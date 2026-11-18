@@ -1,0 +1,23 @@
+# @-/com.leonsilicon.hermes.plugins.slack-always-react
+
+Hermes plugin that gives every Slack message Hermes processes the 👀 → ✅/❌ reaction lifecycle.
+
+Stock Hermes (checked through upstream `main` on 2026-11-06) registers a Slack message for reactions only when it is a 1:1 DM or @mentions the bot (`plugins/platforms/slack/adapter.py`, `if (is_one_to_one_dm or is_mentioned) and self._reactions_enabled()`). With `slack.require_mention: false`, Hermes still answers unmentioned channel messages and thread replies, including replies that redirect a running turn, but none of them get 👀.
+
+The plugin hooks `ctx.register_platform_handler("slack", …)`, which hands it the live adapter at connect. It wraps `_build_message_event`, which runs only after the auth, channel, mention and bot gates have accepted a message, and adds that message to the adapter's own reaction tracking. Synthetic reaction-triggered turns are skipped. `slack.reactions: false` still turns everything off. If the adapter internals change, it logs a warning and does nothing.
+
+## Install
+
+Copy this directory without `__tests__/` to `$HERMES_HOME/plugins/slack-always-react/`, add `slack-always-react` to `plugins.enabled` in `config.yaml`, and restart the gateway. On Hermes Cloud, `$HERMES_HOME` is `/opt/data`, the persistent volume, so the plugin survives restarts and image updates.
+
+## Test
+
+The tests run the real Slack adapter from a Hermes checkout. They need `pytest` and `pytest-asyncio` alongside Hermes's own environment:
+
+```sh
+uv venv /tmp/sar --python ~/.hermes/tools/python-*/bin/python3
+VIRTUAL_ENV=/tmp/sar uv pip install pytest pytest-asyncio
+# Put the checkout and its venv site-packages on the path:
+printf '%s\n' ~/.hermes/hermes-agent <hermes venv site-packages> > /tmp/sar/lib/python3.14/site-packages/hermes.pth
+HERMES_HOME=$(mktemp -d) /tmp/sar/bin/python -m pytest -q __tests__
+```

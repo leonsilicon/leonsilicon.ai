@@ -1,0 +1,14 @@
+{
+  "name": "@-/com.leonsilicon.ai.configs.patching.codemods.unsnooze",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#codemod": "./codemod.ts",
+    "#patch-definition": "./patch-definition.ts",
+    "#patch.json": "./patch.json"
+  },
+  "exports": {
+    ".": "./+.ts"
+  }
+}

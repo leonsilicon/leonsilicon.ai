@@ -1,0 +1,20 @@
+--- a/src/agents/claude.js
++++ b/src/agents/claude.js
+@@ -44,6 +44,7 @@
+     /esc to interrupt/i,
+     /\besc\b.*\binterrupt\b/i,
+     /Retrying in\b/i,
++    /Waiting for API response\b/i,
+     /\battempt\s+\d+\/\d+/i,
+   ],
+   idleRegex: /[❯>]/,
+@@ -52,6 +53,9 @@
+     /API Error:?\s*\(?5\d\d/i,
+     /overloaded_error/i,
+     /API Error:?\s*\(?429/i,
++    // A dropped stream has no HTTP status. Match Claude's error line, not
++    // quoted examples; the rest of the message may wrap onto another row.
++    /^\s*(?:[⏺●•]\s*)?API Error:?\s*Connection lost\b/i,
+     // "API Error: Server is temporarily limiting requests (not your usage
+     // limit)" — a server-side throttle. It clears in seconds, so it belongs on
+     // this ladder; patterns.js separately refuses to read its parenthetical as

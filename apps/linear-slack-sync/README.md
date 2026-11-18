@@ -1,0 +1,60 @@
+# @-apps/linear-slack-sync
+
+Runs [linear-slack-sync](../../packages/com/leonsilicon/ai/services/linear-slack-sync/README.md) as a Cloudflare Worker (since 2026-11-18). It keeps one Slack channel per Linear issue in team LEON, files each channel in Leon's sidebar section named exactly after its status, and mirrors comments both ways. It depends on no machine of Leon's.
+
+```text
+Linear (webhook: Issue, Comment) ──┐                       ┌──▶ Slack Web API as the Linear Sync bot (channels, posts)
+                                   ├─▶ Worker ─▶ SyncObject ┤
+Slack Events (message.*) ──────────┘   (verify)  (SQLite     └──▶ Slack as Leon's web session (sidebar sections, invites)
+cron */15 ─────────────────────────────────────▶  queue)    ───▶ Linear API (comments, status moves)
+```
+
+The Worker only verifies and queues. One Durable Object, `SyncObject`, drains a SQLite queue on an alarm, one job at a time. That serializes everything, so two events about one issue can't both create a channel. Failures retry with backoff (30 s, doubling); after six attempts a job moves to `dead`.
+
+## Pieces
+
+| Piece     | Where                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker    | `linear-slack-sync` in the Cloudflare account that holds the leonsilicon.ai zone; Custom Domain `linear-slack.leonsilicon.ai`, no workers.dev address. Config in [`wrangler.jsonc`](wrangler.jsonc)                                                                                                                                                                                                                                       |
+| State     | Durable Object `SyncObject` (SQLite-backed, one instance named `sync`): issue ↔ channel and comment ↔ message maps, a name cache, the queue                                                                                                                                                                                                                                                                                               |
+| Slack app | **Linear Sync**, with its own bot user, created 2026-11-18 through `apps.manifest.create` with Leon's session. Bot scopes: channels/groups history, read, manage/write, join, chat:write(.customize), users:read. Events: `message.channels` and `message.groups` to `/slack/events`                                                                                                                                                      |
+| Linear    | Webhook "Linear Sync (Slack)" (team LEON, Issue + Comment) to `/linear/webhook`. Personal API key "Linear Sync (Slack)" on Leon's account (named Hermes in Linear), created through `apiKeyCreate`; the key was generated locally and piped straight into the secret                                                                                                                                                                      |
+| Config    | The `#linear-slack-sync` items of the root [`.env.schema`](../../.env.schema), values in Infisical under `/linear-slack-sync`: `LINEAR_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `LINEAR_SYNC_SLACK_BOT_TOKEN`, `LINEAR_SYNC_SLACK_SIGNING_SECRET` and `LINEAR_SYNC_ADMIN_TOKEN`, plus Leon's Slack web session and both Slack user IDs from `/shared` (the same login slack-as-leon holds). Each deploy uploads them as Worker secrets and vars |
+| Page      | [`www/ai/leonsilicon/linear-slack/index.html`](../../www/ai/leonsilicon/linear-slack/index.html), for browsers; built into `dist/www` and uploaded as the Worker's assets (`ASSETS`)                                                                                                                                                                                                                                                      |
+
+## Deploy
+
+```sh
+vpr -w deploy:linear-slack-sync
+```
+
+It typechecks and builds `www/` first, then deploys with `varlock-wrangler`, which resolves the `#linear-slack-sync` items (the filter is set in this app's `package.json`) and uploads them, replacing every var and secret the Worker had. Change values in Infisical, not with `wrangler secret put`. It needs Infisical access (see [DEVELOPMENT.md](../../DEVELOPMENT.md#secrets-and-config)).
+
+Check `curl -s https://linear-slack.leonsilicon.ai/healthz`. It returns `{"ok":true,"bot":"ok","session":"ok",…}`, or 503 when the bot token or the session fails. Cloudflare 403s some default user agents on this zone, so send your own. Logs: `vpx wrangler tail linear-slack-sync`.
+
+## Operating it
+
+With `T=$(vpx varlock load --filter LINEAR_SYNC_ADMIN_TOKEN --format json | jq -r .LINEAR_SYNC_ADMIN_TOKEN)` from the repository root:
+
+- `curl -s -H "authorization: Bearer $T" https://linear-slack.leonsilicon.ai/admin/status` shows the queue with each job's attempts and last error, plus dead jobs.
+- `curl -s -X POST -H "authorization: Bearer $T" …/admin/backfill` adopts or creates channels for every open issue and archives channels of closed ones, quietly (no posts). Safe to rerun.
+- `curl -s -X POST -H "authorization: Bearer $T" …/admin/tick` runs the 15-minute job now.
+
+Other tasks:
+
+- **Session expired** (`/healthz` says `session: invalid_auth`): sections and unarchiving stop, everything else keeps working. Re-copy the session into Infisical's `/shared` folder the way the slack-as-leon README describes, then deploy both Workers: they hold the same login.
+- **Change sections or mentions:** edit `SECTION_ORDER`, `MENTION_LEON_STATES` or `PING_HERMES_STATES` in `.env.schema` and deploy. Sections are named exactly after Linear statuses. Rename a status in Linear and new placements use the new name; the old section empties and is deleted as its channels move.
+- **Turn it off:** `vpx wrangler delete --config apps/linear-slack-sync/wrangler.jsonc`, then delete the Linear webhook and API key (Linear → Settings → API) and the Slack app (api.slack.com/apps → Linear Sync).
+
+## Hermes
+
+Since 2026-11-18, Hermes's `issue-execution-sweep` and `leon-messaging-voice` skills, its `USER.md`, and the 9/13/18 sweep cron say that Linear Sync owns issue channels. Hermes no longer creates, archives or re-topics them, or moves sidebar sections through Task Bot. It posts progress and questions as Linear comments, which show up in the channel. Captain Claude keeps backups of the old versions, suffixed `.bak-20261118-linear-sync`.
+
+Hermes's Slack setting `allow_bots: mentions` means it answers the bot's posts only when they mention it. That is what the Awaiting Hermes and Awaiting Start pings rely on, and why mirrored comments don't loop.
+
+## Security
+
+- Two credentials here are logins: Leon's Slack web session (full Slack access as him) and a Linear personal API key (full access as his account). They are kept in Infisical and stored as Worker secrets, so Infisical and Cloudflare can read them.
+- Only the sidebar, invites and unarchiving use the session. Channels and posts use the bot.
+- Webhooks are verified by signature and timestamp. `/admin/*` needs the bearer token.
+- The first bot token was shown once in a tool output during setup. It was revoked (`auth.revoke`) and the app reinstalled before any token was stored.

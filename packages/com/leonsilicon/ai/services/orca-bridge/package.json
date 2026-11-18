@@ -1,0 +1,21 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.orca-bridge",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Orca on the Mac mini over MCP: the whole Orca CLI including computer use, plus orca-mcp's worker tools.",
+  "type": "module",
+  "imports": {
+    "#cli": "./cli.ts",
+    "#config": "./config.ts",
+    "#images": "./images.ts",
+    "#mcp": "./mcp.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.npmjs.krzysztofkobra__orca-mcp": "workspace:*",
+    "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
+    "@-/com.npmjs.zod": "workspace:*"
+  }
+}

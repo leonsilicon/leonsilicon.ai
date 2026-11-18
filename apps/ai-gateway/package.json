@@ -1,0 +1,12 @@
+{
+  "name": "@-apps/ai-gateway",
+  "private": true,
+  "bin": {
+    "_deploy-ai-gateway": "./_deploy-ai-gateway.sh"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.ai-gateway": "workspace:*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@-apps/orca-bridge",
+  "private": true,
+  "bin": {
+    "_deploy-orca-bridge": "./_deploy-orca-bridge.sh"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.orca-bridge": "workspace:*"
+  }
+}

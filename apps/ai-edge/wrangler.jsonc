@@ -1,0 +1,35 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "ai-edge",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  // A Custom Domain per service; Cloudflare issues each one's certificate.
+  "routes": [
+    { "pattern": "orca.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "grok.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "beeper.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "watch.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "cronometer.leonsilicon.ai", "custom_domain": true },
+    // The old names, aliases until every client has moved (see MOVED in @-/com.leonsilicon.www).
+    { "pattern": "orca.ai.leonsilicon.com", "custom_domain": true },
+    { "pattern": "grok.ai.leonsilicon.com", "custom_domain": true },
+    { "pattern": "beeper.ai.leonsilicon.com", "custom_domain": true },
+    { "pattern": "watch.ai.leonsilicon.com", "custom_domain": true },
+    { "pattern": "cronometer.ai.leonsilicon.com", "custom_domain": true },
+  ],
+  // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
+  // @-/com.leonsilicon.www.
+  "assets": {
+    "directory": "../../dist/www",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none",
+  },
+  "vpc_services": [
+    { "binding": "MINI", "service_id": "01a1d6ff-59ac-77a0-9529-94bdf672bb81", "remote": true },
+  ],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

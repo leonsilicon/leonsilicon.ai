@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.zod",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  }
+}

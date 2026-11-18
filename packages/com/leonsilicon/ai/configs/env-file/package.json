@@ -1,0 +1,19 @@
+{
+  "name": "@-/com.leonsilicon.ai.configs.env-file",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Renders an app's env file for the Mac mini from .env.schema, with values from Infisical.",
+  "bin": {
+    "_env-file": "./_env-file.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#env-file": "./env-file.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  },
+  "devDependencies": {
+    "varlock": "catalog:"
+  }
+}

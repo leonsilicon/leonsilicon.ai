@@ -1,0 +1,5 @@
+{
+  "npmPackage": "unsnooze",
+  "bundles": ["src/agents/claude.js"],
+  "verifiedVersions": ["1.21.1"]
+}

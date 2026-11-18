@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.modelcontextprotocol__sdk",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "catalog:"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.yaml",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "yaml": "catalog:"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@-apps/ai-edge",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.ai-edge": "workspace:*",
+    "@-/com.leonsilicon.www": "workspace:*"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "linear-slack-sync",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  // A Custom Domain per hostname; Cloudflare issues its certificate.
+  "routes": [
+    { "pattern": "linear-slack.leonsilicon.ai", "custom_domain": true },
+    // The old names, aliases until every client has moved (see MOVED in @-/com.leonsilicon.www).
+    { "pattern": "linear-slack.ai.leonsilicon.com", "custom_domain": true },
+  ],
+  "durable_objects": { "bindings": [{ "name": "SYNC", "class_name": "SyncObject" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncObject"] }],
+  // Every 15 minutes: start dated issues, expire listeners, and repair anything a missed webhook left behind.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
+  // @-/com.leonsilicon.www.
+  "assets": {
+    "directory": "../../dist/www",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none",
+  },
+  // No vars here: every var and secret comes from the root .env.schema (#linear-slack-sync, values in
+  // Infisical), uploaded by `varlock-wrangler deploy`, which replaces whatever the Worker had.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

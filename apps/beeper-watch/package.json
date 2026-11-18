@@ -1,0 +1,12 @@
+{
+  "name": "@-apps/beeper-watch",
+  "private": true,
+  "bin": {
+    "_deploy-beeper-watch": "./_deploy-beeper-watch.sh"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*"
+  }
+}

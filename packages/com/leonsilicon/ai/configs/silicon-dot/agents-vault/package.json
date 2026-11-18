@@ -1,0 +1,18 @@
+{
+  "name": "@-/com.leonsilicon.ai.configs.silicon-dot.agents-vault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Silicon Dot's read-only 1Password Agents vault access and autonomous UofT sign-in.",
+  "bin": {
+    "_agents-vault": "./_agents-vault.ts",
+    "_install-agents-vault": "./_install-agents-vault.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#agents-vault": "./agents-vault.ts",
+    "#uoft-login": "./uoft-login.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  }
+}

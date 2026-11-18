@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.krzysztofkobra__orca-mcp",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "@krzysztofkobra/orca-mcp": "catalog:"
+  }
+}

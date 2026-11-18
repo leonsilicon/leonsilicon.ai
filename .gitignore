@@ -1,0 +1,13 @@
+node_modules/
+.env
+*.db
+*.db-shm
+*.db-wal
+.cache/
+.vite/
+*.tsbuildinfo
+__pycache__/
+.claude/settings.local.json
+dist/
+.wrangler/
+.env.local

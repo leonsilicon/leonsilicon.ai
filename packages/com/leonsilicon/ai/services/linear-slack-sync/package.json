@@ -1,0 +1,23 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.linear-slack-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keeps one Slack channel per Linear issue, filed in Leon's sidebar section named after its status, with comments mirrored both ways.",
+  "type": "module",
+  "imports": {
+    "#config": "./config.ts",
+    "#format": "./format.ts",
+    "#linear": "./linear.ts",
+    "#slack": "./slack.ts",
+    "#store": "./store.ts",
+    "#sync": "./sync.ts",
+    "#verify": "./verify.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
+    "@-/com.npmjs.yaml": "workspace:*"
+  }
+}

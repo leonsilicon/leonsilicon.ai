@@ -1,0 +1,9 @@
+# Cloudflare Tunnel "ai-mini": the private path from the ai-edge Worker to the gateway on the Mac mini.
+# The Worker reaches 127.0.0.1:18800 through the Workers VPC service "ai-mini-gateway", so the tunnel
+# has no public hostname (ai.leonsilicon.com was one until 2026-11-13): anything else gets 404.
+# The credentials file holds the tunnel secret and exists only on the mini (mode 600).
+tunnel: 8300e675-b32b-49ca-92cf-d00524c33d07
+credentials-file: __HOME__/.cloudflared/8300e675-b32b-49ca-92cf-d00524c33d07.json
+no-autoupdate: true
+ingress:
+  - service: http_status:404

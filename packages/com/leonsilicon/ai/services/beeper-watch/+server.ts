@@ -1,0 +1,10 @@
+export { jsonLogger, loadConfig, startBeeperWatch } from "#service";
+export type { BeeperWatchConfig } from "#service";
+export { callTool, INSTRUCTIONS, TOOLS } from "#mcp";
+export { Watcher, UserError, LIMITS } from "#watcher";
+export type { WatchSummary, WatcherOptions } from "#watcher";
+export type { BeeperSource, SlackPoster, Watch } from "#types";
+export { Feed, FEED_LIMITS } from "#feed";
+export { channelName, platformOf } from "#platform";
+export type { FeedOptions, FeedWake } from "#feed";
+export type { BeeperFeedSource, FeedChat, FeedMessage } from "#types";

@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.beeper__desktop-api",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "@beeper/desktop-api": "catalog:"
+  }
+}

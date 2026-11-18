@@ -1,0 +1,29 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.beeper-watch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wakes Hermes in Slack when someone replies in a watched Beeper chat, and screens what people send before Hermes sees it.",
+  "type": "module",
+  "imports": {
+    "#beeper": "./beeper.ts",
+    "#feed": "./feed.ts",
+    "#format": "./format.ts",
+    "#mcp": "./mcp.ts",
+    "#platform": "./platform.ts",
+    "#screen": "./screen.ts",
+    "#service": "./service.ts",
+    "#slack": "./slack.ts",
+    "#store": "./store.ts",
+    "#types": "./types.ts",
+    "#watcher": "./watcher.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.npmjs.beeper__desktop-api": "workspace:*",
+    "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
+    "@-/com.npmjs.openai": "workspace:*",
+    "@-/com.npmjs.slack__web-api": "workspace:*"
+  }
+}
