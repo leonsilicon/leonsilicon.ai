@@ -16,6 +16,11 @@ export interface OrcaBridgeConfig {
   maxCallMs: number;
   /** Environment for orca-mcp's tools (ORCA_MCP_ROOTS, ORCA_MCP_CLIENT, ORCA_BIN). */
   env: NodeJS.ProcessEnv;
+  /**
+   * Where these tools run: on the mini (this bridge, the default), or on Hermes Cloud's own Orca
+   * device (`@-/com.leonsilicon.ai.services.orca-device`), which reaches both Macs directly.
+   */
+  host?: "mini" | "hermes-cloud";
 }
 
 export const DEFAULT_ORCA_BIN = "/Applications/Orca.app/Contents/Resources/bin/orca";

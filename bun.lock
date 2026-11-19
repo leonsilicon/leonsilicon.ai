@@ -70,6 +70,15 @@
         "@-/com.leonsilicon.ai.services.orca-bridge": "workspace:*",
       },
     },
+    "apps/orca-device": {
+      "name": "@-apps/orca-device",
+      "bin": {
+        "_orca-device": "./_orca-device.ts",
+      },
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.orca-device": "workspace:*",
+      },
+    },
     "apps/slack-as-leon": {
       "name": "@-apps/slack-as-leon",
       "dependencies": {
@@ -160,6 +169,14 @@
         "@-/com.npmjs.krzysztofkobra__orca-mcp": "workspace:*",
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
         "@-/com.npmjs.zod": "workspace:*",
+      },
+    },
+    "packages/com/leonsilicon/ai/services/orca-device": {
+      "name": "@-/com.leonsilicon.ai.services.orca-device",
+      "version": "0.1.0",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.orca-bridge": "workspace:*",
+        "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
       },
     },
     "packages/com/leonsilicon/ai/services/slack-as-leon": {
@@ -280,6 +297,8 @@
 
     "@-/com.leonsilicon.ai.services.orca-bridge": ["@-/com.leonsilicon.ai.services.orca-bridge@workspace:packages/com/leonsilicon/ai/services/orca-bridge"],
 
+    "@-/com.leonsilicon.ai.services.orca-device": ["@-/com.leonsilicon.ai.services.orca-device@workspace:packages/com/leonsilicon/ai/services/orca-device"],
+
     "@-/com.leonsilicon.ai.services.slack-as-leon": ["@-/com.leonsilicon.ai.services.slack-as-leon@workspace:packages/com/leonsilicon/ai/services/slack-as-leon"],
 
     "@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard": ["@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard@workspace:packages/com/leonsilicon/hermes/plugins/beeper-watch-notification-guard"],
@@ -321,6 +340,8 @@
     "@-apps/linear-slack-sync": ["@-apps/linear-slack-sync@workspace:apps/linear-slack-sync"],
 
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
+
+    "@-apps/orca-device": ["@-apps/orca-device@workspace:apps/orca-device"],
 
     "@-apps/slack-as-leon": ["@-apps/slack-as-leon@workspace:apps/slack-as-leon"],
 

@@ -1,0 +1,13 @@
+{
+  "name": "@-apps/orca-device",
+  "private": true,
+  "bin": {
+    "_build-orca-device": "./_build-orca-device.ts",
+    "_orca-device": "./_orca-device.ts"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.orca-device": "workspace:*"
+  }
+}

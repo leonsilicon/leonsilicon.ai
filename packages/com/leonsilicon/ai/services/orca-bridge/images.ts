@@ -20,7 +20,54 @@ const TMP_ROOTS = [
 export interface ImageContent {
   type: "image";
   data: string;
-  mimeType: "image/jpeg";
+  mimeType: "image/jpeg" | "image/png";
+}
+
+// Pillow, for hosts without sips (Hermes Cloud's Linux): resize to the given width (or fit the long
+// edge) and save as JPEG.
+const PILLOW = `import sys
+from PIL import Image
+src, out, width, edge = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+im = Image.open(src).convert("RGB")
+if width > 0:
+    im = im.resize((width, max(1, round(im.height * width / im.width))))
+else:
+    im.thumbnail((edge, edge))
+im.save(out, "JPEG", quality=72)`;
+const PYTHONS = ["/opt/hermes/.venv/bin/python", "python3"];
+
+/** Writes a JPEG of `src` to `out`, `width` wide (0 = fit MAX_IMAGE_EDGE). False when no converter works. */
+async function toJpeg(src: string, out: string, width: number): Promise<boolean> {
+  if (process.platform === "darwin") {
+    await exec(
+      "/usr/bin/sips",
+      [
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        "72",
+        ...(width ? ["--resampleWidth", String(width)] : ["-Z", String(MAX_IMAGE_EDGE)]),
+        src,
+        "--out",
+        out,
+      ],
+      { timeout: 20_000 },
+    );
+    return true;
+  }
+  for (const python of PYTHONS) {
+    try {
+      await exec(python, ["-c", PILLOW, src, out, String(width), String(MAX_IMAGE_EDGE)], {
+        timeout: 20_000,
+      });
+      return true;
+    } catch {
+      // try the next interpreter
+    }
+  }
+  return false;
 }
 
 /**
@@ -53,32 +100,26 @@ export async function attachImages(value: unknown): Promise<ImageContent[]> {
         const outWidth = width ? Math.max(1, Math.round(width * factor)) : MAX_IMAGE_EDGE;
         const out = path.join(os.tmpdir(), `orca-bridge-${randomUUID()}.jpg`);
         try {
-          await exec(
-            "/usr/bin/sips",
-            [
-              "-s",
-              "format",
-              "jpeg",
-              "-s",
-              "formatOptions",
-              "72",
-              ...(width ? ["--resampleWidth", String(outWidth)] : ["-Z", String(MAX_IMAGE_EDGE)]),
-              real,
-              "--out",
-              out,
-            ],
-            { timeout: 20_000 },
-          );
-          images.push({
-            type: "image",
-            data: fs.readFileSync(out).toString("base64"),
-            mimeType: "image/jpeg",
-          });
+          if (await toJpeg(real, out, width ? outWidth : 0)) {
+            images.push({
+              type: "image",
+              data: fs.readFileSync(out).toString("base64"),
+              mimeType: "image/jpeg",
+            });
+            record.imageCoordinates =
+              factor === 1 && width
+                ? "image pixels = window-local click coordinates"
+                : `multiply image pixels by ${(1 / factor).toFixed(4)} for window-local click coordinates`;
+          } else {
+            // No converter: the original screenshot, in device pixels.
+            images.push({
+              type: "image",
+              data: fs.readFileSync(real).toString("base64"),
+              mimeType: /\.png$/i.test(real) ? "image/png" : "image/jpeg",
+            });
+            record.imageCoordinates = `divide image pixels by ${scale} for window-local click coordinates`;
+          }
           record.attachedImage = images.length;
-          record.imageCoordinates =
-            factor === 1 && width
-              ? "image pixels = window-local click coordinates"
-              : `multiply image pixels by ${(1 / factor).toFixed(4)} for window-local click coordinates`;
           delete record.path;
         } catch (error) {
           record.attachError = String((error as Error).message).slice(0, 300);

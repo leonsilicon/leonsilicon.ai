@@ -1,0 +1,23 @@
+#!/bin/sh
+# Hermes Cloud's own Orca device: the Linux Orca CLI on Orca's pinned Node, with its own pairing
+# store. A command that names no Orca goes to the default Mac (default-environment), as the mini
+# bridge did; pairing-store commands (environment, host list/rm, pair) always stay local.
+D=${ORCA_DEVICE_HOME:-/opt/data/orca-device}
+export ORCA_USER_DATA="$D/data"
+local_only=""
+case "${1:-}" in
+  environment | pair | --version | -v | --help | -h | "") local_only=1 ;;
+  host) case "${2:-}" in list | rm) local_only=1 ;; esac ;;
+esac
+if [ -z "$local_only" ]; then
+  explicit=""
+  for a in "$@"; do
+    case "$a" in --environment | --environment=* | --pairing-code | --pairing-code=*) explicit=1 ;; esac
+  done
+  if [ -z "$explicit" ] && [ -z "${ORCA_ENVIRONMENT:-}" ] && [ -f "$D/default-environment" ]; then
+    ORCA_ENVIRONMENT="$(cat "$D/default-environment")"
+    export ORCA_ENVIRONMENT
+  fi
+fi
+for node in "$D"/runtimes/node-*/bin/node; do :; done
+exec "$node" "$D/bundle/out/cli/index.js" "$@"

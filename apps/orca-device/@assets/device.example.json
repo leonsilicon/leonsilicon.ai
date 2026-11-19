@@ -1,0 +1,10 @@
+{
+  "hostname": "hermes-cloud",
+  "defaultEnvironment": "Mac mini",
+  "mcpClient": "hermes-cloud",
+  "mcpRoots": "<the mini's orca-mcp roots, colon-separated; Infisical /orca-bridge ORCA_MCP_ROOTS>",
+  "peers": [
+    { "name": "Mac mini", "address": "<mini tailnet IP>", "port": 6768, "loopback": "127.0.0.3" },
+    { "name": "MacBook", "address": "<MacBook tailnet IP>", "port": 6768, "loopback": "127.0.0.2" }
+  ]
+}

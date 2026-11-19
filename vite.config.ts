@@ -62,6 +62,7 @@ export default defineConfig({
             "beeper-watch",
             "linear-slack-sync",
             "orca-bridge",
+            "orca-device",
             "slack-as-leon",
           ].map((service) => `${ai}/services/${service}/__tests__/*.test.ts`),
         ].join(" "),
