@@ -50,6 +50,7 @@ export default defineConfig({
         command: [
           "node --test",
           "packages/com/leonsilicon/www/__tests__/*.test.ts",
+          `${ai}/configs/deploy-targets/__tests__/*.test.ts`,
           `${ai}/configs/env-file/__tests__/*.test.ts`,
           `${ai}/configs/patching/codemods/unsnooze/__tests__/*.test.ts`,
           `${ai}/configs/patching/generator/__tests__/*.test.ts`,

@@ -62,15 +62,17 @@ This repository is public, so nothing private is committed: not secrets, and not
 - **Hermes Cloud and agents-vault.** The `#hermes` items are set in Hermes's own env (its dashboard's Keys page) by hand, and the agents-vault installer takes `#agents-vault` through `vpx varlock run --filter '#agents-vault' --`.
 - **Adding a value.** Add the item to `.env.schema` with its app's tag: a literal for anything public, `infisical(leonsilicon, "<KEY>", "/<app>")` and `@sensitive` for anything private. Then add the value to Infisical.
 
-CI runs no deploys and needs no Infisical access.
+CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the GitHub environment `production`, which only `main` can use: `CLOUDFLARE_API_TOKEN`, `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` as secrets, and `CLOUDFLARE_ACCOUNT_ID` as a variable. Pull requests and the checks get none of them.
 
 ## Deploying
 
+**The Workers deploy themselves.** A push to `main` runs CI's checks and then [Deploy](.github/workflows/deploy.yml), which deploys every Worker the push changed since the last successful run. The changed set is worked out by [deploy-targets](packages/com/leonsilicon/ai/configs/deploy-targets/README.md) from the workspace dependency graph: a Worker's app, every package it reaches, and the shared inputs (`www/`, the lockfile, root config, `.env.schema`). Docs and tests don't trigger it. A failed deploy is retried by the next push. To deploy by hand, run Actions → Deploy with `all` or a list of Workers, or run the commands below. Everything else is still deployed by hand.
+
 | What                         | Command                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `ai-edge` Worker             | `vpr -w deploy:ai-edge`                                                                                    |
-| `slack-as-leon` Worker       | `vpr -w deploy:slack-as-leon`                                                                              |
-| `linear-slack-sync` Worker   | `vpr -w deploy:linear-slack-sync`                                                                          |
+| `ai-edge` Worker             | Automatic on push to `main`; by hand `vpr -w deploy:ai-edge`                                               |
+| `slack-as-leon` Worker       | Automatic on push to `main`; by hand `vpr -w deploy:slack-as-leon`                                         |
+| `linear-slack-sync` Worker   | Automatic on push to `main`; by hand `vpr -w deploy:linear-slack-sync`                                     |
 | Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                         |
 | Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy) |
 | ai-gateway and tunnel (mini) | `apps/ai-gateway/_deploy-ai-gateway.sh [--start]`                                                          |

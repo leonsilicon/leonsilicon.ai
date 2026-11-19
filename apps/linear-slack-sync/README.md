@@ -24,6 +24,8 @@ The Worker only verifies and queues. One Durable Object, `SyncObject`, drains a 
 
 ## Deploy
 
+Pushes to `main` deploy it automatically when they change its code ([Deploy workflow](../../.github/workflows/deploy.yml), after CI's checks). By hand:
+
 ```sh
 vpr -w deploy:linear-slack-sync
 ```

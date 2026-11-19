@@ -21,3 +21,13 @@ jobs:
       - run: vpr -w typecheck
       - run: vpr -w test
       - run: vp build
+
+  # Pushes to main deploy the Cloudflare Workers they changed, once the checks above pass.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      actions: read

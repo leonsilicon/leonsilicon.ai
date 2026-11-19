@@ -77,6 +77,13 @@
         "@-/com.leonsilicon.www": "workspace:*",
       },
     },
+    "packages/com/leonsilicon/ai/configs/deploy-targets": {
+      "name": "@-/com.leonsilicon.ai.configs.deploy-targets",
+      "version": "1.0.0",
+      "bin": {
+        "_deploy-targets": "./_deploy-targets.ts",
+      },
+    },
     "packages/com/leonsilicon/ai/configs/env-file": {
       "name": "@-/com.leonsilicon.ai.configs.env-file",
       "version": "1.0.0",
@@ -251,6 +258,8 @@
     "zod": "4.6.7",
   },
   "packages": {
+    "@-/com.leonsilicon.ai.configs.deploy-targets": ["@-/com.leonsilicon.ai.configs.deploy-targets@workspace:packages/com/leonsilicon/ai/configs/deploy-targets"],
+
     "@-/com.leonsilicon.ai.configs.env-file": ["@-/com.leonsilicon.ai.configs.env-file@workspace:packages/com/leonsilicon/ai/configs/env-file"],
 
     "@-/com.leonsilicon.ai.configs.patching.codemods.unsnooze": ["@-/com.leonsilicon.ai.configs.patching.codemods.unsnooze@workspace:packages/com/leonsilicon/ai/configs/patching/codemods/unsnooze"],

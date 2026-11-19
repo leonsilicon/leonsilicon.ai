@@ -17,6 +17,8 @@ The Worker reaches the mini through a Workers VPC binding (in beta and free as o
 
 ## Deploy
 
+Pushes to `main` deploy it automatically when they change its code ([Deploy workflow](../../.github/workflows/deploy.yml), after CI's checks). By hand:
+
 ```sh
 vpr -w deploy:ai-edge
 ```
