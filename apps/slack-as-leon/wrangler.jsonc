@@ -5,11 +5,7 @@
   "compatibility_date": "2026-11-08",
   "workers_dev": false,
   // A Custom Domain per hostname; Cloudflare issues its certificate.
-  "routes": [
-    { "pattern": "slack-as-leon.leonsilicon.ai", "custom_domain": true },
-    // The old names, aliases until every client has moved (see MOVED in @-/com.leonsilicon.www).
-    { "pattern": "slack-as-leon.ai.leonsilicon.com", "custom_domain": true },
-  ],
+  "routes": [{ "pattern": "slack-as-leon.leonsilicon.ai", "custom_domain": true }],
   "preview_urls": false,
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/com.leonsilicon.www.

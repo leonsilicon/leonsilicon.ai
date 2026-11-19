@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { movedHost, serveSite, sitePath, type Assets } from "#sites";
+import { serveSite, sitePath, type Assets } from "#sites";
 
 const root = fileURLToPath(new URL("../../../../../", import.meta.url));
 
@@ -100,23 +100,7 @@ test("every Worker Custom Domain has a page in www/", () => {
   );
   assert.ok(hosts.length > 0);
   for (const host of hosts) {
-    const file = `www${sitePath(movedHost(host) ?? host)}index.html`;
+    const file = `www${sitePath(host)}index.html`;
     assert.ok(existsSync(`${root}/${file}`), `${host} has no ${file}`);
   }
-});
-
-test("a browser on a moved hostname is redirected; API clients there still reach the Worker", async () => {
-  assert.equal(movedHost("orca.ai.leonsilicon.com"), "orca.leonsilicon.ai");
-  assert.equal(movedHost("Watch.AI.leonsilicon.com:443"), "watch.leonsilicon.ai");
-  assert.equal(movedHost("orca.leonsilicon.ai"), null);
-  assert.equal(movedHost("ai.leonsilicon.com"), null);
-  const assets = fakeAssets({});
-  const moved = await serveSite(page("https://orca.ai.leonsilicon.com/healthz?x=1"), assets);
-  assert.equal(moved?.status, 301);
-  assert.equal(moved?.headers.get("location"), "https://orca.leonsilicon.ai/healthz?x=1");
-  const mcp = new Request("https://orca.ai.leonsilicon.com/", {
-    headers: { Accept: "text/event-stream" },
-  });
-  assert.equal(await serveSite(mcp, assets), null);
-  assert.deepEqual(assets.seen, []);
 });

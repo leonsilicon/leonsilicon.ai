@@ -1,4 +1,4 @@
-"""Offline tests for server.py: the bearer gate and the Funnel Host allowance.
+"""Offline tests for server.py: the bearer gate and the public Host allowance.
 
 Run on the mini with cronometer-mcp's venv python (needs pytest there):
     ~/.local/share/cronometer-mcp/.venv/bin/python -m pytest __tests__ -q

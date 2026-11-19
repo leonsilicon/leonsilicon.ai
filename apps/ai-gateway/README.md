@@ -1,6 +1,6 @@
 # @-apps/ai-gateway
 
-The agent services on the always-on Mac mini are public as `https://<name>.leonsilicon.ai` (since 2026-11-18; `<name>.ai.leonsilicon.com` from 2026-11-13, which still answers as an alias; paths under `ai.leonsilicon.com` from 2026-11-12). Each service keeps its own bearer token. The routing code is the [ai-gateway service](../../packages/com/leonsilicon/ai/services/ai-gateway/README.md), and the public side is the [ai-edge Worker](../ai-edge/README.md).
+The agent services on the always-on Mac mini are public as `https://<name>.leonsilicon.ai` (since 2026-11-18; `<name>.ai.leonsilicon.com` from 2026-11-13; paths under `ai.leonsilicon.com` from 2026-11-12). Each service keeps its own bearer token. The routing code is the [ai-gateway service](../../packages/com/leonsilicon/ai/services/ai-gateway/README.md), and the public side is the [ai-edge Worker](../ai-edge/README.md).
 
 ```text
 Hermes Cloud, … ──HTTPS──▶ <name>.leonsilicon.ai: Worker "ai-edge" (Cloudflare)

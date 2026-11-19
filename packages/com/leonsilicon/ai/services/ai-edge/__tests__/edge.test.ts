@@ -10,9 +10,7 @@ test("every gateway route has a subdomain, and nothing else does", () => {
 
 test("gatewayPath maps the subdomain to the gateway's path", () => {
   assert.equal(gatewayPath("orca.leonsilicon.ai", "/"), "/orca");
-  // The old names still answer, as aliases, until every client has moved.
-  assert.equal(gatewayPath("ORCA.ai.leonsilicon.com", "/mcp/"), "/orca");
-  assert.equal(gatewayPath("watch.ai.leonsilicon.com", "/healthz"), "/watch/healthz");
+  assert.equal(gatewayPath("ORCA.leonsilicon.ai", "/mcp/"), "/orca");
   assert.equal(gatewayPath("cronometer.leonsilicon.ai", "", "?x=1"), "/cronometer?x=1");
   assert.equal(gatewayPath("muse.leonsilicon.ai", "/"), null);
   assert.equal(gatewayPath("grok.leonsilicon.ai", "/healthz"), "/grok/healthz");
@@ -23,7 +21,9 @@ test("gatewayPath maps the subdomain to the gateway's path", () => {
     ["beeper.leonsilicon.ai", "/v0/mcp"],
     ["ai.leonsilicon.com", "/orca"],
     ["leonsilicon.ai", "/orca"],
-    ["orca.ai.leonsilicon.com.evil.com", "/"],
+    // The old names, retired on 2026-11-18.
+    ["orca.ai.leonsilicon.com", "/"],
+    ["watch.ai.leonsilicon.com", "/healthz"],
     ["slack-as-leon.leonsilicon.ai", "/"],
     ["evil.leonsilicon.ai", "/"],
     ["orca.leonsilicon.ai.evil.com", "/"],

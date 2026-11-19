@@ -4,16 +4,16 @@ The Cloudflare Worker that serves `https://<name>.leonsilicon.ai` for the servic
 
 ## Why a Worker
 
-The Worker reaches the mini through a Workers VPC binding (in beta and free as of 2026-11), so the tunnel needs no public hostname of its own, and each service is a Custom Domain of this one Worker. The services moved from `<name>.ai.leonsilicon.com` to `<name>.leonsilicon.ai` on 2026-11-18. The old names are still Custom Domains here, as aliases, until every client has moved; a browser on one is redirected to the new name.
+The Worker reaches the mini through a Workers VPC binding (in beta and free as of 2026-11), so the tunnel needs no public hostname of its own, and each service is a Custom Domain of this one Worker. The services moved from `<name>.ai.leonsilicon.com` to `<name>.leonsilicon.ai` on 2026-11-18; the old names were removed once every client had moved.
 
 ## Pieces
 
-| Piece          | Where                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Worker         | `ai-edge`, config in [`wrangler.jsonc`](wrangler.jsonc); no workers.dev address                                                 |
-| Custom Domains | `orca`, `grok`, `beeper`, `watch` and `cronometer` `.leonsilicon.ai`, plus the same names under `ai.leonsilicon.com` as aliases |
-| Pages          | `www/ai/leonsilicon/<name>/index.html`, built into `dist/www` and uploaded as the Worker's assets (`ASSETS`)                    |
-| VPC binding    | `MINI` → VPC service `ai-mini-gateway` (`01a1d6ff-59ac-77a0-9529-94bdf672bb81`): `127.0.0.1:18800` via `ai-mini`                |
+| Piece          | Where                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Worker         | `ai-edge`, config in [`wrangler.jsonc`](wrangler.jsonc); no workers.dev address                                  |
+| Custom Domains | `orca`, `grok`, `beeper`, `watch` and `cronometer` `.leonsilicon.ai`, each with its own certificate              |
+| Pages          | `www/ai/leonsilicon/<name>/index.html`, built into `dist/www` and uploaded as the Worker's assets (`ASSETS`)     |
+| VPC binding    | `MINI` → VPC service `ai-mini-gateway` (`01a1d6ff-59ac-77a0-9529-94bdf672bb81`): `127.0.0.1:18800` via `ai-mini` |
 
 ## Deploy
 

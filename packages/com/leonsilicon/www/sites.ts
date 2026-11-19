@@ -12,22 +12,6 @@ export const SHARED_ASSETS = "/assets/";
 const LABEL = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /**
- * Hostname suffixes that moved, old to new. The old names stay Custom Domains as aliases until every
- * client has moved: API requests there still reach the Worker, and a browser is redirected to the
- * same name under the new suffix. `<name>.ai.leonsilicon.com` moved to `<name>.leonsilicon.ai` on
- * 2026-11-18.
- */
-export const MOVED: Readonly<Record<string, string>> = { "ai.leonsilicon.com": "leonsilicon.ai" };
-
-/** Where a hostname under a moved suffix lives now, or null if it hasn't moved. */
-export function movedHost(host: string): string | null {
-  const lower = host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
-  for (const [from, to] of Object.entries(MOVED))
-    if (lower.endsWith(`.${from}`)) return `${lower.slice(0, -from.length)}${to}`;
-  return null;
-}
-
-/**
  * The `www/` directory a hostname's pages come from: its labels reversed, like a reverse-DNS
  * package name. `orca.leonsilicon.ai` is `/ai/leonsilicon/orca/`. Returns null for anything
  * that isn't a plain DNS name.
@@ -50,8 +34,6 @@ function wantsPage(request: Request): boolean {
  *   `<sitePath(host)><path>`, with `index.html` added to a path that ends in `/`.
  * - `/assets/*`, the scripts and styles every page shares, are served for any host.
  *
- * - A browser on a hostname under a moved suffix (`MOVED`) is redirected to its new name.
- *
  * Anything the build doesn't have, and every other request, returns null. One host can't reach
  * another's pages: paths are resolved under the host's own directory.
  */
@@ -62,8 +44,6 @@ export async function serveSite(request: Request, assets: Assets): Promise<Respo
   if (url.pathname.startsWith(SHARED_ASSETS)) {
     path = url.pathname;
   } else if (wantsPage(request)) {
-    const moved = movedHost(url.hostname);
-    if (moved) return Response.redirect(`https://${moved}${url.pathname}${url.search}`, 301);
     const root = sitePath(url.hostname);
     if (!root) return null;
     path = `${root}${url.pathname.slice(1)}${url.pathname.endsWith("/") ? "index.html" : ""}`;

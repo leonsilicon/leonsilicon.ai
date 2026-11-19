@@ -28,11 +28,11 @@ Grok Bot (connected 2026-11-06, all bots; Grok has no per-bot connectors): the A
 "cronometer". Grok can't write a saved secret into a remote connector's header, so unlike muse and kernel it runs as a
 small local connector on the bots' shared computer that reads Grok secret CRONOMETER_MCP_TOKEN at start and sends it as
 the bearer header. Since 2026-11-18 it connects to https://cronometer.leonsilicon.ai/mcp (Cronometer Bot switched it and
-ran get_profile); before that it used the mini's Tailscale Funnel route /cronometer, which still exists. Cronometer Bot (created by Leon 2026-11-06) and the Authentication Bot both saw 41 tools and ran
+ran get_profile); before that it used the mini's Tailscale Funnel route /cronometer, removed the same day. Cronometer Bot (created by Leon 2026-11-06) and the Authentication Bot both saw 41 tools and ran
 get_profile. Grok probes /.well-known/openid-configuration first; those 401s in the log are expected.
 
 Behaviour: bearer token required on every request (401 otherwise); FastMCP's Host check allows CRONOMETER_HTTP_PUBLIC_HOST
-and localhost (the gateway and the Funnel both hand it the local address); all 41 upstream tools are exposed (reads, plus adding, editing and deleting diary entries, custom foods,
+and localhost (the gateway hands it the local address); all 41 upstream tools are exposed (reads, plus adding, editing and deleting diary entries, custom foods,
 recipes, notes, biometrics, exercise, fasts and nutrient targets). Upstream's Node OAuth server and nginx are not used,
 so Claude.ai's custom-connector OAuth flow isn't available; clients that send a bearer header work.
 

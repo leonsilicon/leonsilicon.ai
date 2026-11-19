@@ -12,12 +12,6 @@
     { "pattern": "beeper.leonsilicon.ai", "custom_domain": true },
     { "pattern": "watch.leonsilicon.ai", "custom_domain": true },
     { "pattern": "cronometer.leonsilicon.ai", "custom_domain": true },
-    // The old names, aliases until every client has moved (see MOVED in @-/com.leonsilicon.www).
-    { "pattern": "orca.ai.leonsilicon.com", "custom_domain": true },
-    { "pattern": "grok.ai.leonsilicon.com", "custom_domain": true },
-    { "pattern": "beeper.ai.leonsilicon.com", "custom_domain": true },
-    { "pattern": "watch.ai.leonsilicon.com", "custom_domain": true },
-    { "pattern": "cronometer.ai.leonsilicon.com", "custom_domain": true },
   ],
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/com.leonsilicon.www.

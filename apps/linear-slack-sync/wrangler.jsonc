@@ -6,11 +6,7 @@
   "workers_dev": false,
   "preview_urls": false,
   // A Custom Domain per hostname; Cloudflare issues its certificate.
-  "routes": [
-    { "pattern": "linear-slack.leonsilicon.ai", "custom_domain": true },
-    // The old names, aliases until every client has moved (see MOVED in @-/com.leonsilicon.www).
-    { "pattern": "linear-slack.ai.leonsilicon.com", "custom_domain": true },
-  ],
+  "routes": [{ "pattern": "linear-slack.leonsilicon.ai", "custom_domain": true }],
   "durable_objects": { "bindings": [{ "name": "SYNC", "class_name": "SyncObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncObject"] }],
   // Every 15 minutes: start dated issues, expire listeners, and repair anything a missed webhook left behind.

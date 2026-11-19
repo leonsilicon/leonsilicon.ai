@@ -13,8 +13,8 @@ The Cronometer login never leaves the mini (~/.config/cronometer-mcp/env, mode
 ~/.cache/cronometer-mcp/session.json. Compared with upstream's own HTTP mode:
   - the bearer check runs in this process, so upstream's Node auth-server and
     nginx aren't needed (and no OAuth login page is exposed);
-  - FastMCP's Host check allows the Funnel host, which upstream's localhost-only
-    defaults would reject with 421.
+  - FastMCP's Host check allows the public host (CRONOMETER_HTTP_PUBLIC_HOST), which
+    upstream's localhost-only defaults would reject with 421.
 
 Environment (all optional):
   CRONOMETER_HTTP_TOKEN_FILE   default ~/.config/cronometer-mcp-http/token
