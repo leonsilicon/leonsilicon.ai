@@ -1,0 +1,121 @@
+{
+  "manifestVersion": 1,
+  "name": "Complete Linear task from Todoist",
+  "description": "When I complete a mirrored Todoist task, mark the linked Linear issue as done.",
+  "triggers": [
+    {
+      "type": "webhook",
+      "event": "todoist.item.completed",
+      "outputSchema": {
+        "type": "object",
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["item"],
+            "properties": {
+              "item": {
+                "type": "object",
+                "required": ["id", "content", "description"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Runs when a Todoist task is completed"
+    }
+  ],
+  "overlap": "skip",
+  "resultFrom": {
+    "stepId": "summaryStep",
+    "path": "text"
+  },
+  "steps": [
+    {
+      "id": "extractLinearRef",
+      "title": "Extract Linear reference",
+      "description": "Extracts the Linear issue identifier from the completed task description.",
+      "exitOn": {
+        "type": "object",
+        "required": ["matchCount"],
+        "properties": {
+          "matchCount": {
+            "const": 0
+          }
+        }
+      },
+      "type": "code",
+      "outputSchema": {
+        "type": "object",
+        "required": ["matchCount", "linearRef"],
+        "properties": {
+          "linearRef": {
+            "type": "string"
+          },
+          "matchCount": {
+            "type": "number"
+          }
+        }
+      },
+      "runtime": {
+        "language": "typescript",
+        "version": "5.9"
+      },
+      "code": "const description = trigger.item.description ?? '';\n// Match a Linear issue identifier like LIN-123 or a linear.app issue URL.\nconst urlMatch = description.match(/linear\\.app\\/[^/\\s]+\\/([A-Z]{2,5}-\\d+)/i);\nconst idMatch = description.match(/\\b([A-Z]{2,5}-\\d{1,6})\\b/);\nconst linearRef = urlMatch?.[1] ?? idMatch?.[1] ?? '';\nreturn {\n  linearRef,\n  matchCount: linearRef ? 1 : 0\n};"
+    },
+    {
+      "id": "completeLinearIssue",
+      "title": "Complete Linear issue",
+      "description": "Finds the Linear issue by its identifier and marks it as Done.",
+      "type": "codegen",
+      "prompt": "Find the Linear issue identified by `` steps.extractLinearRef.linearRef `` and mark it as done.\n\nUse mcp.linear['list_issues'] with the query set to `` steps.extractLinearRef.linearRef `` and includeArchived false, to locate the exact issue matching that identifier. Confirm exactly one matching issue is found (match its identifier).\n\nIf exactly one issue is found, call mcp.linear['save_issue'] with:\n- id: the exact issue identifier `` steps.extractLinearRef.linearRef ``\n- state: \"Done\"\n\nReturn:\n- issueIdentifier: the Linear identifier that was marked done (e.g. \"LIN-123\"), or an empty string if no unique match.\n- matched: boolean indicating a unique issue was found and marked done.",
+      "outputSchema": {
+        "type": "object",
+        "required": ["issueIdentifier", "matched"],
+        "properties": {
+          "matched": {
+            "type": "boolean"
+          },
+          "issueIdentifier": {
+            "type": "string"
+          }
+        }
+      },
+      "model": "flash",
+      "tools": {
+        "linear": ["list_issues", "save_issue"]
+      }
+    },
+    {
+      "id": "summaryStep",
+      "title": "Summarize result",
+      "description": "Builds a short summary of the completed Linear issue.",
+      "type": "code",
+      "outputSchema": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "runtime": {
+        "language": "typescript",
+        "version": "5.9"
+      },
+      "code": "const ref = steps.completeLinearIssue.issueIdentifier;\nconst matched = steps.completeLinearIssue.matched;\nreturn {\n  text: matched\n    ? `Marked Linear ${ref} as done in Linear.`\n    : `Could not find a matching Linear issue for \"${ref}\".`\n};"
+    }
+  ]
+}

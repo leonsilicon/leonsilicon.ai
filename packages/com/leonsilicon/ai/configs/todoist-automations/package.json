@@ -1,0 +1,20 @@
+{
+  "name": "@-/com.leonsilicon.ai.configs.todoist-automations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leon's Todoist Automations: the manifests Todoist runs, published from here on every deploy, and the commands that check, pull and push them.",
+  "bin": {
+    "_todoist-automations": "./_todoist-automations.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#todoist-automations": "./todoist-automations.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  },
+  "devDependencies": {
+    "@todoist/automations-cli": "catalog:",
+    "varlock": "catalog:"
+  }
+}

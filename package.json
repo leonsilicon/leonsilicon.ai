@@ -13,6 +13,7 @@
       "@krzysztofkobra/orca-mcp": "0.1.1",
       "@modelcontextprotocol/sdk": "1.32.2",
       "@slack/web-api": "8.3.0",
+      "@todoist/automations-cli": "2.2.0",
       "@types/node": "24.19.2",
       "@varlock/cloudflare-integration": "1.6.3",
       "@varlock/infisical-plugin": "2.1.3",
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@-/com.leonsilicon.ai.configs.env-file": "workspace:*",
     "@-/com.leonsilicon.ai.configs.patching.generator": "workspace:*",
+    "@-/com.leonsilicon.ai.configs.todoist-automations": "workspace:*",
     "@-/com.leonsilicon.www": "workspace:*",
     "@types/node": "catalog:",
     "@varlock/cloudflare-integration": "catalog:",

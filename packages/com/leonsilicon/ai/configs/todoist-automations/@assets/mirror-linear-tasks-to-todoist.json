@@ -1,0 +1,127 @@
+{
+  "manifestVersion": 1,
+  "name": "Mirror Linear tasks to Todoist",
+  "description": "When a Linear issue is assigned to me, create a matching task in my Todoist.",
+  "triggers": [
+    {
+      "type": "webhook",
+      "event": "linear.issue.create",
+      "outputSchema": {
+        "type": "object",
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["issue"],
+            "properties": {
+              "issue": {
+                "type": "object",
+                "required": ["id", "identifier", "title", "url"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "number"
+                  },
+                  "assigneeId": {
+                    "type": ["string", "null"]
+                  },
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["issue"],
+            "properties": {
+              "issue": {
+                "type": "object",
+                "required": ["assigneeId"],
+                "properties": {
+                  "assigneeId": {
+                    "const": {
+                      "$env": "LINEAR_LEON_USER_ID"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Runs when a Linear issue is created and assigned to me"
+    }
+  ],
+  "overlap": "skip",
+  "resultFrom": {
+    "stepId": "summaryStep",
+    "path": "text"
+  },
+  "steps": [
+    {
+      "id": "mirrorToTodoist",
+      "title": "Create Todoist task",
+      "description": "Creates a matching task in my Todoist inbox with a link back to the Linear issue.",
+      "type": "codegen",
+      "prompt": "Using the todoist \"add-tasks\" tool, create one new task in the user's Inbox (projectId \"inbox\") that mirrors the Linear issue just created.\n\nUse these values from the Linear issue trigger (`` trigger.issue `` object):\n- Task title: `` trigger.issue.title ``\n- Task description: write a Markdown description that includes the Linear issue URL from `` trigger.issue.url `` and a clearly labeled link to the issue (identifier `` trigger.issue.identifier ``).\n\nCall mcp.todoist['add-tasks'] with a single task. Include the description on the task so the Linear issue identifier is preserved for later syncing. Do not set a due date or priority unless the trigger provides them; use only the values described above.",
+      "outputSchema": {
+        "type": "object",
+        "required": ["createdTaskIds", "taskTitle"],
+        "properties": {
+          "taskTitle": {
+            "type": "string"
+          },
+          "createdTaskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "model": "flash",
+      "tools": {
+        "todoist": ["add-tasks"]
+      }
+    },
+    {
+      "id": "summaryStep",
+      "title": "Summarize result",
+      "description": "Build a short summary of the mirrored task.",
+      "type": "code",
+      "outputSchema": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "runtime": {
+        "language": "typescript",
+        "version": "5.9"
+      },
+      "code": "const taskTitle = steps.mirrorToTodoist.taskTitle;\nconst createdCount = (steps.mirrorToTodoist.createdTaskIds ?? []).length;\nreturn {\n  text: createdCount > 0\n    ? `Mirrored Linear task \"${taskTitle}\" to your Todoist Inbox.`\n    : `Could not mirror the Linear task \"${taskTitle}\".`\n};"
+    }
+  ]
+}

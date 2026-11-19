@@ -55,6 +55,7 @@ export default defineConfig({
           `${ai}/configs/patching/codemods/unsnooze/__tests__/*.test.ts`,
           `${ai}/configs/patching/generator/__tests__/*.test.ts`,
           `${ai}/configs/silicon-dot/agents-vault/__tests__/*.test.ts`,
+          `${ai}/configs/todoist-automations/__tests__/*.test.ts`,
           ...[
             "ai-edge",
             "ai-gateway",
