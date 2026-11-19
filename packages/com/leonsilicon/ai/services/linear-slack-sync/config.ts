@@ -24,6 +24,12 @@ export interface SyncConfig {
   /** The status whose issues wait on a listener, and where they go once its `stop` passes. */
   listenerState: string;
   listenerExpiredTarget: string;
+  /**
+   * When Hermes reacts with this emoji (Slack's name, no colons) to Leon's message in an issue
+   * channel, the issue moves to `hermesAckState`, so the sidebar shows Hermes has it.
+   */
+  hermesAckReaction: string;
+  hermesAckState: string;
   /** Time zone for bare dates in title metadata. */
   timeZone: string;
   /** The sidebar section for project channels, below the status sections. */
@@ -74,6 +80,8 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     dateTarget: env.DATE_TARGET ?? "Awaiting Start",
     listenerState: env.LISTENER_STATE ?? "Awaiting Listener",
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
+    hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
+    hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     projectSection: env.PROJECT_SECTION ?? "Projects",
     closedProjectTypes: list(env.CLOSED_PROJECT_TYPES, ["completed", "canceled"]),

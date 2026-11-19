@@ -43,6 +43,25 @@ export interface SlackMessageEvent {
   message?: { ts: string; user?: string; text?: string; bot_id?: string; files?: SlackFile[] };
 }
 
+export interface SlackReactionEvent {
+  type: "reaction_added";
+  /** Who reacted. */
+  user: string;
+  /** The emoji's name, without colons. */
+  reaction: string;
+  /** Who wrote the message reacted to. */
+  item_user?: string;
+  item: { type: string; channel?: string; ts?: string };
+}
+
+/** Extras for a live status post. */
+interface StatusPost {
+  /** Said after the move, e.g. why it happened. */
+  note?: string;
+  /** Leaves Hermes unpinged, when it already has the issue. */
+  quietHermes?: boolean;
+}
+
 export interface SyncDeps {
   config: SyncConfig;
   store: Store;
@@ -103,6 +122,8 @@ export class Sync {
   #botUserId: string | null = null;
   #channels: ChannelInfo[] | null = null;
   #projectChannels: ProjectChannelSettings | null | undefined;
+  /** Linear status IDs by name, read once per drain. */
+  #states: Map<string, string> | null = null;
 
   constructor(deps: SyncDeps) {
     this.#c = deps.config;
@@ -126,8 +147,11 @@ export class Sync {
       // A delayed look at a new project, once Linear has had time to make its channel.
       const project = await this.#linear.project((payload as { id: string }).id);
       if (project && project.teamKeys.includes(this.#c.teamKey)) await this.syncProject(project);
-    } else if (kind === "slack") await this.onSlackMessage(payload as SlackMessageEvent);
-    else if (kind === "tick") await this.tick();
+    } else if (kind === "slack") {
+      const event = payload as SlackMessageEvent | SlackReactionEvent;
+      if (event.type === "reaction_added") await this.onSlackReaction(event as SlackReactionEvent);
+      else await this.onSlackMessage(event as SlackMessageEvent);
+    } else if (kind === "tick") await this.tick();
     else if (kind === "backfill") await this.backfill();
     else this.#log("unknown_job", { kind });
   }
@@ -205,9 +229,14 @@ export class Sync {
 
   /**
    * Brings an issue's channel in line with the issue. `live` posts what changed (the intro for a
-   * new channel, status moves, mentions); `quiet` only fixes state, for backfills.
+   * new channel, status moves, mentions); `quiet` only fixes state, for backfills. `post` shapes
+   * the status post, when there is one.
    */
-  async syncIssue(issue: LinearIssue, mode: "live" | "quiet"): Promise<IssueRecord | null> {
+  async syncIssue(
+    issue: LinearIssue,
+    mode: "live" | "quiet",
+    post: StatusPost = {},
+  ): Promise<IssueRecord | null> {
     const prev = this.#store.issue(issue.id);
     const { name, meta } = parseTitle(issue.title);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
@@ -263,7 +292,7 @@ export class Sync {
     }
 
     if (mode === "live" && prev && prev.stateName !== issue.state.name)
-      await this.#postStatus(rec.channelId, prev.stateName, issue);
+      await this.#postStatus(rec.channelId, prev.stateName, issue, post);
 
     if (rec.section !== issue.state.name && (await this.#place(rec.channelId, issue.state.name)))
       rec.section = issue.state.name;
@@ -487,6 +516,30 @@ export class Sync {
     }
   }
 
+  /**
+   * Hermes reacting 👀 to Leon's message in an issue channel means it has taken the message up, so
+   * the issue moves to Awaiting Hermes from whatever status it was in. The channel follows at once,
+   * without pinging Hermes, which is already on it; Linear's webhook then finds nothing to do.
+   */
+  async onSlackReaction(event: SlackReactionEvent): Promise<void> {
+    const { hermesAckReaction, hermesAckState } = this.#c;
+    if (event.reaction !== hermesAckReaction || event.user !== this.#c.hermesUserId) return;
+    if (event.item_user !== this.#c.leonUserId || event.item.type !== "message") return;
+    const rec = event.item.channel ? this.#store.issueByChannel(event.item.channel) : null;
+    if (!rec || rec.archived) return;
+    const issue = await this.#linear.issue(rec.issueId);
+    if (!issue || this.#c.closedStateTypes.includes(issue.state.type)) return;
+    if (issue.state.name === hermesAckState) return;
+    await this.#move(issue, hermesAckState);
+    this.#log("hermes_ack", { issue: issue.identifier, from: issue.state.name });
+    const moved = await this.#linear.issue(issue.id);
+    if (moved)
+      await this.syncIssue(moved, "live", {
+        note: `(Hermes reacted :${hermesAckReaction}: to Leon's message)`,
+        quietHermes: true,
+      });
+  }
+
   // ── Scheduled work ─────────────────────────────────────────────────────────
 
   /**
@@ -496,37 +549,19 @@ export class Sync {
   async tick(): Promise<void> {
     const now = this.#now();
     const issues = await this.#linear.openIssues(this.#c.teamKey, this.#c.closedStateTypes);
-    let states: Map<string, string> | null = null;
-    const stateId = async (name: string) => {
-      states ??= new Map((await this.#linear.states(this.#c.teamKey)).map((s) => [s.name, s.id]));
-      const id = states.get(name);
-      if (!id) throw new Error(`no Linear status named ${name}`);
-      return id;
-    };
     for (const issue of issues) {
-      const { name, meta } = parseTitle(issue.title);
+      const { meta } = parseTitle(issue.title);
       if (issue.state.name === this.#c.dateState && meta.start) {
         const at = metaInstant(meta.start, this.#c.timeZone);
         if (at && at.getTime() <= now) {
-          const rest = { ...meta };
-          delete rest.start;
-          await this.#linear.updateIssue(issue.id, {
-            stateId: await stateId(this.#c.dateTarget),
-            title: formatTitle(name, rest),
-          });
+          await this.#move(issue, this.#c.dateTarget);
           this.#log("start_date_reached", { issue: issue.identifier });
         }
       } else if (issue.state.name === this.#c.listenerState && meta.stop) {
         const at = metaInstant(meta.stop, this.#c.timeZone);
         if (at && at.getTime() <= now) {
           const { event, stop } = meta;
-          const rest = { ...meta };
-          delete rest.event;
-          delete rest.stop;
-          await this.#linear.updateIssue(issue.id, {
-            stateId: await stateId(this.#c.listenerExpiredTarget),
-            title: formatTitle(name, rest),
-          });
+          await this.#move(issue, this.#c.listenerExpiredTarget);
           await this.#linear.createComment({
             id: await stableUuid(`listener-expired:${issue.id}:${stop}`),
             issueId: issue.id,
@@ -608,6 +643,33 @@ export class Sync {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  async #stateId(name: string): Promise<string> {
+    this.#states ??= new Map(
+      (await this.#linear.states(this.#c.teamKey)).map((s) => [s.name, s.id]),
+    );
+    const id = this.#states.get(name);
+    if (!id) throw new Error(`no Linear status named ${name}`);
+    return id;
+  }
+
+  /** Title metadata that belongs to a status, dropped when an issue leaves it. */
+  #statusKeys(status: string): string[] {
+    if (status === this.#c.dateState) return ["start"];
+    if (status === this.#c.listenerState) return ["event", "stop"];
+    return [];
+  }
+
+  /** Moves an issue to another status in Linear, stripping the old status's keys from its title. */
+  async #move(issue: LinearIssue, to: string): Promise<void> {
+    const { name, meta } = parseTitle(issue.title);
+    const stale = this.#statusKeys(issue.state.name).filter((key) => key in meta);
+    for (const key of stale) delete meta[key];
+    await this.#linear.updateIssue(issue.id, {
+      stateId: await this.#stateId(to),
+      ...(stale.length ? { title: formatTitle(name, meta) } : {}),
+    });
+  }
 
   #text(markdown: string): string {
     return linearToSlack(markdown).trim() || "(empty comment)";
@@ -806,11 +868,11 @@ export class Sync {
     await this.#sidebar?.release(channelId, this.#order());
   }
 
-  #mentions(issue: LinearIssue): string {
+  #mentions(issue: LinearIssue, post: StatusPost = {}): string {
     const status = issue.state.name;
     const lines: string[] = [];
     if (this.#c.mentionLeonStates.includes(status)) lines.push(`<@${this.#c.leonUserId}>`);
-    if (this.#c.pingHermesStates.includes(status))
+    if (this.#c.pingHermesStates.includes(status) && !post.quietHermes)
       lines.push(
         `<@${this.#c.hermesUserId}> ${issue.identifier} is now ${status}: ${
           status === "Awaiting Hermes" ? "an agent is waiting on you." : "please pick it up."
@@ -819,12 +881,18 @@ export class Sync {
     return lines.join(" ");
   }
 
-  async #postStatus(channelId: string, from: string, issue: LinearIssue): Promise<void> {
-    const mentions = this.#mentions(issue);
+  async #postStatus(
+    channelId: string,
+    from: string,
+    issue: LinearIssue,
+    post: StatusPost = {},
+  ): Promise<void> {
+    const mentions = this.#mentions(issue, post);
+    const move = `*${from}* → *${issue.state.name}*${post.note ? ` ${post.note}` : ""}`;
     await tolerate(
       this.#bot("chat.postMessage", {
         channel: channelId,
-        text: `*${from}* → *${issue.state.name}*${mentions ? `\n${mentions}` : ""}`,
+        text: `${move}${mentions ? `\n${mentions}` : ""}`,
         unfurl_links: false,
       }),
       ARCHIVED,

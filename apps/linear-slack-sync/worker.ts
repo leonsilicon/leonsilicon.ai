@@ -49,6 +49,8 @@ interface Env {
   SLACK_SESSION_COOKIE?: string;
   /** Bearer token for /admin/* (backfill, tick, status). */
   LINEAR_SYNC_ADMIN_TOKEN: string;
+  /** Hermes's reaction that moves an issue to Awaiting Hermes; `eyes` unless set. */
+  HERMES_ACK_REACTION?: string;
   [key: string]: unknown;
 }
 
@@ -70,8 +72,19 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
   if (!response.ok) throw new Error(`enqueue failed: ${response.status}`);
 }
 
-/** Slack message events worth queueing: people's messages and edits in channels. */
-function wantedSlackEvent(event: Record<string, unknown> | undefined): boolean {
+/**
+ * Slack events worth queueing: people's messages and edits in channels, and 👀 reactions to
+ * messages (the sync checks who reacted to whom).
+ */
+function wantedSlackEvent(
+  event: Record<string, unknown> | undefined,
+  ackReaction: string,
+): boolean {
+  if (event?.type === "reaction_added")
+    return (
+      event.reaction === ackReaction &&
+      (event.item as { type?: string } | undefined)?.type === "message"
+    );
   if (!event || event.type !== "message") return false;
   if (event.channel_type !== "channel" && event.channel_type !== "group") return false;
   if (event.subtype === "message_changed") return true;
@@ -118,7 +131,8 @@ export default {
       );
       if (!ok) return json({ error: "bad signature" }, 401);
       if (payload.type === "url_verification") return json({ challenge: payload.challenge });
-      if (payload.type === "event_callback" && wantedSlackEvent(payload.event))
+      const ackReaction = env.HERMES_ACK_REACTION ?? "eyes";
+      if (payload.type === "event_callback" && wantedSlackEvent(payload.event, ackReaction))
         await enqueue(env, `slack:${payload.event_id}`, "slack", payload.event);
       return json({ ok: true });
     }

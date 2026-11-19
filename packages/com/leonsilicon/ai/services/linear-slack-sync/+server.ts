@@ -26,5 +26,11 @@ export type { Section, SlackCall, SlackParams, SlackResponse } from "#slack";
 export { Store } from "#store";
 export type { CommentRecord, IssueRecord, Job, ProjectRecord, Row, Sql, SqlValue } from "#store";
 export { PROJECT_GRACE_MS, stableUuid, Sync } from "#sync";
-export type { LinearWebhook, SlackFile, SlackMessageEvent, SyncDeps } from "#sync";
+export type {
+  LinearWebhook,
+  SlackFile,
+  SlackMessageEvent,
+  SlackReactionEvent,
+  SyncDeps,
+} from "#sync";
 export { hmacHex, verifyLinear, verifySlack } from "#verify";

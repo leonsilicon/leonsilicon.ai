@@ -610,6 +610,84 @@ test("bots, system messages and unmapped channels stay out of Linear", async () 
   assert.equal(linear.created.length, 0);
 });
 
+const eyes = (channel: string, overrides: Record<string, unknown> = {}) => ({
+  type: "reaction_added",
+  user: HERMES,
+  reaction: "eyes",
+  item_user: LEON,
+  item: { type: "message", channel, ts: "1794100000.000001" },
+  ...overrides,
+});
+
+test("Hermes reacting 👀 to Leon's message moves the issue to Awaiting Hermes, unpinged", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(
+    205,
+    "switch to rogers `{event: Rogers deal, stop: 2026-12-01, owner: Leon}`",
+    "Awaiting Listener",
+  );
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!;
+
+  await sync.run("slack", eyes(channel.id));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  assert.equal(
+    issue.title,
+    "switch to rogers `{owner: Leon}`",
+    "the listener's keys leave with it; others stay",
+  );
+  assert.equal(
+    slack.posts.at(-1)!.text,
+    "*Awaiting Listener* → *Awaiting Hermes* (Hermes reacted :eyes: to Leon's message)",
+    "Hermes is already on it, so it isn't pinged",
+  );
+  assert.equal(slack.sectionOf(channel.id), "Awaiting Hermes");
+
+  // Linear's webhook for the move finds the channel already done.
+  const posts = slack.posts.length;
+  await sync.run("linear", issueHook(issue.id));
+  assert.equal(slack.posts.length, posts);
+
+  // Another 👀 while it's Awaiting Hermes changes nothing.
+  const updates = linear.updates.length;
+  await sync.run(
+    "slack",
+    eyes(channel.id, { item: { type: "message", channel: channel.id, ts: "2.2" } }),
+  );
+  assert.equal(linear.updates.length, updates);
+  assert.equal(slack.posts.length, posts);
+
+  // It works from any open status.
+  issue.state = state("Executing");
+  await sync.run("linear", issueHook(issue.id));
+  await sync.run("slack", eyes(channel.id));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  assert.equal(issue.title, "switch to rogers `{owner: Leon}`", "no status keys, no title change");
+  assert.equal(linear.updates.at(-1)!.input.title, undefined);
+});
+
+test("other reactions, reactors, authors and channels don't move an issue", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(9, "x", "Awaiting Leon");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!.id;
+  for (const event of [
+    eyes(channel, { reaction: "white_check_mark" }),
+    eyes(channel, { user: LEON }),
+    eyes(channel, { item_user: BOT }),
+    eyes(channel, { item: { type: "file", channel } }),
+    eyes("C-unmapped"),
+  ])
+    await sync.run("slack", event);
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(linear.updates.length, 0);
+
+  issue.state = state("Done");
+  await sync.run("linear", issueHook(issue.id));
+  await sync.run("slack", eyes(channel));
+  assert.equal(issue.state.name, "Done", "a closed issue stays closed");
+});
+
 test("backfill adopts existing issue channels quietly and archives closed ones", async () => {
   const { linear, slack, sync, store } = setup();
   const open = slack.addLeonChannel("leon-315-migrate-instagram-payout-setup-from-us-to");
