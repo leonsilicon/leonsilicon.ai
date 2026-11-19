@@ -82,7 +82,7 @@
       "title": "Create Todoist task",
       "description": "Creates a matching task in my Todoist inbox with a link back to the Linear issue.",
       "type": "codegen",
-      "prompt": "Using the todoist \"add-tasks\" tool, create one new task in the user's Inbox (projectId \"inbox\") that mirrors the Linear issue just created.\n\nUse these values from the Linear issue trigger (`` trigger.issue `` object):\n- Task title: `` trigger.issue.title ``\n- Task description: write a Markdown description that includes the Linear issue URL from `` trigger.issue.url `` and a clearly labeled link to the issue (identifier `` trigger.issue.identifier ``).\n\nCall mcp.todoist['add-tasks'] with a single task. Include the description on the task so the Linear issue identifier is preserved for later syncing. Do not set a due date or priority unless the trigger provides them; use only the values described above.",
+      "prompt": "Call mcp.todoist['add-tasks'] once, to create one task in the user's Inbox (projectId \"inbox\") that mirrors the Linear issue that was just created:\n\n- content: `` trigger.payload.issue.title ``\n- description: exactly \"[\" + `` trigger.payload.issue.identifier `` + \"](\" + `` trigger.payload.issue.url `` + \")\", with nothing before or after it. \"Complete Linear task from Todoist\" reads the issue from this link, so its format must not change.\n\nSet nothing else: no due date, priority or labels.",
       "outputSchema": {
         "type": "object",
         "required": ["createdTaskIds", "taskTitle"],
