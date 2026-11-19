@@ -54,38 +54,126 @@ export function formatTitle(name: string, meta: TitleMeta): string {
  * `timeZone`; anything else must be an RFC 3339 time with an offset. Null when it isn't a date.
  */
 export function metaInstant(value: string, timeZone: string): Date | null {
-  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  if (day) return zonedMidnight(Number(day[1]), Number(day[2]), Number(day[3]), timeZone);
+  const day = BARE_DATE.exec(value.trim());
+  if (day) return zonedTime(Number(day[1]), Number(day[2]), Number(day[3]), 0, 0, timeZone);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(value.trim()))
     return null;
   const date = new Date(value.trim());
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function zonedMidnight(year: number, month: number, day: number, timeZone: string): Date {
-  const format = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  // Midnight local is UTC midnight shifted by the zone's offset, which is within ±14 hours.
-  for (let offset = -14; offset <= 14; offset++) {
-    const candidate = new Date(Date.UTC(year, month - 1, day, offset, 0));
-    const parts = Object.fromEntries(format.formatToParts(candidate).map((p) => [p.type, p.value]));
+const BARE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Whether a metadata date has a time of day; a bare `YYYY-MM-DD` doesn't. */
+export const hasTime = (value: string) => !BARE_DATE.test(value.trim());
+
+interface LocalParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+/** The wall-clock reading of `instant` (ms) in `timeZone`. */
+function localParts(instant: number, timeZone: string): LocalParts {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(instant)
+      .map((p) => [p.type, Number(p.value)]),
+  ) as unknown as LocalParts;
+  return parts;
+}
+
+/** The instant a wall-clock time in `timeZone` names. */
+function zonedTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const local = Date.UTC(year, month - 1, day, hour, minute);
+  // The zone's offset is within ±14 hours, in steps of 15 minutes.
+  for (let offset = -14 * 60; offset <= 14 * 60; offset += 15) {
+    const candidate = local - offset * 60_000;
+    const p = localParts(candidate, timeZone);
     if (
-      Number(parts.year) === year &&
-      Number(parts.month) === month &&
-      Number(parts.day) === day &&
-      parts.hour === "00" &&
-      parts.minute === "00"
+      p.year === year &&
+      p.month === month &&
+      p.day === day &&
+      p.hour === hour &&
+      p.minute === minute
     )
-      return candidate;
+      return new Date(candidate);
   }
-  return new Date(Date.UTC(year, month - 1, day));
+  return new Date(local);
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** `instant` as RFC 3339 in `timeZone`'s wall-clock time, with its offset: `2026-11-20T17:00:00-05:00`. */
+export function zonedIso(instant: number, timeZone: string): string {
+  const seconds = Math.floor(instant / 1000) * 1000;
+  const p = localParts(seconds, timeZone);
+  const offset = Math.round(
+    (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - seconds) / 60_000,
+  );
+  const abs = Math.abs(offset);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}:${pad(p.second)}${
+    offset < 0 ? "-" : "+"
+  }${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
+/**
+ * A metadata date moved to `day` (`YYYY-MM-DD`) at the same wall-clock time in `timeZone`, written
+ * as RFC 3339; a bare date becomes `day` itself. Null when either doesn't parse.
+ */
+export function withDay(value: string, day: string, timeZone: string): string | null {
+  const at = metaInstant(value, timeZone);
+  const target = BARE_DATE.exec(day);
+  if (!at || !target) return null;
+  if (!hasTime(value)) return day;
+  const { hour, minute } = localParts(at.getTime(), timeZone);
+  const moved = zonedTime(
+    Number(target[1]),
+    Number(target[2]),
+    Number(target[3]),
+    hour,
+    minute,
+    timeZone,
+  );
+  return zonedIso(moved.getTime(), timeZone);
+}
+
+/** The day `n` days after `day`, both `YYYY-MM-DD`. */
+export function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** `Fri, Nov 20` or, with `time`, `Fri, Nov 20, 5:00 PM`, in `timeZone`. */
+export function localLabel(instant: number, timeZone: string, time: boolean): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(time ? { hour: "numeric", minute: "2-digit" } : {}),
+  })
+    .format(instant)
+    .replace(/ /g, " "); // newer ICU puts a narrow no-break space before AM/PM
 }
 
 /** Lowercase words joined by hyphens, accents dropped: what Slack allows in a channel name. */
@@ -114,10 +202,36 @@ export function channelName(prefix: string, number: number, name: string, max: n
 }
 
 /**
+ * The day a project is for, as `YYYY-MM-DD`, when its whole name is a calendar date: `20261119` (the
+ * name Hermes's 05:00 Toronto job gives each day's project) or `2026-11-19`. Null for any other name.
+ */
+export function projectDay(name: string): string | null {
+  const match = /^(\d{4})(-?)(\d{2})\2(\d{2})$/.exec(name.trim());
+  if (!match) return null;
+  const [, y, , m, d] = match as unknown as [string, string, string, string, string];
+  const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  if (date.getUTCMonth() !== Number(m) - 1 || date.getUTCDate() !== Number(d)) return null;
+  return `${y}-${m}-${d}`;
+}
+
+/** The calendar day `instant` (ms) falls on in `timeZone`, as `YYYY-MM-DD`. */
+export function localDay(instant: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
+/**
  * `project-uoft-creators-club`: Linear's project channel prefix (which ends in a hyphen) and the project
- * name, cut at a word.
+ * name, cut at a word. A project named after a day gets `project-2026-11-19`, whichever way the name
+ * writes the date.
  */
 export function projectChannelName(prefix: string, name: string, max: number): string {
+  const day = projectDay(name);
+  if (day) return `${prefix}${day}`;
   const slug = slugify(name) || "project";
   const out = `${prefix}${slug}`;
   return out.length <= max ? out : joinCut(prefix.replace(/-+$/, ""), slug, max);
@@ -141,7 +255,7 @@ export function channelTopic(stateName: string, meta: TitleMeta, url: string): s
   return head + tail;
 }
 
-const escapeSlack = (text: string) =>
+export const escapeSlack = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Pulls code spans and blocks out so the other rewrites leave them alone. */

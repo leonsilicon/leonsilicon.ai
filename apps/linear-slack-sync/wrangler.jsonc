@@ -9,8 +9,9 @@
   "routes": [{ "pattern": "linear-slack.leonsilicon.ai", "custom_domain": true }],
   "durable_objects": { "bindings": [{ "name": "SYNC", "class_name": "SyncObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncObject"] }],
-  // Every 15 minutes: start dated issues, expire listeners, and repair anything a missed webhook left behind.
-  "triggers": { "crons": ["*/15 * * * *"] },
+  // Once a day (08:00 UTC, 03:00 or 04:00 in Toronto), the safety net: repairs anything a missed webhook
+  // left behind and resets every issue's timer. Times themselves go off on the Durable Object's alarm.
+  "triggers": { "crons": ["0 8 * * *"] },
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/com.leonsilicon.www.
   "assets": {

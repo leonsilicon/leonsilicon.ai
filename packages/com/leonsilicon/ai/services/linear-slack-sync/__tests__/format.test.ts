@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  addDays,
   channelName,
   channelNumber,
   channelTopic,
   formatTitle,
+  hasTime,
   linearToSlack,
+  localDay,
+  localLabel,
   metaInstant,
   parseTitle,
   projectChannelName,
+  projectDay,
   slackToLinear,
+  withDay,
+  zonedIso,
 } from "#format";
 import { hmacHex, verifyLinear, verifySlack } from "#verify";
 
@@ -58,6 +65,39 @@ test("metaInstant reads bare dates as Toronto midnight and RFC 3339 times as giv
   );
   assert.equal(metaInstant("next week", "America/Toronto"), null);
   assert.equal(metaInstant("2026-12-01T09:00", "America/Toronto"), null);
+});
+
+test("zonedIso writes an instant as Toronto wall-clock time with its offset", () => {
+  assert.equal(
+    zonedIso(Date.UTC(2026, 11, 1, 22, 0, 0, 500), "America/Toronto"),
+    "2026-12-01T17:00:00-05:00",
+  );
+  assert.equal(
+    zonedIso(Date.UTC(2026, 6, 1, 21, 30), "America/Toronto"),
+    "2026-07-01T17:30:00-04:00",
+  );
+  assert.equal(zonedIso(Date.UTC(2026, 6, 1, 21, 30), "Asia/Kolkata"), "2026-07-02T03:00:00+05:30");
+});
+
+test("withDay moves a due to another day at the same wall-clock time, across DST", () => {
+  const tz = "America/Toronto";
+  assert.equal(withDay("2026-12-01", "2026-12-03", tz), "2026-12-03");
+  assert.equal(withDay("2026-12-01T17:00:00-05:00", "2026-12-03", tz), "2026-12-03T17:00:00-05:00");
+  // 17:00 in October is EDT; on the day after the clocks change it's EST, still 17:00.
+  assert.equal(withDay("2026-10-30T17:00:00-04:00", "2026-11-02", tz), "2026-11-02T17:00:00-05:00");
+  assert.equal(withDay("2026-12-01T22:00:00Z", "2026-12-02", tz), "2026-12-02T17:00:00-05:00");
+  assert.equal(withDay("someday", "2026-12-02", tz), null);
+  assert.equal(withDay("2026-12-01", "Dec 2", tz), null);
+});
+
+test("hasTime, addDays and localLabel", () => {
+  assert.equal(hasTime("2026-12-01"), false);
+  assert.equal(hasTime("2026-12-01T09:00:00-05:00"), true);
+  assert.equal(addDays("2026-12-31", 1), "2027-01-01");
+  assert.equal(addDays("2026-03-01", -1), "2026-02-28");
+  const at = Date.UTC(2026, 11, 1, 22, 0);
+  assert.equal(localLabel(at, "America/Toronto", false), "Tue, Dec 1");
+  assert.equal(localLabel(at, "America/Toronto", true), "Tue, Dec 1, 5:00 PM");
 });
 
 test("channel names use the prefix and number, cut at a word", () => {
@@ -147,4 +187,26 @@ test("projectChannelName uses Linear's prefix and cuts at a word", () => {
     projectChannelName("p-", "Creator accounts and payouts for every platform", 25),
     "p-creator-accounts-and",
   );
+});
+
+test("projectDay reads a project named after a calendar day, either way it's written", () => {
+  assert.equal(projectDay("20261119"), "2026-11-19");
+  assert.equal(projectDay("2026-11-19"), "2026-11-19");
+  assert.equal(projectDay(" 20261119 "), "2026-11-19");
+  assert.equal(projectDay("20261131"), null);
+  assert.equal(projectDay("2026-1119"), null);
+  assert.equal(projectDay("University"), null);
+  assert.equal(projectDay("20261119 debrief"), null);
+  assert.equal(projectDay("202611190"), null);
+});
+
+test("a day's project channel is project-YYYY-MM-DD", () => {
+  assert.equal(projectChannelName("project-", "20261119", 60), "project-2026-11-19");
+  assert.equal(projectChannelName("project-", "2026-11-19", 60), "project-2026-11-19");
+});
+
+test("localDay is the calendar day in the given time zone", () => {
+  // 04:30 UTC on Nov 20 is still Nov 19 in Toronto.
+  assert.equal(localDay(Date.UTC(2026, 10, 20, 4, 30), "America/Toronto"), "2026-11-19");
+  assert.equal(localDay(Date.UTC(2026, 10, 20, 5, 0), "America/Toronto"), "2026-11-20");
 });

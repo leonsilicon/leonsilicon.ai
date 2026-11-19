@@ -183,7 +183,8 @@ export default {
 /**
  * The one place work happens: webhooks become rows in a SQLite queue, and an alarm drains it one
  * job at a time, retrying failures with backoff. Serial processing means two events for the same
- * issue can never both create a channel.
+ * issue can never both create a channel. Timers are delayed jobs in the same queue (an issue's next
+ * start, stop or due time, the next midnight), so the alarm is always set for the earliest of them.
  */
 export class SyncObject {
   readonly #state: DurableObjectState;

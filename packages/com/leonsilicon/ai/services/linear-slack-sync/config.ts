@@ -30,8 +30,10 @@ export interface SyncConfig {
    */
   hermesAckReaction: string;
   hermesAckState: string;
-  /** Time zone for bare dates in title metadata. */
+  /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
+  /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
+  feedChannel: string;
   /** The sidebar section for project channels, below the status sections. */
   projectSection: string;
   /** Linear project status types that close a project; its channel is archived. */
@@ -83,6 +85,7 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
     hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
+    feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",
     closedProjectTypes: list(env.CLOSED_PROJECT_TYPES, ["completed", "canceled"]),
   };

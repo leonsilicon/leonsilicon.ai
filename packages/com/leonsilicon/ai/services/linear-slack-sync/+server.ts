@@ -1,19 +1,26 @@
 export { DEFAULT_SECTION_ORDER, loadConfig } from "#config";
 export type { SyncConfig } from "#config";
 export {
+  addDays,
   channelName,
   channelNumber,
   channelTopic,
   formatTitle,
+  hasTime,
   linearToSlack,
+  localDay,
+  localLabel,
   metaInstant,
   parseTitle,
   projectChannelName,
   slackToLinear,
+  withDay,
+  zonedIso,
 } from "#format";
 export type { ParsedTitle, TitleMeta } from "#format";
 export { LinearClient, LinearError } from "#linear";
 export type {
+  IssueUpdate,
   LinearApi,
   LinearComment,
   LinearIssue,

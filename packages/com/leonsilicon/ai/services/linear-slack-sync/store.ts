@@ -70,6 +70,7 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS projects (
     project_id TEXT PRIMARY KEY, name TEXT NOT NULL, status_name TEXT NOT NULL, channel_id TEXT,
     section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -108,7 +109,10 @@ const toComment = (r: Row): CommentRecord => ({
   origin: r.origin as "linear" | "slack",
 });
 
-/** Issue ↔ channel, project ↔ channel and comment ↔ message mappings, plus the durable job queue. */
+/**
+ * Issue ↔ channel, project ↔ channel and comment ↔ message mappings, plus the durable job queue,
+ * whose delayed jobs double as timers.
+ */
 export class Store {
   readonly #sql: Sql;
 
@@ -241,6 +245,51 @@ export class Store {
       now,
     );
     return true;
+  }
+
+  /**
+   * Sets when `key` goes off: one job of `kind`, run at `at` in place of any other time set for
+   * `key`. Null clears it. Its job ID is `key@at`, so setting the same time again changes nothing,
+   * however long ago it was set (unlike `enqueue`, whose dedupe lasts three days).
+   */
+  setTimer(key: string, kind: string, payload: unknown, at: number | null, now: number): void {
+    const prefix = `${key}@`;
+    const id = at === null ? null : `${prefix}${at}`;
+    this.#sql.exec(
+      `DELETE FROM queue WHERE substr(id, 1, ?) = ? AND id IS NOT ?`,
+      prefix.length,
+      prefix,
+      id,
+    );
+    if (id === null) return;
+    this.#sql.exec(
+      `INSERT OR IGNORE INTO queue (id, kind, payload, not_before, created_at) VALUES (?, ?, ?, ?, ?)`,
+      id,
+      kind,
+      JSON.stringify(payload),
+      at,
+      now,
+    );
+  }
+
+  /** When `key` goes off next (ms), or null when it isn't set. */
+  timer(key: string): number | null {
+    const prefix = `${key}@`;
+    const row = this.#sql.exec(
+      `SELECT MIN(not_before) AS t FROM queue WHERE substr(id, 1, ?) = ?`,
+      prefix.length,
+      prefix,
+    )[0];
+    return row?.t === null || row?.t === undefined ? null : Number(row.t);
+  }
+
+  /** Whether something that should happen once, such as an issue's due notice, already has. */
+  fired(key: string): boolean {
+    return this.#sql.exec(`SELECT key FROM fired WHERE key = ?`, key).length > 0;
+  }
+
+  markFired(key: string, now: number): void {
+    this.#sql.exec(`INSERT OR IGNORE INTO fired (key, at) VALUES (?, ?)`, key, now);
   }
 
   dueJobs(now: number, limit: number): Job[] {

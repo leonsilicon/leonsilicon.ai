@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { loadConfig } from "#config";
 import type {
+  IssueUpdate,
   LinearApi,
   LinearComment,
   LinearIssue,
@@ -12,7 +13,7 @@ import type {
 } from "#linear";
 import { SlackError, type SlackCall, type SlackParams } from "#slack";
 import { Store, type Sql, type SqlValue } from "#store";
-import { PROJECT_GRACE_MS, Sync } from "#sync";
+import { PROJECT_GRACE_MS, STARRED, Sync } from "#sync";
 
 const LEON = "U0LEON00001";
 const HERMES = "U0HERMES001";
@@ -63,7 +64,7 @@ function fakeLinear(makeChannel: MakeChannel) {
   };
   const comments = new Map<string, LinearComment>();
   const created: { id: string; issueId: string; body: string; parentId?: string }[] = [];
-  const updates: { id: string; input: { stateId?: string; title?: string } }[] = [];
+  const updates: { id: string; input: IssueUpdate }[] = [];
   const api: LinearApi = {
     issue: async (id) =>
       issues.get(id) ?? [...issues.values()].find((i) => i.identifier === id) ?? null,
@@ -92,6 +93,7 @@ function fakeLinear(makeChannel: MakeChannel) {
       const issue = issues.get(id)!;
       if (input.stateId) issue.state = STATES.find((s) => s.id === input.stateId)!;
       if (input.title) issue.title = input.title;
+      if ("dueDate" in input) issue.dueDate = input.dueDate ?? null;
     },
     project: async (id) => projects.get(id) ?? null,
     openProjects: async (team, closed) =>
@@ -134,6 +136,7 @@ function fakeLinear(makeChannel: MakeChannel) {
       description,
       state: state(status),
       teamKey: "LEON",
+      dueDate: null,
     };
     issues.set(issue.id, issue);
     return issue;
@@ -178,6 +181,8 @@ function fakeSlack() {
     by: string;
   }[] = [];
   const calls: { who: string; method: string; params: SlackParams }[] = [];
+  /** Leon's starred channels. Slack keeps them apart from custom sections: a channel can be in both. */
+  const stars = new Set<string>();
   let seq = 0;
   const find = (id: unknown) => {
     const c = channels.find((ch) => ch.id === id);
@@ -239,6 +244,9 @@ function fakeSlack() {
               .filter((c) => !c.private || c.members.has(me))
               .map((c) => ({ id: c.id, name: c.name, is_archived: c.archived })),
           };
+        case "conversations.setPurpose":
+          member(find(params.channel));
+          return { ok: true };
         case "conversations.setTopic": {
           const c = find(params.channel);
           member(c);
@@ -257,6 +265,13 @@ function fakeSlack() {
           return { ok: true };
         case "conversations.rename":
           find(params.channel).name = String(params.name);
+          return { ok: true };
+        case "stars.add":
+          if (stars.has(String(params.channel))) throw new SlackError(method, "already_starred");
+          stars.add(String(params.channel));
+          return { ok: true };
+        case "stars.remove":
+          if (!stars.delete(String(params.channel))) throw new SlackError(method, "not_starred");
           return { ok: true };
         case "chat.postMessage": {
           const c = find(params.channel);
@@ -374,6 +389,7 @@ function fakeSlack() {
     session: client("leon"),
     channels,
     sections,
+    stars,
     posts,
     calls,
     sectionOf,
@@ -397,7 +413,19 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     now: () => clock.now,
     sleep: async () => {},
   });
-  return { linear, slack, store, sync, clock };
+  /** Runs every queued job that is due by the clock, as the Durable Object's alarm does. */
+  const drain = async () => {
+    for (let round = 0; round < 20; round++) {
+      const jobs = store.dueJobs(clock.now, 50);
+      if (!jobs.length) return;
+      for (const job of jobs) {
+        await sync.run(job.kind, JSON.parse(job.payload));
+        store.finish(job.id);
+      }
+    }
+    throw new Error("the queue never settled");
+  };
+  return { linear, slack, store, sync, clock, drain };
 }
 
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
@@ -709,31 +737,189 @@ test("backfill adopts existing issue channels quietly and archives closed ones",
   assert.equal(slack.posts.length, 0, "backfill posts nothing");
 });
 
-test("tick starts dated issues, expires listeners and repairs drift", async () => {
-  const { linear, slack, sync, clock, store } = setup(Date.UTC(2026, 11, 1, 5, 30));
-  const dated = linear.addIssue(10, "File taxes `{start: 2026-12-01}`", "Awaiting Date");
-  const later = linear.addIssue(11, "Renew `{start: 2026-12-02}`", "Awaiting Date");
-  const listener = linear.addIssue(
-    205,
-    "switch to rogers `{event: Rogers deal, stop: 2026-12-01}`",
-    "Awaiting Listener",
-  );
-  await sync.run("backfill", {});
+const updateHook = (id: string, updatedFrom: Record<string, unknown>) => ({
+  ...issueHook(id),
+  updatedFrom,
+});
 
-  await sync.run("tick", {});
+/** 00:00 Toronto on 2026-12-01. */
+const DEC_1 = Date.UTC(2026, 11, 1, 5, 0);
+
+test("an Awaiting Date issue starts when its timer goes off, not before", async () => {
+  const { linear, slack, sync, clock, store, drain } = setup(DEC_1 - 3600_000);
+  const dated = linear.addIssue(10, "File taxes `{start: 2026-12-01}`", "Awaiting Date");
+  await sync.run("linear", issueHook(dated.id, "create"));
+  assert.equal(store.timer(`timer:${dated.id}`), DEC_1, "midnight in Toronto");
+
+  clock.now = DEC_1 - 1;
+  await drain();
+  assert.equal(dated.state.name, "Awaiting Date");
+
+  clock.now = DEC_1;
+  await drain();
   assert.equal(dated.state.name, "Awaiting Start");
   assert.equal(dated.title, "File taxes");
-  assert.equal(later.state.name, "Awaiting Date");
+  assert.equal(store.timer(`timer:${dated.id}`), null, "nothing left to wait for");
+  // Linear's webhook for the move then files the channel.
+  await sync.run("linear", issueHook(dated.id));
+  assert.equal(slack.sectionOf(store.issue(dated.id)!.channelId), "Awaiting Start");
+});
+
+test("an expired listener goes back to Leon with a comment, on its timer", async () => {
+  const { linear, sync, clock, store, drain } = setup(DEC_1 - 60_000);
+  const listener = linear.addIssue(
+    205,
+    "switch to rogers `{event: Rogers deal, stop: 2026-12-01T09:00:00-05:00}`",
+    "Awaiting Listener",
+  );
+  await sync.run("linear", issueHook(listener.id, "create"));
+  assert.equal(store.timer(`timer:${listener.id}`), Date.UTC(2026, 11, 1, 14, 0));
+
+  clock.now = Date.UTC(2026, 11, 1, 14, 0);
+  await drain();
   assert.equal(listener.state.name, "Awaiting Leon");
   assert.equal(listener.title, "switch to rogers");
-  assert.match(linear.created.at(-1)!.body, /stop date \(2026-12-01\) passed .* Rogers deal/);
-  // The tick's own reconcile already moved the channels (webhooks would too).
-  assert.equal(slack.sectionOf(store.issue(dated.id)!.channelId), "Awaiting Start");
-  assert.equal(slack.sectionOf(store.issue(listener.id)!.channelId), "Awaiting Leon");
+  assert.match(
+    linear.created.at(-1)!.body,
+    /stop date \(2026-12-01T09:00:00-05:00\) passed .* Rogers deal/,
+  );
+});
 
-  clock.now += 24 * 3600_000;
+test("a changed time replaces the timer, and leaving the status or closing clears it", async () => {
+  const { linear, sync, clock, store, drain } = setup(DEC_1 - 86_400_000);
+  const dated = linear.addIssue(10, "File taxes `{start: 2026-12-01}`", "Awaiting Date");
+  await sync.run("linear", issueHook(dated.id, "create"));
+
+  dated.title = "File taxes `{start: 2026-12-03}`";
+  await sync.run("linear", issueHook(dated.id));
+  assert.equal(store.timer(`timer:${dated.id}`), DEC_1 + 2 * 86_400_000);
+  clock.now = DEC_1;
+  await drain();
+  assert.equal(dated.state.name, "Awaiting Date", "the old time no longer counts");
+
+  dated.state = state("Executing");
+  await sync.run("linear", issueHook(dated.id));
+  assert.equal(store.timer(`timer:${dated.id}`), null, "a start only counts in Awaiting Date");
+
+  dated.state = state("Awaiting Date");
+  await sync.run("linear", issueHook(dated.id));
+  dated.state = state("Done");
+  await sync.run("linear", issueHook(dated.id));
+  assert.equal(store.timer(`timer:${dated.id}`), null);
+});
+
+test("a due time in the title sets Linear's due date and posts in #feed-linear once, on time", async () => {
+  const at = Date.UTC(2026, 11, 1, 22, 0); // 17:00 Toronto
+  const { linear, slack, sync, clock, store, drain } = setup(at - 3600_000);
+  const issue = linear.addIssue(
+    401,
+    "Send the invoice `{due: 2026-12-01T17:00:00-05:00}`",
+    "Awaiting Leon",
+  );
+  await sync.run("linear", issueHook(issue.id, "create"));
+  assert.equal(issue.dueDate, "2026-12-01", "Linear shows the day");
+  assert.equal(store.timer(`timer:${issue.id}`), at);
+  assert.ok(!slack.channels.some((c) => c.name === "feed-linear"), "made when first needed");
+
+  clock.now = at;
+  await drain();
+  const feed = slack.channels.find((c) => c.name === "feed-linear")!;
+  assert.equal(feed.private, false);
+  assert.deepEqual([...feed.members].sort(), [BOT, HERMES, LEON].sort());
+  const post = slack.posts.find((m) => m.channel === feed.id)!;
+  assert.equal(
+    post.text,
+    `:date: Due: *<${issue.url}|LEON-401: Send the invoice>* · due Tue, Dec 1, 5:00 PM · Awaiting Leon · <#${store.issue(issue.id)!.channelId}>`,
+  );
+  assert.equal(store.timer(`timer:${issue.id}`), null);
+
+  // Announced once: webhooks, the daily tick and another drain post nothing more.
+  await sync.run("linear", issueHook(issue.id));
   await sync.run("tick", {});
-  assert.equal(later.state.name, "Awaiting Start");
+  await drain();
+  assert.equal(slack.posts.filter((m) => m.channel === feed.id).length, 1);
+});
+
+test("Linear's own due date alone goes off at midnight starting that day", async () => {
+  const { linear, slack, sync, clock, store, drain } = setup(DEC_1 - 3600_000);
+  const issue = linear.addIssue(402, "Renew passport", "Executing");
+  issue.dueDate = "2026-12-01";
+  await sync.run("linear", updateHook(issue.id, { dueDate: null }));
+  assert.equal(store.timer(`timer:${issue.id}`), DEC_1);
+  assert.equal(issue.title, "Renew passport", "the title is left alone");
+
+  clock.now = DEC_1;
+  await drain();
+  assert.match(
+    slack.posts.at(-1)!.text,
+    /^:date: Due: .*LEON-402: Renew passport.* · due Tue, Dec 1 · Executing/,
+  );
+});
+
+test("changing Linear's due date moves the title's due, keeping its time; clearing it drops it", async () => {
+  const { linear, sync, store } = setup(DEC_1 - 86_400_000);
+  const issue = linear.addIssue(403, "Pay rent `{due: 2026-12-01T17:00:00-05:00}`", "Executing");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  assert.equal(issue.dueDate, "2026-12-01");
+
+  // Leon picks Dec 3 in Linear's date picker.
+  issue.dueDate = "2026-12-03";
+  await sync.run("linear", updateHook(issue.id, { dueDate: "2026-12-01" }));
+  assert.equal(issue.title, 'Pay rent `{due: "2026-12-03T17:00:00-05:00"}`');
+  assert.equal(store.timer(`timer:${issue.id}`), Date.UTC(2026, 11, 3, 22, 0));
+  // Its own webhook then finds the two agree.
+  const writes = linear.updates.length;
+  await sync.run("linear", updateHook(issue.id, { title: "Pay rent" }));
+  assert.equal(linear.updates.length, writes);
+
+  // Editing the title instead moves Linear's date.
+  issue.title = "Pay rent `{due: 2026-12-05}`";
+  await sync.run("linear", updateHook(issue.id, { title: "x" }));
+  assert.equal(issue.dueDate, "2026-12-05");
+
+  issue.dueDate = null;
+  await sync.run("linear", updateHook(issue.id, { dueDate: "2026-12-05" }));
+  assert.equal(issue.title, "Pay rent");
+  assert.equal(store.timer(`timer:${issue.id}`), null);
+});
+
+test("an issue first seen past its due day or time says Overdue; earlier the same day, Due", async () => {
+  const { linear, slack, sync, clock, drain } = setup(DEC_1 + 12 * 3600_000); // noon, Dec 1
+  linear.addIssue(404, "Return library books `{due: 2026-12-01}`", "Awaiting Leon");
+  linear.addIssue(405, "Call the bank `{due: 2026-12-01T09:00:00-05:00}`", "Awaiting Leon");
+  await sync.run("tick", {});
+  await drain();
+  const text = (n: number) =>
+    slack.posts.find((m) => m.text.startsWith(":date:") && m.text.includes(`LEON-${n}:`))!.text;
+  assert.match(text(404), /^:date: Due: /, "still its day");
+  assert.match(text(405), /^:date: Overdue: /, "three hours late");
+
+  clock.now += 2 * 86_400_000;
+  linear.addIssue(406, "Renew permit `{due: 2026-12-02}`", "Awaiting Leon");
+  await sync.run("tick", {});
+  await drain();
+  assert.match(text(406), /^:date: Overdue: /);
+});
+
+test("the daily tick sets lost timers, repairs drift and creates #feed-linear", async () => {
+  const { linear, slack, sync, clock, store, drain } = setup(DEC_1 + 60_000);
+  const dated = linear.addIssue(10, "File taxes `{start: 2026-12-01}`", "Awaiting Date");
+  const later = linear.addIssue(11, "Renew `{start: 2026-12-02}`", "Awaiting Date");
+  await sync.run("backfill", {});
+  // Timers lost (say, the queue was cleared): the tick sets them again.
+  store.setTimer(`timer:${dated.id}`, "timer", null, null, clock.now);
+  store.setTimer(`timer:${later.id}`, "timer", null, null, clock.now);
+
+  await sync.run("tick", {});
+  assert.ok(slack.channels.some((c) => c.name === "feed-linear"));
+  assert.equal(store.timer(`timer:${later.id}`), DEC_1 + 86_400_000);
+  await drain();
+  assert.equal(dated.state.name, "Awaiting Start", "a time already past goes off at once");
+  assert.equal(later.state.name, "Awaiting Date");
+
+  // The move's webhook was missed: the next tick files the channel anyway.
+  await sync.run("tick", {});
+  assert.equal(slack.sectionOf(store.issue(dated.id)!.channelId), "Awaiting Start");
 });
 
 test("an open project gets a channel from Linear's Slack app, filed under Projects", async () => {
@@ -884,6 +1070,128 @@ test("tick gives open projects channels and archives the ones that closed or van
   await sync.run("tick", {});
   assert.equal(slack.channels.find((c) => c.id === a.slackChannelId)!.archived, true);
   assert.equal(channelB.archived, true);
+});
+
+/** 17:30 Toronto on 2026-11-19. */
+const NOV_19_EVENING = Date.UTC(2026, 10, 19, 22, 30);
+/** 05:00 Toronto on 2026-11-20, when Hermes makes the day's project. */
+const NOV_20_MORNING = Date.UTC(2026, 10, 20, 10, 0);
+
+test("a day's project channel is renamed project-YYYY-MM-DD and starred, out of Projects", async () => {
+  const { linear, slack, sync, store } = setup(NOV_19_EVENING);
+  const general = slack.addLeonChannel("general");
+  slack.stars.add(general.id);
+  const university = linear.addProject("University");
+  await sync.run("linear", projectHook(university.id));
+  // Linear's own app made the channel after the project's name.
+  const channel = slack.addLinearChannel("project-20261119");
+  const day = linear.addProject("20261119");
+  day.slackChannelId = channel.id;
+  await sync.run("linear", projectHook(day.id));
+
+  assert.equal(channel.name, "project-2026-11-19");
+  assert.equal(linear.channelRequests.length, 1, "only University's channel was requested");
+  assert.ok(slack.stars.has(channel.id));
+  assert.equal(slack.sectionOf(channel.id), null, "not under Projects as well");
+  assert.equal(store.project(day.id)!.section, STARRED);
+  assert.equal(slack.sectionOf(university.slackChannelId!), "Projects");
+  assert.ok(!slack.stars.has(university.slackChannelId!));
+  assert.ok(slack.stars.has(general.id), "a channel Leon starred himself stays starred");
+
+  // Settled: another webhook or tick changes nothing.
+  const before = slack.calls.length;
+  await sync.run("linear", projectHook(day.id));
+  await sync.run("tick", {});
+  assert.ok(
+    !slack.calls
+      .slice(before)
+      .some((c) =>
+        /^(stars\.|conversations\.rename|users\.channelSections\.channels)/.test(c.method),
+      ),
+  );
+});
+
+test("the next day's channel takes over Starred when its day comes; the old one goes under Projects", async () => {
+  const { linear, slack, sync, store, clock, drain } = setup(NOV_19_EVENING);
+  const nov19 = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
+  await sync.run("linear", projectHook(nov19.id));
+  assert.equal(
+    linear.channelRequests[0]!.name,
+    "project-2026-11-19",
+    "requested under its date name",
+  );
+  assert.ok(slack.stars.has(nov19.slackChannelId!));
+
+  // A project for tomorrow, made the evening before, waits under Projects for its day.
+  const nov20 = linear.addProject(
+    "2026-11-20",
+    "Backlog:backlog",
+    NOV_19_EVENING - PROJECT_GRACE_MS,
+  );
+  await sync.run("linear", projectHook(nov20.id));
+  assert.equal(
+    slack.channels.find((c) => c.id === nov20.slackChannelId)!.name,
+    "project-2026-11-20",
+  );
+  assert.equal(slack.sectionOf(nov20.slackChannelId!), "Projects");
+  assert.ok(slack.stars.has(nov19.slackChannelId!));
+
+  // At midnight in Toronto, the days timer swaps them.
+  const midnight = Date.UTC(2026, 10, 20, 5, 0);
+  assert.equal(store.timer("days"), midnight);
+  clock.now = midnight;
+  await drain();
+  assert.ok(slack.stars.has(nov20.slackChannelId!));
+  assert.equal(slack.sectionOf(nov20.slackChannelId!), null);
+  assert.ok(!slack.stars.has(nov19.slackChannelId!));
+  assert.equal(slack.sectionOf(nov19.slackChannelId!), "Projects");
+  assert.equal(store.project(nov19.id)!.section, "Projects");
+});
+
+test("Hermes's 05:00 project takes Starred once its channel exists, not before", async () => {
+  const { linear, slack, sync, clock } = setup(NOV_19_EVENING);
+  const nov19 = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
+  await sync.run("linear", projectHook(nov19.id));
+
+  clock.now = NOV_20_MORNING;
+  const nov20 = linear.addProject("20261120", "Backlog:backlog", NOV_20_MORNING);
+  await sync.run("linear", projectHook(nov20.id, "create"));
+  await sync.run("tick", {});
+  assert.equal(nov20.slackChannelId, null, "still in the grace period");
+  assert.ok(slack.stars.has(nov19.slackChannelId!), "yesterday's stays starred meanwhile");
+
+  clock.now += PROJECT_GRACE_MS;
+  await sync.run("project", { id: nov20.id });
+  assert.equal(
+    slack.channels.find((c) => c.id === nov20.slackChannelId)!.name,
+    "project-2026-11-20",
+  );
+  assert.deepEqual([...slack.stars], [nov20.slackChannelId]);
+  assert.equal(slack.sectionOf(nov19.slackChannelId!), "Projects");
+});
+
+test("closing the starred day's project unstars and archives its channel", async () => {
+  const { linear, slack, sync } = setup(NOV_19_EVENING);
+  const day = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
+  await sync.run("linear", projectHook(day.id));
+  const channel = slack.channels.find((c) => c.id === day.slackChannelId)!;
+  assert.ok(slack.stars.has(channel.id));
+
+  day.status = { name: "Completed", type: "completed" };
+  await sync.run("linear", projectHook(day.id));
+  assert.equal(channel.archived, true);
+  assert.ok(!slack.stars.has(channel.id));
+});
+
+test("a day's channel keeps its name when another channel already has the date name", async () => {
+  const { linear, slack, sync } = setup(NOV_19_EVENING);
+  slack.addLeonChannel("project-2026-11-19");
+  const channel = slack.addLinearChannel("project-20261119");
+  const day = linear.addProject("20261119");
+  day.slackChannelId = channel.id;
+  await sync.run("linear", projectHook(day.id));
+  assert.equal(channel.name, "project-20261119");
+  assert.ok(slack.stars.has(channel.id), "still starred");
 });
 
 test("loadConfig needs both Slack user IDs, which have no built-in defaults", () => {

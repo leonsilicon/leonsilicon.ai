@@ -13,6 +13,8 @@ export interface LinearIssue {
   description: string | null;
   state: LinearState;
   teamKey: string;
+  /** Linear's own due date, `YYYY-MM-DD`: a day with no time. */
+  dueDate: string | null;
 }
 
 export interface LinearComment {
@@ -72,7 +74,14 @@ export interface LinearApi {
     parentId?: string;
   }): Promise<void>;
   updateComment(id: string, body: string): Promise<void>;
-  updateIssue(id: string, input: { stateId?: string; title?: string }): Promise<void>;
+  updateIssue(id: string, input: IssueUpdate): Promise<void>;
+}
+
+/** The issue fields the sync changes. `dueDate` is `YYYY-MM-DD`, or null to clear it. */
+export interface IssueUpdate {
+  stateId?: string;
+  title?: string;
+  dueDate?: string | null;
 }
 
 export class LinearError extends Error {
@@ -82,7 +91,7 @@ export class LinearError extends Error {
   }
 }
 
-const ISSUE_FIELDS = `id identifier number title url description state { id name type } team { key }`;
+const ISSUE_FIELDS = `id identifier number title url description dueDate state { id name type } team { key }`;
 
 interface IssueNode {
   id: string;
@@ -91,6 +100,7 @@ interface IssueNode {
   title: string;
   url: string;
   description: string | null;
+  dueDate: string | null;
   state: LinearState;
   team: { key: string };
 }
@@ -104,6 +114,7 @@ const toIssue = (node: IssueNode): LinearIssue => ({
   description: node.description,
   state: node.state,
   teamKey: node.team.key,
+  dueDate: node.dueDate ?? null,
 });
 
 const PROJECT_FIELDS = `id name url createdAt archivedAt trashed status { name type } slackChannelId
@@ -314,7 +325,7 @@ export class LinearClient implements LinearApi {
     );
   }
 
-  async updateIssue(id: string, input: { stateId?: string; title?: string }) {
+  async updateIssue(id: string, input: IssueUpdate) {
     await this.gql(
       `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`,
       { id, input },
