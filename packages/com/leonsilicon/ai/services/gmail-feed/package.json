@@ -1,0 +1,24 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.gmail-feed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Copies every email that reaches Leon's Gmail into Slack, screened like the Beeper feed: safe ones in #feed-gmail, unsafe ones in #feed-flagged and spam in #feed-spam.",
+  "type": "module",
+  "imports": {
+    "#config": "./config.ts",
+    "#feed": "./feed.ts",
+    "#format": "./format.ts",
+    "#gmail": "./gmail.ts",
+    "#mime": "./mime.ts",
+    "#screen": "./screen.ts",
+    "#slack": "./slack.ts",
+    "#store": "./store.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
+    "@-/com.npmjs.openai": "workspace:*"
+  }
+}

@@ -18,6 +18,7 @@ Services for Leon's agents (Hermes Cloud and others). The MCP servers each check
 | [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html) | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                       | Its own Cloudflare Worker                           |
 | [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html) | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                           | Its own Cloudflare Worker                           |
 | [`autolinear`](www/ai/leonsilicon/autolinear/index.html)     | [autolinear: an issue and channel per Slack message](apps/autolinear/README.md)   | Its own Cloudflare Worker                           |
+| [`gmail-feed`](www/ai/leonsilicon/gmail-feed/index.html)     | [Gmail feed: every email into Slack](apps/gmail-feed/README.md)                   | Its own Cloudflare Worker                           |
 
 The [endpoint map](apps/ai-gateway/README.md) has the mini's local targets.
 

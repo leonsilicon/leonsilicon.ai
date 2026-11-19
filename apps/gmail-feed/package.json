@@ -1,0 +1,15 @@
+{
+  "name": "@-apps/gmail-feed",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
+    "@-/com.leonsilicon.ai.services.gmail-feed": "workspace:*",
+    "@-/com.leonsilicon.www": "workspace:*"
+  },
+  "varlock": {
+    "loadPath": "../../",
+    "filter": "#gmail-feed"
+  }
+}

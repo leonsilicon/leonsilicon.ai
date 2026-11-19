@@ -1,6 +1,6 @@
 # @-/com.leonsilicon.ai.configs.deploy-targets
 
-Decides which Cloudflare Workers a push needs to redeploy, for the [Deploy workflow](../../../../../../.github/workflows/deploy.yml). A Worker is an app with a `wrangler.jsonc` and a `deploy:<app>` task in the root `vite.config.ts`: `ai-edge`, `linear-slack-sync` and `slack-as-leon` (served as slack-puppet).
+Decides which Cloudflare Workers a push needs to redeploy, for the [Deploy workflow](../../../../../../.github/workflows/deploy.yml). A Worker is an app with a `wrangler.jsonc` and a `deploy:<app>` task in the root `vite.config.ts`: `ai-edge`, `gmail-feed`, `linear-slack-sync` and `slack-as-leon` (served as slack-puppet).
 
 A changed file affects a Worker when it is in the Worker's app or in any workspace package the app reaches through `workspace:*` dependencies. It also affects every Worker when it is a shared build input: `www/`, which is built into every Worker's assets, the lockfile, root config, `.env.schema` and the deploy workflow. Docs (`*.md`) and `__tests__/` never trigger a deploy. The graph is read from the `package.json` files each time, so a new dependency is picked up without editing anything here.
 

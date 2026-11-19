@@ -63,6 +63,14 @@
         "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
       },
     },
+    "apps/gmail-feed": {
+      "name": "@-apps/gmail-feed",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
+        "@-/com.leonsilicon.ai.services.gmail-feed": "workspace:*",
+        "@-/com.leonsilicon.www": "workspace:*",
+      },
+    },
     "apps/linear-slack-sync": {
       "name": "@-apps/linear-slack-sync",
       "dependencies": {
@@ -182,6 +190,14 @@
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
         "@-/com.npmjs.slack__web-api": "workspace:*",
+      },
+    },
+    "packages/com/leonsilicon/ai/services/gmail-feed": {
+      "name": "@-/com.leonsilicon.ai.services.gmail-feed",
+      "version": "1.0.0",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
+        "@-/com.npmjs.openai": "workspace:*",
       },
     },
     "packages/com/leonsilicon/ai/services/linear-slack-sync": {
@@ -336,6 +352,8 @@
 
     "@-/com.leonsilicon.ai.services.beeper-watch": ["@-/com.leonsilicon.ai.services.beeper-watch@workspace:packages/com/leonsilicon/ai/services/beeper-watch"],
 
+    "@-/com.leonsilicon.ai.services.gmail-feed": ["@-/com.leonsilicon.ai.services.gmail-feed@workspace:packages/com/leonsilicon/ai/services/gmail-feed"],
+
     "@-/com.leonsilicon.ai.services.linear-slack-sync": ["@-/com.leonsilicon.ai.services.linear-slack-sync@workspace:packages/com/leonsilicon/ai/services/linear-slack-sync"],
 
     "@-/com.leonsilicon.ai.services.orca-bridge": ["@-/com.leonsilicon.ai.services.orca-bridge@workspace:packages/com/leonsilicon/ai/services/orca-bridge"],
@@ -385,6 +403,8 @@
     "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
 
     "@-apps/beeper-watch": ["@-apps/beeper-watch@workspace:apps/beeper-watch"],
+
+    "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
 
     "@-apps/linear-slack-sync": ["@-apps/linear-slack-sync@workspace:apps/linear-slack-sync"],
 

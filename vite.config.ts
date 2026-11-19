@@ -62,6 +62,7 @@ export default defineConfig({
             "autolinear",
             "beeper-inbox",
             "beeper-watch",
+            "gmail-feed",
             "linear-slack-sync",
             "orca-bridge",
             "orca-device",
@@ -97,6 +98,19 @@ export default defineConfig({
         // Like deploy:slack-as-leon: varlock-wrangler uploads the #autolinear items.
         command:
           "tsc --noEmit && vp build && cd apps/autolinear && varlock-wrangler deploy -c wrangler.jsonc",
+      },
+      "deploy:cronometer": {
+        cache: false,
+        // A Python Worker: pywrangler puts its Python packages in python_modules (it needs uv 0.13.4
+        // or newer), then varlock-wrangler deploys and uploads the #cronometer items, as for the others.
+        command:
+          "vp build && cd apps/cronometer && uv run pywrangler sync && varlock-wrangler deploy -c wrangler.jsonc",
+      },
+      "deploy:gmail-feed": {
+        cache: false,
+        // Like deploy:slack-as-leon: varlock-wrangler uploads the #gmail-feed items.
+        command:
+          "tsc --noEmit && vp build && cd apps/gmail-feed && varlock-wrangler deploy -c wrangler.jsonc",
       },
       "deploy:linear-slack-sync": {
         cache: false,

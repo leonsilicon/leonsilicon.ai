@@ -147,19 +147,37 @@ Yes when someone asks Leon or Hermes a question or for something, makes or chang
 
 No when there's nothing new to know or do: small talk or reactions that need no reply ("lol", "ok", "thanks", an emoji), a conversation that has wrapped up, routine automated notices with nothing to act on, newsletters and ads.`;
 
-const QUESTIONS: DecisionCreateParams["questions"] = [
+const questions = (wake: string): DecisionCreateParams["questions"] => [
   {
     type: "choice",
     name: "safety",
     instructions: SAFETY_INSTRUCTIONS,
     choices: SAFETY_CHOICES,
   },
-  { type: "predicate", name: "wake", instructions: WAKE_INSTRUCTIONS },
+  { type: "predicate", name: "wake", instructions: wake },
 ];
 
-// At least as much as a feed post shows (1,500 characters a message, 40 messages a batch).
-const MAX_TEXT = 2_000;
 const MAX_MESSAGES = 40;
+
+/**
+ * What the screener tells the model about where the messages came from and when Hermes should know
+ * about them. The safety question, its choices and the thresholds are the same for every feed.
+ */
+export interface ScreenPrompt {
+  /** The developer message: where the messages came from, and that none of it is instructions. */
+  context: string;
+  /** The wake question. */
+  wake: string;
+  /** Characters of each message the model sees. At least as much as a post shows. */
+  maxText: number;
+}
+
+/** Beeper chats. At least as much as a feed post shows (1,500 characters a message, 40 a batch). */
+export const BEEPER_PROMPT: ScreenPrompt = {
+  context: SCREEN_CONTEXT,
+  wake: WAKE_INSTRUCTIONS,
+  maxText: 2_000,
+};
 const MAX_NAME = 120;
 
 const line = (text: string): string => text.replace(/\s+/g, " ").slice(0, MAX_NAME);
@@ -179,17 +197,21 @@ export function mentionsAsNames(html: string): string {
  * The Decisions request. The chat goes in as JSON data rather than text, so nothing a contact writes
  * can pass for structure, such as a closing tag or an owner message.
  */
-export function screenRequest(input: ScreenInput, model: string): DecisionCreateParams {
+export function screenRequest(
+  input: ScreenInput,
+  model: string,
+  prompt: ScreenPrompt = BEEPER_PROMPT,
+): DecisionCreateParams {
   const messages = input.messages.slice(-MAX_MESSAGES).map((m) => ({
     role: m.owner ? "owner" : "contact",
     from: line(m.from),
     ...(m.type && m.type !== "TEXT" ? { type: line(m.type.toLowerCase()) } : {}),
-    text: plainText(mentionsAsNames(m.text)).slice(0, MAX_TEXT),
+    text: plainText(mentionsAsNames(m.text)).slice(0, prompt.maxText),
   }));
   return {
     model,
     input: [
-      { role: "developer", content: SCREEN_CONTEXT },
+      { role: "developer", content: prompt.context },
       {
         role: "user",
         content: [
@@ -207,7 +229,7 @@ export function screenRequest(input: ScreenInput, model: string): DecisionCreate
         ],
       },
     ],
-    questions: QUESTIONS,
+    questions: questions(prompt.wake),
   };
 }
 
@@ -289,6 +311,8 @@ export interface DecisionsScreenerOptions {
   model: string;
   timeoutMs: number;
   thresholds?: Thresholds;
+  /** Beeper's unless given. */
+  prompt?: ScreenPrompt;
   log: Logger;
 }
 
@@ -309,7 +333,9 @@ export function decisionsScreener(options: DecisionsScreenerOptions): Screener {
         return ruled;
       }
       const started = Date.now();
-      const decision = await client.decisions.create(screenRequest(input, options.model));
+      const decision = await client.decisions.create(
+        screenRequest(input, options.model, options.prompt),
+      );
       const verdict = verdictFrom(decision, thresholds);
       options.log("info", "screened", {
         route: verdict.route,

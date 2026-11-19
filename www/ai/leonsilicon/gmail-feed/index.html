@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Gmail feed · gmail-feed.leonsilicon.ai</title>
+  </head>
+  <body>
+    <main>
+      <p class="host">gmail-feed.leonsilicon.ai</p>
+      <h1>Gmail feed</h1>
+      <p>
+        Copies every email that reaches Leon's Gmail into Slack, screened first like his Beeper
+        messages. It reads Gmail read-only and takes no requests from the internet; this page only
+        shows whether it's keeping up.
+      </p>
+      <dl>
+        <dt>Status</dt>
+        <dd data-health>Checking…</dd>
+      </dl>
+    </main>
+    <script type="module">
+      import { mountServicePage } from "@-/com.leonsilicon.www/client";
+
+      void mountServicePage();
+    </script>
+  </body>
+</html>

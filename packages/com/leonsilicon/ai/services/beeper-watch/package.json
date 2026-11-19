@@ -18,7 +18,8 @@
     "#watcher": "./watcher.ts"
   },
   "exports": {
-    ".": "./+server.ts"
+    ".": "./+server.ts",
+    "./screen": "./+screen.ts"
   },
   "dependencies": {
     "@-/com.npmjs.beeper__desktop-api": "workspace:*",

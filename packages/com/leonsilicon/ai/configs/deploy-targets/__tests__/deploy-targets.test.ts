@@ -9,7 +9,13 @@ const workspace = readWorkspace(root);
 
 test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", () => {
   const apps = workspace.workers.map((worker) => worker.app);
-  assert.deepEqual(apps, ["ai-edge", "autolinear", "linear-slack-sync", "slack-as-leon"]);
+  assert.deepEqual(apps, [
+    "ai-edge",
+    "autolinear",
+    "gmail-feed",
+    "linear-slack-sync",
+    "slack-as-leon",
+  ]);
   const config = readFileSync(`${root}vite.config.ts`, "utf8");
   for (const app of apps)
     assert.ok(config.includes(`"deploy:${app}"`), `vite.config.ts has deploy:${app}`);
@@ -37,20 +43,27 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("www/ai/leonsilicon/orca/index.html"), [
     "ai-edge",
     "autolinear",
+    "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
   assert.deepEqual(affected("bun.lock"), [
     "ai-edge",
     "autolinear",
+    "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
   assert.deepEqual(affected("packages/com/leonsilicon/www/page.ts"), [
     "ai-edge",
     "autolinear",
+    "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
+  ]);
+  // The Gmail feed uses Beeper Watch's screener, so a change there redeploys it.
+  assert.deepEqual(affected("packages/com/leonsilicon/ai/services/beeper-watch/screen.ts"), [
+    "gmail-feed",
   ]);
   // Things that don't run on Cloudflare: the mini, Hermes, docs and tests.
   assert.deepEqual(affected("apps/beeper-watch/main.ts"), []);
