@@ -20,6 +20,7 @@ Emails go through Beeper Watch's screener ([`screen.ts`](../beeper-watch/screen.
 - The model reads one `contact` message: From, Reply-To, To, Cc, Subject, Gmail's category and labels, the sender's SPF/DKIM/DMARC results, whether it's from a mailing list, the attachment names, and the whole body a post shows. The developer message says failed checks, a different Reply-To and a display name that doesn't match the domain are signs of phishing.
 - The wake question is reworded for email: Hermes can read mail but not send it.
 - Beeper Watch's fixed rules run first. They hold anything with phrases aimed at an AI, so a GitHub or newsletter email quoting "system prompt" or an `mcp__` tool name lands in `#feed-flagged`. That's the safe way to be wrong; Leon still sees it.
+- **Thresholds are email's own.** Held as unsafe when the unsafe reasons add up to `GMAIL_FEED_UNSAFE_THRESHOLD` (0.7), not Beeper's 0.3. On 225 recent real emails, 0.3 held 16, nearly all genuine notices from banks, Apple, Google, OpenAI, Linear and Interac that pass DMARC (the first live day held a Todoist and a Fongo notice); 0.7 held 2. Synthetic attacks scored 0.97 to 1.00: a look-alike bank domain, a display-name spoof from Gmail, a request for a texted code, a prize scam and an injection addressed to "the assistant reading Leon's inbox" with no rule words. A friend's email scored 0.03 and an e-transfer notice 0.32.
 - **Failures.** A screener error is retried on later ticks. After 15 minutes the email is held in `#feed-flagged` as "the screener couldn't check it". Nothing is posted unscreened. A verdict is saved, so a retried Slack post never asks again.
 - **Cost.** About 1,000 to 10,000 input tokens an email, at $0.10 per million. The text goes to OpenAI's API under the account's data controls, as Beeper messages do.
 
@@ -41,6 +42,6 @@ Emails go through Beeper Watch's screener ([`screen.ts`](../beeper-watch/screen.
 - `Store` is the SQLite queue and state, over a Durable Object's `storage.sql` or `node:sqlite`.
 - `loadConfig(env)` reads:
   - required: `GMAIL_FEED_GOOGLE_CLIENT_ID`, `GMAIL_FEED_GOOGLE_CLIENT_SECRET`, `GMAIL_FEED_GOOGLE_REFRESH_TOKEN`, `SLACK_BOT_TOKEN`, `OPENAI_API_KEY`, `HERMES_SLACK_USER_ID`, `FEED_FLAGGED_CHANNEL` and `FEED_SPAM_CHANNEL`;
-  - optional: `GMAIL_FEED_CHANNEL` (`feed-gmail`), `GMAIL_FEED_SPAM_CHANNEL`, `GMAIL_FEED_WAKE` (`screened` or `none`), `FEED_INVITE`, `SCREEN_MODEL`, `SCREEN_TIMEOUT_SECONDS`, `SCREEN_UNSAFE_THRESHOLD` and `GMAIL_FEED_WAKE_THRESHOLD` (0.9).
+  - optional: `GMAIL_FEED_CHANNEL` (`feed-gmail`), `GMAIL_FEED_SPAM_CHANNEL`, `GMAIL_FEED_WAKE` (`screened` or `none`), `FEED_INVITE`, `SCREEN_MODEL`, `SCREEN_TIMEOUT_SECONDS`, `GMAIL_FEED_UNSAFE_THRESHOLD` (0.7) and `GMAIL_FEED_WAKE_THRESHOLD` (0.9).
 
 Tests run offline with fake Gmail, Slack and screener and a fake clock: `node --test __tests__/*.test.ts`.

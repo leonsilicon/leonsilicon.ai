@@ -17,13 +17,15 @@ const env = {
 test("email has its own wake threshold, 0.9 unless set", () => {
   const config = loadConfig(env);
   assert.equal(config.screen.wake, 0.9);
-  assert.equal(config.screen.unsafe, 0.3);
+  assert.equal(config.screen.unsafe, 0.7);
   assert.equal(config.feed.wake, "screened");
   assert.equal(config.feed.channel, "feed-gmail");
   assert.deepEqual(config.feed.invite, ["ULEON"]);
   assert.equal(loadConfig({ ...env, GMAIL_FEED_WAKE_THRESHOLD: "0.95" }).screen.wake, 0.95);
-  // Beeper's knob doesn't move email's.
+  // Beeper's knobs don't move email's.
   assert.equal(loadConfig({ ...env, SCREEN_WAKE_THRESHOLD: "0.5" }).screen.wake, 0.9);
+  assert.equal(loadConfig({ ...env, SCREEN_UNSAFE_THRESHOLD: "0.3" }).screen.unsafe, 0.7);
+  assert.equal(loadConfig({ ...env, GMAIL_FEED_UNSAFE_THRESHOLD: "0.5" }).screen.unsafe, 0.5);
 });
 
 test("missing secrets and bad settings fail loudly", () => {

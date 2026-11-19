@@ -52,7 +52,9 @@ export function loadConfig(env: Record<string, string | undefined>): GmailFeedCo
     screen: {
       model: env.SCREEN_MODEL?.trim() || "gpt-6-luna",
       timeoutMs: number(env.SCREEN_TIMEOUT_SECONDS, 30) * 1000,
-      unsafe: number(env.SCREEN_UNSAFE_THRESHOLD, 0.3),
+      // Email's own: Beeper's 0.3 held 7% of real mail (bank, Apple, Google and e-transfer notices
+      // that pass DMARC); 0.7 held 1%, and synthetic phishing, scams and injection scored 0.97+.
+      unsafe: number(env.GMAIL_FEED_UNSAFE_THRESHOLD, 0.7),
       // Email's own: 0.9 matched 80% of the old Gmail monitor's alerts while waking Hermes for
       // about a quarter of mail (the screener scores most notifications 0.8 or more).
       wake: number(env.GMAIL_FEED_WAKE_THRESHOLD, 0.9),
