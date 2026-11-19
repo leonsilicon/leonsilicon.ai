@@ -215,7 +215,7 @@ export class LinearClient implements LinearApi {
     }>(`{ organization { slackProjectChannelIntegration { id } slackProjectChannelPrefix } }`);
     const { slackProjectChannelIntegration: integration, slackProjectChannelPrefix: prefix } =
       data.organization;
-    return integration ? { integrationId: integration.id, prefix: prefix || "p-" } : null;
+    return integration ? { integrationId: integration.id, prefix: prefix || "project-" } : null;
   }
 
   // Not in Linear's published schema: it is the mutation behind the project's "Create Slack

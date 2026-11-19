@@ -114,7 +114,7 @@ export function channelName(prefix: string, number: number, name: string, max: n
 }
 
 /**
- * `p-uoft-creators-club`: Linear's project channel prefix (which ends in a hyphen) and the project
+ * `project-uoft-creators-club`: Linear's project channel prefix (which ends in a hyphen) and the project
  * name, cut at a word.
  */
 export function projectChannelName(prefix: string, name: string, max: number): string {

@@ -52,7 +52,7 @@ function fakeLinear(makeChannel: MakeChannel) {
   const projects = new Map<string, LinearProject>();
   const channelRequests: { projectId: string; name: string; integrationId: string }[] = [];
   const linearSide = {
-    settings: { integrationId: "int-slack", prefix: "p-" } as ProjectChannelSettings | null,
+    settings: { integrationId: "int-slack", prefix: "project-" } as ProjectChannelSettings | null,
     /** When true, Linear accepts a request but the channel doesn't appear until `finish`. */
     slow: false,
     pending: [] as { projectId: string; name: string }[],
@@ -742,10 +742,10 @@ test("an open project gets a channel from Linear's Slack app, filed under Projec
   await sync.run("linear", projectHook(project.id));
 
   assert.deepEqual(linear.channelRequests, [
-    { projectId: project.id, name: "p-uoft-creators-club", integrationId: "int-slack" },
+    { projectId: project.id, name: "project-uoft-creators-club", integrationId: "int-slack" },
   ]);
   const channel = slack.channels.find((c) => c.id === project.slackChannelId)!;
-  assert.equal(channel.name, "p-uoft-creators-club");
+  assert.equal(channel.name, "project-uoft-creators-club");
   assert.equal(channel.private, false);
   assert.deepEqual(
     [...channel.members].sort(),
@@ -764,7 +764,7 @@ test("an open project gets a channel from Linear's Slack app, filed under Projec
 
 test("a project that already has a Linear channel is adopted, and Leon joins it", async () => {
   const { linear, slack, sync } = setup();
-  const channel = slack.addLinearChannel("p-agent-operations", []);
+  const channel = slack.addLinearChannel("project-agent-operations", []);
   const project = linear.addProject("Agent operations");
   project.slackChannelId = channel.id;
   await sync.run("linear", projectHook(project.id));
@@ -794,7 +794,7 @@ test("a new project waits for Linear's own channel before asking for one", async
   assert.equal(job!.kind, "project");
 
   // Linear's "Create channel for new projects" made one meanwhile: the delayed check adopts it.
-  const auto = slack.addLinearChannel("p-launch");
+  const auto = slack.addLinearChannel("project-launch");
   project.slackChannelId = auto.id;
   clock.now = project.createdAt + PROJECT_GRACE_MS;
   await sync.run(job!.kind, JSON.parse(job!.payload));
@@ -806,17 +806,17 @@ test("a new project waits for Linear's own channel before asking for one", async
   await sync.run("linear", projectHook(api.id, "create"));
   clock.now += PROJECT_GRACE_MS;
   await sync.run("project", { id: api.id });
-  assert.equal(linear.channelRequests.at(-1)!.name, "p-from-the-api");
+  assert.equal(linear.channelRequests.at(-1)!.name, "project-from-the-api");
   assert.equal(slack.sectionOf(api.slackChannelId!), "Projects");
 });
 
 test("a taken name gets a suffix, and a slow channel is picked up later without asking twice", async () => {
   const { linear, slack, sync, store, clock } = setup();
-  slack.addLeonChannel("p-unduo-me");
+  slack.addLeonChannel("project-unduo-me");
   linear.linearSide.slow = true;
   const project = linear.addProject("unduo.me");
   await sync.run("linear", projectHook(project.id));
-  assert.equal(linear.channelRequests[0]!.name, "p-unduo-me-2");
+  assert.equal(linear.channelRequests[0]!.name, "project-unduo-me-2");
   assert.equal(store.project(project.id)!.channelId, null);
   assert.equal(store.project(project.id)!.requestedAt, clock.now);
 

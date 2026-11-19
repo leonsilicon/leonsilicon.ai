@@ -239,9 +239,18 @@ export class SyncObject {
         } catch (error) {
           checks.session = String(error);
         }
+      // Project channels come from Linear's own Slack app: without it, no project gets a channel.
+      try {
+        const settings = await new LinearClient(this.#env.LINEAR_API_KEY).projectChannelSettings();
+        checks.projects = settings
+          ? "ok"
+          : "off: connect Linear's Slack app and turn on Project channels";
+      } catch (error) {
+        checks.projects = String(error);
+      }
       const { queued, dead } = this.#store.stats();
       return json({
-        ok: checks.bot === "ok" && checks.session === "ok",
+        ok: checks.bot === "ok" && checks.session === "ok" && checks.projects === "ok",
         ...checks,
         queued,
         dead: dead.length,
