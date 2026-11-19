@@ -9,14 +9,14 @@ Hermes Cloud ──▶ orca.leonsilicon.ai ──▶ mini: orca-bridge 127.0.0.1
 
 ## Pieces
 
-| Piece       | Where                                                                                                                                                                                                                                              |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Service     | Mini, as its usual user: LaunchAgent `com.leonsilicon.orca-bridge` (KeepAlive), app in `~/.local/share/orca-bridge/app`, logs in `~/.local/share/orca-bridge/logs/`                                                                                |
-| Config      | Mini `~/.config/orca-bridge/env` (mode 600), written by `--start` from the `#orca-bridge` items of the root [`.env.schema`](../../.env.schema). `ORCA_BRIDGE_TOKEN` and `ORCA_MCP_ROOTS` (paths on the mini) are in Infisical under `/orca-bridge` |
-| MacBook     | Saved Orca environment `MacBook` on the mini, paired 2026-11-12 from an offer made on the MacBook with `orca pair --address <the MacBook's tailnet IP> --grant-desktop-control` (no restart). Computer use on the MacBook works through it         |
-| Mini's Orca | Headless `orca serve` LaunchAgent `dev.onorca.serve`, attributed to `com.stablyai.orca` for Accessibility and Screen Recording. `/Applications/Orca.app` is owned by the mini's user so the serve can update itself and stay on the MacBook's version |
+| Piece       | Where                                                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Service     | Mini, as its usual user: LaunchAgent `com.leonsilicon.orca-bridge` (KeepAlive), app in `~/.local/share/orca-bridge/app`, logs in `~/.local/share/orca-bridge/logs/`                                                                                                      |
+| Config      | Mini `~/.config/orca-bridge/env` (mode 600), written by `--start` from the `#orca-bridge` items of the root [`.env.schema`](../../.env.schema). `ORCA_BRIDGE_TOKEN` and `ORCA_MCP_ROOTS` (paths on the mini) are in Infisical under `/orca-bridge`                       |
+| MacBook     | Saved Orca environment `MacBook` on the mini, paired 2026-11-12 from an offer made on the MacBook with `orca pair --address <the MacBook's tailnet IP> --grant-desktop-control` (no restart). Computer use on the MacBook works through it                               |
+| Mini's Orca | Headless `orca serve` LaunchAgent `dev.onorca.serve`, attributed to `com.stablyai.orca` for Accessibility and Screen Recording. `/Applications/Orca.app` is owned by the mini's user so the serve can update itself and stay on the MacBook's version                    |
 | Watchdog    | LaunchAgent `com.leonsilicon.orca-watchdog`, every 60 s: [`@assets/orca-watchdog.sh`](@assets/orca-watchdog.sh) restarts `dev.onorca.serve` after 5 checks in a row where `orca status` is not ready. Log and state in `~/.local/share/orca-bridge/logs/orca-watchdog.*` |
-| Hermes      | Captain Claude's `orca` MCP server, `Authorization: Bearer <ORCA_BRIDGE_TOKEN>`, `timeout: 180`                                                                                                                                                    |
+| Hermes      | Captain Claude's `orca` MCP server, `Authorization: Bearer <ORCA_BRIDGE_TOKEN>`, `timeout: 180`                                                                                                                                                                          |
 
 ## Deploy
 
