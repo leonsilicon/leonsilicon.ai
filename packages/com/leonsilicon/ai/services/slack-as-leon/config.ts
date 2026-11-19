@@ -38,7 +38,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): S
     throw new Error("SLACK_AS_LEON_BLOCKED_USERS is required (comma-separated Slack user IDs)");
   return {
     token,
-    publicOrigin: new URL(env.SLACK_AS_LEON_PUBLIC_ORIGIN ?? "https://slack-as-leon.leonsilicon.ai")
+    publicOrigin: new URL(env.SLACK_AS_LEON_PUBLIC_ORIGIN ?? "https://slack-puppet.leonsilicon.ai")
       .origin,
     session: { token: sessionToken, cookie },
     maxPerHour: Number(env.SLACK_AS_LEON_MAX_PER_HOUR ?? 30),

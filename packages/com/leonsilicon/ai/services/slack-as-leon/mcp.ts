@@ -2,9 +2,9 @@ import type { SlackAsLeonConfig } from "#config";
 import { Refused, type SlackAsLeon } from "#service";
 import { SlackError } from "#slack";
 
-export const VERSION = "2.0.0";
+export const VERSION = "2.1.0";
 
-export const instructions = `This server posts in Leon's Slack workspace (leonsilicon, LLC) as Leon himself, through his own Slack session, held by a Cloudflare Worker. The messages carry no app or bot marker, so other bots treat them exactly as if Leon had typed them. That is the point: Leon's Grok Bot bots in Slack (Task Bot, Google Bot, UofT Bot, GitHub Bot, X Bot, Pine Bot, …) ignore anything a bot posts, including your own Hermes posts and Composio posts in his name, and answer only Leon.
+export const instructions = `This server is a double puppet of Leon's real Slack account: it posts in Leon's Slack workspace (leonsilicon, LLC) as Leon himself, through his own Slack session, held by a Cloudflare Worker. The messages carry no app or bot marker, so other bots treat them exactly as if Leon had typed them. That is the point: Leon's Grok Bot bots in Slack (Task Bot, Google Bot, UofT Bot, GitHub Bot, X Bot, Pine Bot, …) ignore anything a bot posts, including your own Hermes posts and Composio posts in his name, and answer only Leon.
 
 When to use it: when Leon asks you to get something from, or tell something to, one of those bots in Slack, or when he asks you to say something in Slack as him. Keep your ordinary replies on your own Hermes account. Silicon Dot is refused here on purpose: hand it tasks the way your memory says (its Beeper chat), not in Slack under Leon's name.
 
@@ -211,7 +211,7 @@ export function createHandler(
       if (!health || Date.now() - health.at > 60_000)
         health = { at: Date.now(), session: await service.sessionState() };
       return reply(health.session === "invalid" ? 503 : 200, {
-        service: "slack-as-leon",
+        service: "slack-puppet",
         version: VERSION,
         up: true,
         session: health.session,
@@ -252,7 +252,7 @@ export function createHandler(
           protocolVersion:
             typeof params?.protocolVersion === "string" ? params.protocolVersion : "2025-06-18",
           capabilities: { tools: {} },
-          serverInfo: { name: "leon-slack-as-leon", version: VERSION },
+          serverInfo: { name: "slack-puppet", version: VERSION },
           instructions,
         });
       case "ping":

@@ -8,15 +8,15 @@ Each site's entrypoint is `www/<hostname, labels reversed>/index.html`: `orca.le
 
 Services for Leon's agents (Hermes Cloud and others). The MCP servers each check their own bearer token. Browsers get the page in `www/`.
 
-| Site                                                           | What it is                                                                        | Runs on                                             |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [`orca`](www/ai/leonsilicon/orca/index.html)                   | [Orca bridge](apps/orca-bridge/README.md)                                         | Mac mini, through [ai-edge](apps/ai-edge/README.md) |
-| [`grok`](www/ai/leonsilicon/grok/index.html)                   | [Grok Bot relay](packages/com/leonsilicon/ai/configs/grok-relay-hermes/README.md) | Mac mini, through ai-edge                           |
-| [`beeper`](www/ai/leonsilicon/beeper/index.html)               | Beeper Desktop's own MCP (no source of ours)                                      | Mac mini, through ai-edge                           |
-| [`watch`](www/ai/leonsilicon/watch/index.html)                 | [Beeper Watch](apps/beeper-watch/README.md)                                       | Mac mini, through ai-edge                           |
-| [`cronometer`](www/ai/leonsilicon/cronometer/index.html)       | [Cronometer](packages/com/leonsilicon/ai/configs/cronometer-mcp-http/README.txt)  | Mac mini, through ai-edge                           |
-| [`slack-as-leon`](www/ai/leonsilicon/slack-as-leon/index.html) | [Slack as Leon](apps/slack-as-leon/README.md)                                     | Its own Cloudflare Worker                           |
-| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html)   | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                           | Its own Cloudflare Worker                           |
+| Site                                                         | What it is                                                                        | Runs on                                             |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`orca`](www/ai/leonsilicon/orca/index.html)                 | [Orca bridge](apps/orca-bridge/README.md)                                         | Mac mini, through [ai-edge](apps/ai-edge/README.md) |
+| [`grok`](www/ai/leonsilicon/grok/index.html)                 | [Grok Bot relay](packages/com/leonsilicon/ai/configs/grok-relay-hermes/README.md) | Mac mini, through ai-edge                           |
+| [`beeper`](www/ai/leonsilicon/beeper/index.html)             | Beeper Desktop's own MCP (no source of ours)                                      | Mac mini, through ai-edge                           |
+| [`watch`](www/ai/leonsilicon/watch/index.html)               | [Beeper Watch](apps/beeper-watch/README.md)                                       | Mac mini, through ai-edge                           |
+| [`cronometer`](www/ai/leonsilicon/cronometer/index.html)     | [Cronometer](packages/com/leonsilicon/ai/configs/cronometer-mcp-http/README.txt)  | Mac mini, through ai-edge                           |
+| [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html) | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                       | Its own Cloudflare Worker                           |
+| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html) | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                           | Its own Cloudflare Worker                           |
 
 The [endpoint map](apps/ai-gateway/README.md) has the mini's local targets.
 

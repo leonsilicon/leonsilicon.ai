@@ -1,6 +1,6 @@
 # @-/com.leonsilicon.ai.services.slack-as-leon
 
-An MCP server that lets Hermes post in Slack as Leon, with no bot marker, using Leon's own Slack web session. It is a plain fetch handler with no Node or npm dependencies, and runs as a Cloudflare Worker. Deployment is in [`apps/slack-as-leon`](../../../../../../apps/slack-as-leon/README.md).
+An MCP server that lets Hermes post in Slack as Leon, with no bot marker, using Leon's own Slack web session: a double puppet of his Slack account, in chat-bridge terms. It is served as `slack-puppet.leonsilicon.ai` and named `slack-puppet` in Hermes. It is a plain fetch handler with no Node or npm dependencies, and runs as a Cloudflare Worker. Deployment is in [`apps/slack-as-leon`](../../../../../../apps/slack-as-leon/README.md).
 
 ## Why
 

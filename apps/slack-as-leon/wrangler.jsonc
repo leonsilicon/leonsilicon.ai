@@ -4,8 +4,12 @@
   "main": "worker.ts",
   "compatibility_date": "2026-11-08",
   "workers_dev": false,
-  // A Custom Domain per hostname; Cloudflare issues its certificate.
-  "routes": [{ "pattern": "slack-as-leon.leonsilicon.ai", "custom_domain": true }],
+  // A Custom Domain per hostname; Cloudflare issues its certificate. slack-puppet is the name since
+  // 2026-11-19; slack-as-leon stays only until Captain Claude has moved over (remove after 2026-11-26).
+  "routes": [
+    { "pattern": "slack-puppet.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "slack-as-leon.leonsilicon.ai", "custom_domain": true },
+  ],
   "preview_urls": false,
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/com.leonsilicon.www.
