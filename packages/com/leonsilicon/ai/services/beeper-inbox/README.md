@@ -1,0 +1,69 @@
+# @-/com.leonsilicon.ai.services.beeper-inbox
+
+Hermes's direct Beeper Cloud inbox: it lists, reads, downloads from and sends in Leon's existing Beeper conversations over Matrix, as its own end-to-end-encrypted device of Leon's Beeper account. It needs neither Beeper Desktop nor any of Leon's computers. The app that runs it on Hermes Cloud, and how to deploy it, is in [`apps/beeper-inbox`](../../../../../../apps/beeper-inbox/README.md).
+
+Leon's Beeper messages are still copied to the Slack #feed- channels by [Beeper Watch](../beeper-watch/README.md), and Slack is still where Hermes searches. This adds actions on the original conversations: open the chat behind a feed post, read the original message, fetch its attachment, reply.
+
+## Tools
+
+| Tool                  | Does                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_conversations`  | Searches the joined rooms by name, participant, network or exact room ID, newest activity first. Each has its room ID, name, short network name (`whatsapp`, `instagram`…) and bridge identity.        |
+| `get_conversation`    | One room: name, network, bridge, member count, encryption.                                                                                                                                             |
+| `list_messages`       | One bounded page of history (up to 100 raw events), decrypted, oldest first, with `next_cursor`. Events that couldn't be decrypted are listed under `undecryptable` and the page is `complete: false`. |
+| `get_message`         | One original event, with full text, reply link and attachments, or an explicit "could not decrypt" with the error.                                                                                     |
+| `download_attachment` | Decrypts an attachment and saves the real bytes under `downloads/<day>/`, returning the path, filename, media type, byte count and SHA-256. Up to 64 MB.                                               |
+| `send_message`        | Text, optionally a reply (`reply_to` = an event ID in the same room). Returns the event ID, a readback and the bridge's delivery status when it reports one.                                           |
+| `send_file`           | A file from the machine, with filename and media type; media as media unless `send_as: "file"`. Up to 50 MB. Downloads the upload back and compares SHA-256.                                           |
+| `send_reaction`       | An emoji reaction.                                                                                                                                                                                     |
+| `inbox_status`        | Device, encryption and key backup state, sync health, directory size, recent sends, limits and what isn't supported.                                                                                   |
+
+Room IDs are opaque and used exactly as the homeserver gives them (`:beeper.local` is normal for bridged rooms; room version 12 IDs have no server part). The chat ID in a #feed- post is the room ID. A Slack ts is not an event ID; the tools refuse one with a pointer to `list_messages`.
+
+Not implemented: starting conversations with new contacts, edits and deletions, Beeper's merged chats (each bridged room is its own conversation), network-specific actions, and thread replies in bridged rooms (Beeper answers `/relations` with 403 there).
+
+## How it works
+
+```text
+Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp ─unix socket─▶ beeper-inbox.mjs daemon ─Pickle (WASM)─▶ matrix.beeper.com
+(any number of processes)  (no state)                      (one owner per device)
+```
+
+- **Library.** [Pickle](https://github.com/beeper/pickle) (`@beeper/pickle`, mautrix-go and goolm compiled to WebAssembly) with its SQLite state adapter, built from the pinned revision in [`apps/beeper-inbox/@assets/pickle.json`](../../../../../../apps/beeper-inbox/@assets/pickle.json). It isn't on npm, so it is vendored, and loaded at run time by `pickle.ts`; `types.ts` describes the slice used.
+- **One writer.** Pickle requires exactly one writer per device store. The daemon is the only process that opens `pickle.db` and `inbox.db`, and only while it holds `state/owner.lock`: an open SQLite `BEGIN EXCLUSIVE` transaction, which the kernel releases when the process dies by any cause, so there is no stale lock to clear. A second daemon exits with code 75. Both databases are also opened with `locking_mode=EXCLUSIVE`.
+- **Thin adapters.** Hermes may start the MCP server in several processes (the gateway, cron runs, dashboard chats). Each is a stateless client of the daemon's socket. The first call, or the adapter's start, launches the daemon detached (`setsid`), outside the process group Hermes kills when an MCP server exits; every adapter checks on it once a minute.
+- **Background sync** keeps to-device room keys, device lists and the directory current. It never creates Hermes tasks or contacts anyone.
+- **Pickle's `fetch`** goes through `matrix-fetch.ts`, which adds what Pickle doesn't expose:
+  - Send retries in Pickle get fresh transaction IDs, so a lost response could post twice. The wrapper pins each send to one transaction ID derived from its idempotency key, and the homeserver deduplicates by it.
+  - A message that isn't `m.room.encrypted` in an encrypted room is refused locally.
+  - Pickle silently drops events it can't decrypt from history. The raw `/messages` and `/event` responses are captured so the tools account for every event.
+  - Pickle's state store re-serializes its whole cache on every state event, and Beeper ignores `types: []` and `limit: 0` in sync filters (measured: 23,049 state events across 1,415 rooms). The sync filter gets `not_types: ["*"]` for room state, which Beeper honours (54 events). Pickle fetches encryption state and members itself before a send.
+  - `/relations` 403s in a room are cached for ten minutes, timeouts are set on every request, and sync health is recorded.
+- **Sends** are serialized and recorded in a ledger (`inbox.db`). The same idempotency key, or without one the same content to the same room within 15 minutes, never sends twice: overlapping calls wait and get the first result. When delivery is uncertain (a timeout after the request went out), the result says so. Calling again within 30 minutes reuses the transaction ID, which is safe; after that the tool asks for a new key.
+- **Directory.** `list_conversations` searches a metadata table (no message text) built from one filtered, stateless `/sync`. It is rebuilt when older than 6 hours, or with `refresh: true`, and updated from live sync.
+- **Files** travel as paths on the shared volume, never through tool output. `send_file` refuses hidden files (`.env`, `.ssh`), anything under the service's state, and names that look like credentials.
+
+## State and secrets
+
+Everything is under `$BEEPER_INBOX_HOME` (default `$HERMES_HOME/beeper-inbox`, `/opt/data/beeper-inbox` on Hermes Cloud):
+
+| Path                    | What                                                                                                                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state/` (0700)         | `account.json` (homeserver, user, device ID; no secrets), `pickle.db` (Olm/Megolm, sync cursor, room cache), `inbox.db` (ledger, directory), `owner.lock`, `daemon.sock`, `daemon.json`, `verified.json` |
+| `downloads/<day>/`      | Decrypted attachments                                                                                                                                                                                    |
+| `logs/daemon.log`       | JSON lines, rotated at 5 MB. IDs and counts only, never message text                                                                                                                                     |
+| `app/`, `node_modules/` | The release; `*.prev` is the one before                                                                                                                                                                  |
+
+Secrets Leon may set are in Hermes's own `.env` (dashboard Keys page, `PUT /api/env`), which Hermes redacts from tool output: `BEEPER_INBOX_ACCESS_TOKEN` and `BEEPER_INBOX_RECOVERY_KEY` (Leon's Beeper recovery key). The daemon reads them from the file itself. It reloads within a minute when they (or `account.json`) change, after checking the new values: a malformed recovery key, or a token for another device, is reported in `status.secrets.problems` and the running session is kept. With the recovery key, the first start cross-signs the device from secret storage and loads the key backup; `verified.json` records it. Bridges only share message keys with cross-signed devices, so without the recovery key nothing bridged decrypts.
+
+The key that encrypts Pickle's store (`pickleKey`) is not in `.env`. It is generated per device into `state/pickle-key-<device>` (0600) on the device's first start, and must never change. Until 2026-11-19 it was `BEEPER_INBOX_PICKLE_KEY` in `.env`, where a recovery key pasted into that entry made the first device's store unreadable. An old store without a key file is migrated from that entry once; one whose key is gone stops with an explanation rather than retrying.
+
+## Test
+
+```sh
+node --test packages/com/leonsilicon/ai/services/beeper-inbox/__tests__/*.test.ts
+```
+
+Offline, with a fake homeserver and a fake Pickle that retries sends with fresh transaction IDs as the real one does. Covers the lock across processes (including SIGKILL), the ledger, overlapping and ambiguous sends, decryption accounting, the plaintext guard, the sync filter, the directory, the upload guard, and a daemon restart that keeps the device. Live checks are in the app README.
+
+Public API (`+server.ts`): `runCli`, `startDaemon`, `runMcpServer`, `Inbox`, `TOOLS`, `runTool`, `OwnerLock`, `SendLedger`, `RoomDirectory`, `MatrixFetch` and helpers.

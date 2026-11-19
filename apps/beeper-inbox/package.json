@@ -1,0 +1,13 @@
+{
+  "name": "@-apps/beeper-inbox",
+  "private": true,
+  "bin": {
+    "_beeper-inbox": "./_beeper-inbox.ts",
+    "_build-beeper-inbox": "./_build-beeper-inbox.ts"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*"
+  }
+}

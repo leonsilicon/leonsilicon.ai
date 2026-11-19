@@ -34,6 +34,16 @@
         "@-/com.leonsilicon.ai.services.ai-gateway": "workspace:*",
       },
     },
+    "apps/beeper-inbox": {
+      "name": "@-apps/beeper-inbox",
+      "bin": {
+        "_beeper-inbox": "./_beeper-inbox.ts",
+        "_build-beeper-inbox": "./_build-beeper-inbox.ts",
+      },
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
+      },
+    },
     "apps/beeper-watch": {
       "name": "@-apps/beeper-watch",
       "bin": {
@@ -110,6 +120,13 @@
     "packages/com/leonsilicon/ai/services/ai-gateway": {
       "name": "@-/com.leonsilicon.ai.services.ai-gateway",
       "version": "1.0.0",
+    },
+    "packages/com/leonsilicon/ai/services/beeper-inbox": {
+      "name": "@-/com.leonsilicon.ai.services.beeper-inbox",
+      "version": "0.1.0",
+      "dependencies": {
+        "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
+      },
     },
     "packages/com/leonsilicon/ai/services/beeper-watch": {
       "name": "@-/com.leonsilicon.ai.services.beeper-watch",
@@ -246,6 +263,8 @@
 
     "@-/com.leonsilicon.ai.services.ai-gateway": ["@-/com.leonsilicon.ai.services.ai-gateway@workspace:packages/com/leonsilicon/ai/services/ai-gateway"],
 
+    "@-/com.leonsilicon.ai.services.beeper-inbox": ["@-/com.leonsilicon.ai.services.beeper-inbox@workspace:packages/com/leonsilicon/ai/services/beeper-inbox"],
+
     "@-/com.leonsilicon.ai.services.beeper-watch": ["@-/com.leonsilicon.ai.services.beeper-watch@workspace:packages/com/leonsilicon/ai/services/beeper-watch"],
 
     "@-/com.leonsilicon.ai.services.linear-slack-sync": ["@-/com.leonsilicon.ai.services.linear-slack-sync@workspace:packages/com/leonsilicon/ai/services/linear-slack-sync"],
@@ -285,6 +304,8 @@
     "@-apps/ai-edge": ["@-apps/ai-edge@workspace:apps/ai-edge"],
 
     "@-apps/ai-gateway": ["@-apps/ai-gateway@workspace:apps/ai-gateway"],
+
+    "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
 
     "@-apps/beeper-watch": ["@-apps/beeper-watch@workspace:apps/beeper-watch"],
 

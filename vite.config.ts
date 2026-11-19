@@ -57,6 +57,7 @@ export default defineConfig({
           ...[
             "ai-edge",
             "ai-gateway",
+            "beeper-inbox",
             "beeper-watch",
             "linear-slack-sync",
             "orca-bridge",
@@ -65,6 +66,11 @@ export default defineConfig({
         ].join(" "),
       },
       typecheck: { command: "tsc --noEmit" },
+      // dist/beeper-inbox.tgz for Hermes Cloud: the app plus Pickle built from its pinned revision.
+      "build:beeper-inbox": {
+        cache: false,
+        command: "node apps/beeper-inbox/_build-beeper-inbox.ts",
+      },
       // Reapplies the Unsnooze connection-loss fix to the global install (or the path after --).
       "patch:unsnooze": {
         cache: false,

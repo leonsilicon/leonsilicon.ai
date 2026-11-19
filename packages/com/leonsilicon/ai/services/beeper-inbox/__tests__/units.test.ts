@@ -1,0 +1,386 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { RoomDirectory, normalizeNetwork, roomsFromSync } from "#directory";
+import { accountPage, refusedUploadReason, safeFilename } from "#format";
+import { MatrixFetch, slimSyncFilter } from "#fetch";
+import { SendLedger, idempotencyKey, payloadHash, txnIdFor } from "#ledger";
+import { OwnerLock } from "#lock";
+import {
+  loadPickleKey,
+  looksLikeRecoveryKey,
+  parseEnvFile,
+  pickleKeyFile,
+  readEnvSecrets,
+  storeHasCrypto,
+} from "#secrets";
+
+const quiet = () => undefined;
+
+test("owner lock: one holder across processes, released when the holder is killed", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bi-lock-"));
+  const path = join(dir, "owner.lock");
+  const holder = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `import { DatabaseSync } from "node:sqlite";
+       const db = new DatabaseSync(${JSON.stringify(path)}, { timeout: 0 });
+       db.exec("PRAGMA journal_mode=DELETE"); db.exec("CREATE TABLE IF NOT EXISTS owner (pid INTEGER NOT NULL, since TEXT NOT NULL)");
+       db.exec("PRAGMA locking_mode=EXCLUSIVE"); db.exec("BEGIN EXCLUSIVE");
+       db.prepare("INSERT INTO owner (pid, since) VALUES (?, ?)").run(process.pid, "x");
+       console.log("held"); setInterval(() => {}, 1000);`,
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+  await new Promise<void>((resolve) => holder.stdout.once("data", () => resolve()));
+  assert.equal(OwnerLock.tryAcquire(path), null, "a second process must not get the lock");
+  holder.kill("SIGKILL");
+  await new Promise((resolve) => holder.once("exit", resolve));
+  const lock = OwnerLock.tryAcquire(path);
+  assert.ok(lock, "the lock is free once the holder is dead, with no stale state");
+  assert.equal(OwnerLock.tryAcquire(path), null, "and exclusive within one process too");
+  lock.release();
+  const again = OwnerLock.tryAcquire(path);
+  assert.ok(again);
+  again.release();
+});
+
+test("ledger: keys, transaction IDs and state transitions", () => {
+  const ledger = new SendLedger(new DatabaseSync(":memory:"));
+  const hash = payloadHash(["text", "hello", ""]);
+  assert.notEqual(hash, payloadHash(["text", "hell", "o"]), "parts are length-prefixed");
+  const derived = idempotencyKey(undefined, "!r:x", "text", hash);
+  assert.equal(derived.derived, true);
+  const explicit = idempotencyKey("order-42", "!r:x", "text", hash);
+  assert.equal(explicit.key, "k:!r:x:order-42");
+  assert.throws(() => idempotencyKey("has space", "!r:x", "text", hash));
+  assert.equal(txnIdFor(explicit.key), txnIdFor(explicit.key));
+  assert.notEqual(txnIdFor(explicit.key), txnIdFor(derived.key));
+  assert.match(txnIdFor(explicit.key), /^bi[A-Za-z0-9_-]{26}$/);
+  const begun = ledger.begin(
+    {
+      key: explicit.key,
+      derived: false,
+      roomId: "!r:x",
+      kind: "text",
+      payloadHash: hash,
+      txnId: txnIdFor(explicit.key),
+    },
+    1000,
+  );
+  assert.equal(begun.status, "pending");
+  assert.equal(ledger.finish(explicit.key, "unknown", null, "timeout", 2000).status, "unknown");
+  const retried = ledger.begin(
+    {
+      key: explicit.key,
+      derived: false,
+      roomId: "!r:x",
+      kind: "text",
+      payloadHash: hash,
+      txnId: "ignored",
+    },
+    3000,
+  );
+  assert.equal(retried.attempts, 2);
+  assert.equal(retried.txnId, txnIdFor(explicit.key), "a key keeps its first transaction ID");
+  const sent = ledger.finish(explicit.key, "sent", "$e", null, 4000);
+  assert.equal(sent.eventId, "$e");
+  ledger.retire(explicit.key, 5000);
+  assert.equal(ledger.get(explicit.key), null);
+});
+
+test("page accounting lists undecryptable events and explains every omission", () => {
+  const raw = [
+    { event_id: "$ok", type: "m.room.encrypted", content: { ciphertext: "x" } },
+    {
+      event_id: "$bad",
+      type: "m.room.encrypted",
+      sender: "@a:x",
+      origin_server_ts: 1,
+      content: { ciphertext: "y" },
+    },
+    {
+      event_id: "$thread",
+      type: "m.room.encrypted",
+      content: { ciphertext: "z", "m.relates_to": { rel_type: "m.thread", event_id: "$root" } },
+    },
+    {
+      event_id: "$edit",
+      type: "m.room.encrypted",
+      content: { ciphertext: "z", "m.relates_to": { rel_type: "m.replace", event_id: "$ok" } },
+    },
+    {
+      event_id: "$react",
+      type: "m.reaction",
+      content: { "m.relates_to": { rel_type: "m.annotation", event_id: "$ok", key: "👍" } },
+    },
+    { event_id: "$member", type: "m.room.member", state_key: "@a:x", content: {} },
+    { event_id: "$gone", type: "m.room.message", content: {}, unsigned: { redacted_because: {} } },
+    { event_id: "$status", type: "m.room.encrypted", content: { ciphertext: "q" } },
+  ];
+  const page = accountPage(raw, new Set(["$ok"]), new Map([["$bad", "no session"]]));
+  assert.deepEqual(
+    page.undecryptable.map((event) => [event.event_id, event.error]),
+    [["$bad", "no session"]],
+  );
+  assert.equal(page.thread_replies.length, 1);
+  assert.equal(page.edits_merged, 1);
+  assert.equal(page.reactions, 1);
+  assert.equal(page.state_events, 1);
+  assert.equal(page.redacted, 1);
+  assert.deepEqual(
+    page.other.map((event) => [event.event_id, event.reason]),
+    [["$status", "not_a_message"]],
+  );
+});
+
+test("directory: bridge identity, names, direct chats and search", () => {
+  const body = {
+    account_data: {
+      events: [{ type: "m.direct", content: { "@x:beeper.local": ["!dm:beeper.local"] } }],
+    },
+    rooms: {
+      join: {
+        "!dm:beeper.local": {
+          state: {
+            events: [
+              {
+                type: "m.room.encryption",
+                state_key: "",
+                content: { algorithm: "m.megolm.v1.aes-sha2" },
+              },
+              {
+                type: "m.bridge",
+                state_key: "fi.mau.whatsapp://whatsapp/123",
+                content: {
+                  bridgebot: "@whatsappbot:beeper.local",
+                  protocol: { id: "whatsapp", displayname: "WhatsApp" },
+                  channel: { id: "123", displayname: "Sam", receiver: "acct1" },
+                  "com.beeper.room_type": "dm",
+                },
+              },
+              {
+                type: "m.room.member",
+                state_key: "@whatsapp_123:beeper.local",
+                content: { displayname: "Sam Lee", membership: "join" },
+              },
+            ],
+          },
+          summary: { "m.heroes": ["@whatsapp_123:beeper.local"], "m.joined_member_count": 2 },
+          timeline: {
+            events: [
+              {
+                type: "m.room.encrypted",
+                sender: "@whatsapp_123:beeper.local",
+                origin_server_ts: 5000,
+                content: {},
+              },
+            ],
+          },
+        },
+        "!group:beeper.local": {
+          state: {
+            events: [
+              { type: "m.room.name", state_key: "", content: { name: "Study group" } },
+              { type: "m.bridge", state_key: "k", content: { protocol: { id: "instagramgo" } } },
+            ],
+          },
+          summary: { "m.joined_member_count": 6 },
+          timeline: {
+            events: [
+              {
+                type: "m.room.message",
+                sender: "@me:beeper.com",
+                origin_server_ts: 9000,
+                content: {},
+              },
+            ],
+          },
+        },
+        "!note:beeper.com": {
+          state: {
+            events: [{ type: "m.room.name", state_key: "", content: { name: "Note to self" } }],
+          },
+        },
+      },
+    },
+  };
+  const rooms = roomsFromSync(body, "@me:beeper.com", 1);
+  const dm = rooms.find((room) => room.roomId === "!dm:beeper.local");
+  assert.equal(dm?.name, "Sam Lee");
+  assert.equal(dm?.network, "whatsapp");
+  assert.equal(dm?.isDirect, true);
+  assert.equal(dm?.encrypted, true);
+  assert.equal(dm?.bridge?.receiver, "acct1");
+  assert.equal(rooms.find((room) => room.roomId === "!group:beeper.local")?.network, "instagram");
+  assert.equal(rooms.find((room) => room.roomId === "!note:beeper.com")?.network, "beeper");
+  const directory = new RoomDirectory(new DatabaseSync(":memory:"));
+  directory.replaceAll(rooms, 1);
+  assert.deepEqual(
+    directory.search({ limit: 10, offset: 0 }).rooms.map((room) => room.roomId),
+    ["!group:beeper.local", "!dm:beeper.local", "!note:beeper.com"],
+  );
+  assert.equal(directory.search({ query: "sam", limit: 10, offset: 0 }).total, 1);
+  assert.equal(directory.search({ network: "WhatsApp", limit: 10, offset: 0 }).total, 1);
+  assert.equal(directory.search({ query: "!note:beeper.com", limit: 10, offset: 0 }).total, 1);
+  directory.touch("!note:beeper.com", 10_000, "@me:beeper.com");
+  assert.equal(directory.search({ limit: 1, offset: 0 }).rooms[0]?.roomId, "!note:beeper.com");
+  assert.equal(normalizeNetwork("discordgo"), "discord");
+  assert.equal(normalizeNetwork("twitter"), "x");
+});
+
+test("fetch wrapper: pins the transaction ID, refuses plaintext, captures pages, caches relations 403s", async () => {
+  const seen: string[] = [];
+  const base = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : input.toString());
+    seen.push(`${init?.method ?? "GET"} ${url.pathname}`);
+    if (url.pathname.includes("/relations/")) return new Response("{}", { status: 403 });
+    if (url.pathname.endsWith("/messages"))
+      return new Response(JSON.stringify({ chunk: [{ event_id: "$1" }] }), { status: 200 });
+    return new Response(JSON.stringify({ event_id: "$sent" }), { status: 200 });
+  }) as typeof fetch;
+  const wrapper = new MatrixFetch(base, quiet);
+  const room = "!r:beeper.local";
+  const encoded = encodeURIComponent(room);
+  const guard = wrapper.beginSend({ roomId: room, txnId: "biPINNED", expectEncrypted: true });
+  await wrapper.fetch(
+    `https://hs/_matrix/client/v3/rooms/${encoded}/send/m.room.encrypted/mautrix-go_1`,
+    { method: "PUT" },
+  );
+  await wrapper.fetch(
+    `https://hs/_matrix/client/v3/rooms/${encoded}/send/m.room.encrypted/mautrix-go_2`,
+    { method: "PUT" },
+  );
+  const blocked = await wrapper.fetch(
+    `https://hs/_matrix/client/v3/rooms/${encoded}/send/m.room.message/mautrix-go_3`,
+    { method: "PUT" },
+  );
+  wrapper.endSend();
+  assert.equal(blocked.status, 400);
+  assert.deepEqual(
+    seen.filter((line) => line.startsWith("PUT")),
+    [
+      `PUT /_matrix/client/v3/rooms/${encoded}/send/m.room.encrypted/biPINNED`,
+      `PUT /_matrix/client/v3/rooms/${encoded}/send/m.room.encrypted/biPINNED`,
+    ],
+  );
+  assert.equal(guard.attempts.length, 3);
+  assert.equal(guard.attempts[2]?.blocked, true);
+  await wrapper.fetch(`https://hs/_matrix/client/v3/rooms/${encoded}/send/m.room.encrypted/free`, {
+    method: "PUT",
+  });
+  assert.ok(seen.at(-1)?.endsWith("/free"), "outside a send nothing is rewritten");
+
+  const capture = wrapper.beginCapture("messages", room);
+  await wrapper.fetch(`https://hs/_matrix/client/v3/rooms/${encoded}/messages?dir=b`);
+  await wrapper.endCapture();
+  assert.deepEqual(capture.bodies, [{ chunk: [{ event_id: "$1" }] }]);
+
+  const before = seen.length;
+  assert.equal(
+    (await wrapper.fetch(`https://hs/_matrix/client/v1/rooms/${encoded}/relations/%24a/m.replace`))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await wrapper.fetch(`https://hs/_matrix/client/v1/rooms/${encoded}/relations/%24b/m.replace`))
+      .status,
+    403,
+  );
+  assert.equal(seen.length, before + 1, "the second relations call is answered locally");
+});
+
+test("upload guard and filenames", () => {
+  const state = "/opt/data/beeper-inbox/state";
+  assert.ok(refusedUploadReason("/opt/data/.env", state));
+  assert.ok(refusedUploadReason("/opt/data/.ssh/id_ed25519", state));
+  assert.ok(refusedUploadReason("/opt/data/beeper-inbox/state/pickle.db", state));
+  assert.ok(refusedUploadReason("/opt/data/google_token.json", state));
+  assert.ok(refusedUploadReason("/opt/data/config.yaml", state));
+  assert.ok(refusedUploadReason("/opt/data/auth.json", state));
+  assert.equal(refusedUploadReason("/opt/data/artifacts/report.pdf", state), null);
+  assert.equal(refusedUploadReason("/tmp/photo.jpg", state), null);
+  assert.equal(safeFilename("../../etc/passwd", "x"), "passwd");
+  assert.equal(safeFilename("..hidden", "x"), "hidden");
+  assert.equal(safeFilename("", "fallback"), "fallback");
+});
+
+test(".env parsing reads only the wanted keys", () => {
+  const parsed = parseEnvFile(
+    'A=1\nBEEPER_INBOX_ACCESS_TOKEN="tok"\n# c\nexport BEEPER_INBOX_PICKLE_KEY=pk\nOTHER=secret',
+    ["BEEPER_INBOX_ACCESS_TOKEN", "BEEPER_INBOX_PICKLE_KEY"],
+  );
+  assert.deepEqual(parsed, { BEEPER_INBOX_ACCESS_TOKEN: "tok", BEEPER_INBOX_PICKLE_KEY: "pk" });
+});
+
+test("sync filter: Pickle's filter loses room state, keeps the rest", async () => {
+  const slim = slimSyncFilter({ room: { timeline: { limit: 50 }, state: { limit: 0 } } });
+  assert.deepEqual(slim, {
+    room: {
+      timeline: { limit: 50, lazy_load_members: true },
+      state: { limit: 0, not_types: ["*"], lazy_load_members: true },
+      account_data: { not_types: ["*"] },
+      ephemeral: { not_types: ["*"] },
+    },
+    presence: { not_types: ["*"] },
+  });
+  let seen = "";
+  const base = (async (input: RequestInfo | URL) => {
+    seen =
+      new URL(input instanceof Request ? input.url : input.toString()).searchParams.get("filter") ??
+      "";
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  const wrapper = new MatrixFetch(base, quiet);
+  await wrapper.fetch(
+    `https://hs/_matrix/client/v3/sync?filter=${encodeURIComponent('{"room":{"timeline":{"limit":0}}}')}&timeout=0`,
+  );
+  assert.deepEqual(
+    (JSON.parse(seen) as { room: { state: { not_types: string[] } } }).room.state.not_types,
+    ["*"],
+  );
+  await wrapper.fetch("https://hs/_matrix/client/v3/sync?filter=abc123");
+  assert.equal(seen, "abc123", "a server-side filter ID is left alone");
+});
+
+test("pickle key: created once per device, migrated from .env only for an existing store, never guessed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bi-key-"));
+  assert.ok(looksLikeRecoveryKey("EsTc 1234 abcd EFGH 5678 ijkm NPQR 9abc defg hijk mnop qrst"));
+  assert.ok(!looksLikeRecoveryKey("x2wQ0vJ7cS_8-random-base64url-pickle-key-0000"));
+  const file = pickleKeyFile(dir, "DEVICE1");
+  const created = loadPickleKey(file, false, undefined);
+  assert.equal(created.source, "created");
+  assert.equal(loadPickleKey(file, true, "ignored").pickleKey, created.pickleKey);
+  const legacyFile = pickleKeyFile(dir, "DEVICE2");
+  assert.equal(loadPickleKey(legacyFile, true, "old-base64url-key").source, "migrated");
+  assert.throws(
+    () =>
+      loadPickleKey(
+        pickleKeyFile(dir, "DEVICE3"),
+        true,
+        "EsTc 1234 abcd EFGH 5678 ijkm NPQR 9abc defg hijk mnop qrst",
+      ),
+    /can never be opened again/,
+  );
+  const db = new DatabaseSync(":memory:");
+  assert.equal(storeHasCrypto(db, "DEVICE1"), false);
+  db.exec("CREATE TABLE matrix_store (key TEXT PRIMARY KEY, value BLOB NOT NULL)");
+  db.prepare("INSERT INTO matrix_store VALUES (?, ?)").run(
+    `pickle/v1/h/u/${Buffer.from("DEVICE1").toString("base64url")}/crypto.json`,
+    new Uint8Array([1]),
+  );
+  assert.equal(storeHasCrypto(db, "DEVICE1"), true);
+  assert.equal(storeHasCrypto(db, "DEVICE2"), false);
+  const envFile = join(dir, ".env");
+  writeFileSync(
+    envFile,
+    "BEEPER_INBOX_ACCESS_TOKEN=EsTc 1234 abcd EFGH 5678 ijkm NPQR 9abc defg hijk mnop qrst\n",
+  );
+  assert.match(readEnvSecrets(envFile, {}).fatal.join(), /holds what looks like a recovery key/);
+});

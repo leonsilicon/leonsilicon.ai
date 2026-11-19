@@ -66,15 +66,16 @@ CI runs no deploys and needs no Infisical access.
 
 ## Deploying
 
-| What                         | Command                                                            |
-| ---------------------------- | ------------------------------------------------------------------ |
-| `ai-edge` Worker             | `vpr -w deploy:ai-edge`                                            |
-| `slack-as-leon` Worker       | `vpr -w deploy:slack-as-leon`                                      |
-| `linear-slack-sync` Worker   | `vpr -w deploy:linear-slack-sync`                                  |
-| Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README |
-| ai-gateway and tunnel (mini) | `apps/ai-gateway/_deploy-ai-gateway.sh [--start]`                  |
-| Orca bridge (mini)           | `apps/orca-bridge/_deploy-orca-bridge.sh [--start]`                |
-| Beeper Watch (mini)          | `apps/beeper-watch/_deploy-beeper-watch.sh [--start]`              |
+| What                         | Command                                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ai-edge` Worker             | `vpr -w deploy:ai-edge`                                                                                    |
+| `slack-as-leon` Worker       | `vpr -w deploy:slack-as-leon`                                                                              |
+| `linear-slack-sync` Worker   | `vpr -w deploy:linear-slack-sync`                                                                          |
+| Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                         |
+| Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy) |
+| ai-gateway and tunnel (mini) | `apps/ai-gateway/_deploy-ai-gateway.sh [--start]`                                                          |
+| Orca bridge (mini)           | `apps/orca-bridge/_deploy-orca-bridge.sh [--start]`                                                        |
+| Beeper Watch (mini)          | `apps/beeper-watch/_deploy-beeper-watch.sh [--start]`                                                      |
 
 The Worker tasks typecheck and build `www/` before deploying, and every command that writes config needs Infisical access. The mini scripts copy this workspace to the mini over SSH (`DEPLOY_HOST`, default `mini`) and install production dependencies there. The Grok relay and Cronometer are copied by hand; their READMEs have the steps.
 
