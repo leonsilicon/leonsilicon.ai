@@ -31,6 +31,19 @@ export interface CommentRecord {
   origin: "linear" | "slack";
 }
 
+export interface ProjectRecord {
+  projectId: string;
+  name: string;
+  statusName: string;
+  /** The channel Linear connected to the project; null until it has one. */
+  channelId: string | null;
+  /** The sidebar section the channel was last put in. */
+  section: string | null;
+  archived: boolean;
+  /** When the sync last asked Linear to create the channel (ms), so it doesn't ask twice. */
+  requestedAt: number | null;
+}
+
 export interface Job {
   id: string;
   kind: string;
@@ -54,6 +67,9 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS seen (id TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS dead (
     id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL, error TEXT, at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS projects (
+    project_id TEXT PRIMARY KEY, name TEXT NOT NULL, status_name TEXT NOT NULL, channel_id TEXT,
+    section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -71,6 +87,17 @@ const toIssue = (r: Row): IssueRecord => ({
   archived: Number(r.archived) === 1,
 });
 
+const toProject = (r: Row): ProjectRecord => ({
+  projectId: r.project_id as string,
+  name: r.name as string,
+  statusName: r.status_name as string,
+  channelId: (r.channel_id as string | null) ?? null,
+  section: (r.section as string | null) ?? null,
+  archived: Number(r.archived) === 1,
+  requestedAt:
+    r.requested_at === null || r.requested_at === undefined ? null : Number(r.requested_at),
+});
+
 const toComment = (r: Row): CommentRecord => ({
   commentId: r.comment_id as string,
   issueId: r.issue_id as string,
@@ -81,7 +108,7 @@ const toComment = (r: Row): CommentRecord => ({
   origin: r.origin as "linear" | "slack",
 });
 
-/** Issue ↔ channel and comment ↔ message mappings, plus the durable job queue. */
+/** Issue ↔ channel, project ↔ channel and comment ↔ message mappings, plus the durable job queue. */
 export class Store {
   readonly #sql: Sql;
 
@@ -128,6 +155,32 @@ export class Store {
     );
   }
 
+  project(projectId: string): ProjectRecord | null {
+    const row = this.#sql.exec(`SELECT * FROM projects WHERE project_id = ?`, projectId)[0];
+    return row ? toProject(row) : null;
+  }
+
+  allProjects(): ProjectRecord[] {
+    return this.#sql.exec(`SELECT * FROM projects`).map(toProject);
+  }
+
+  putProject(r: ProjectRecord): void {
+    this.#sql.exec(
+      `INSERT INTO projects (project_id, name, status_name, channel_id, section, archived, requested_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (project_id) DO UPDATE SET name = excluded.name, status_name = excluded.status_name,
+         channel_id = excluded.channel_id, section = excluded.section, archived = excluded.archived,
+         requested_at = excluded.requested_at`,
+      r.projectId,
+      r.name,
+      r.statusName,
+      r.channelId,
+      r.section,
+      r.archived ? 1 : 0,
+      r.requestedAt,
+    );
+  }
+
   comment(commentId: string): CommentRecord | null {
     const row = this.#sql.exec(`SELECT * FROM comments WHERE comment_id = ?`, commentId)[0];
     return row ? toComment(row) : null;
@@ -171,8 +224,11 @@ export class Store {
     this.#sql.exec(`INSERT OR REPLACE INTO names (user_id, name) VALUES (?, ?)`, userId, name);
   }
 
-  /** Queues a job unless one with the same ID was already queued recently. True when queued. */
-  enqueue(id: string, kind: string, payload: unknown, now: number): boolean {
+  /**
+   * Queues a job unless one with the same ID was already queued recently. True when queued. It runs
+   * at `notBefore`, which defaults to now.
+   */
+  enqueue(id: string, kind: string, payload: unknown, now: number, notBefore = now): boolean {
     this.#sql.exec(`DELETE FROM seen WHERE at < ?`, now - SEEN_TTL_MS);
     if (this.#sql.exec(`SELECT id FROM seen WHERE id = ?`, id).length) return false;
     this.#sql.exec(`INSERT INTO seen (id, at) VALUES (?, ?)`, id, now);
@@ -181,7 +237,7 @@ export class Store {
       id,
       kind,
       JSON.stringify(payload),
-      now,
+      notBefore,
       now,
     );
     return true;

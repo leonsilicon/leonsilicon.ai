@@ -8,12 +8,13 @@ import {
   linearToSlack,
   metaInstant,
   parseTitle,
+  projectChannelName,
   slackToLinear,
 } from "#format";
-import type { LinearApi, LinearIssue } from "#linear";
+import type { LinearApi, LinearIssue, LinearProject, ProjectChannelSettings } from "#linear";
 import { Sidebar, SlackError, tolerate } from "#slack";
 import type { SlackCall } from "#slack";
-import type { IssueRecord, Store } from "#store";
+import type { IssueRecord, ProjectRecord, Store } from "#store";
 
 export interface LinearWebhook {
   action: string;
@@ -51,6 +52,8 @@ export interface SyncDeps {
   /** Leon's web session. Without it, sidebar sections and unarchiving are skipped. */
   session: SlackCall | null;
   now?: () => number;
+  /** Waits, while Linear creates a project channel. Tests pass one that returns at once. */
+  sleep?: (ms: number) => Promise<void>;
   log?: (event: string, fields?: Record<string, unknown>) => void;
 }
 
@@ -74,6 +77,15 @@ export async function stableUuid(seed: string): Promise<string> {
 const ARCHIVED = ["is_archived", "already_archived"];
 
 /**
+ * How long a new project is left alone before the sync asks for its channel. Linear's own "Create
+ * channel for new projects" makes one within seconds of a project created in its app; projects
+ * made through the API get none, so the sync makes those.
+ */
+export const PROJECT_GRACE_MS = 5 * 60_000;
+/** How long to wait before asking Linear again for a channel that never appeared. */
+const PROJECT_RETRY_MS = 30 * 60_000;
+
+/**
  * Keeps one Slack channel per Linear issue: creates or adopts it, files it in the sidebar section
  * named after the issue's status, mirrors comments both ways, and archives it when the issue
  * closes. Every method runs inside one serial queue, so nothing here races itself.
@@ -87,8 +99,10 @@ export class Sync {
   readonly #sidebar: Sidebar | null;
   readonly #now: () => number;
   readonly #log: (event: string, fields?: Record<string, unknown>) => void;
+  readonly #sleep: (ms: number) => Promise<void>;
   #botUserId: string | null = null;
   #channels: ChannelInfo[] | null = null;
+  #projectChannels: ProjectChannelSettings | null | undefined;
 
   constructor(deps: SyncDeps) {
     this.#c = deps.config;
@@ -98,6 +112,7 @@ export class Sync {
     this.#session = deps.session;
     this.#sidebar = deps.session ? new Sidebar(deps.session) : null;
     this.#now = deps.now ?? Date.now;
+    this.#sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.#log = deps.log ?? (() => {});
   }
 
@@ -106,6 +121,11 @@ export class Sync {
       const hook = payload as LinearWebhook;
       if (hook.type === "Issue") await this.onLinearIssue(hook);
       else if (hook.type === "Comment") await this.onLinearComment(hook);
+      else if (hook.type === "Project") await this.onLinearProject(hook);
+    } else if (kind === "project") {
+      // A delayed look at a new project, once Linear has had time to make its channel.
+      const project = await this.#linear.project((payload as { id: string }).id);
+      if (project && project.teamKeys.includes(this.#c.teamKey)) await this.syncProject(project);
     } else if (kind === "slack") await this.onSlackMessage(payload as SlackMessageEvent);
     else if (kind === "tick") await this.tick();
     else if (kind === "backfill") await this.backfill();
@@ -255,6 +275,167 @@ export class Sync {
     return rec;
   }
 
+  // ── Linear projects ────────────────────────────────────────────────────────
+
+  async onLinearProject(hook: LinearWebhook): Promise<void> {
+    if (hook.action === "remove") {
+      const rec = this.#store.project(hook.data.id);
+      if (rec) await this.#closeProject(rec);
+      return;
+    }
+    const project = await this.#linear.project(hook.data.id);
+    if (project && project.teamKeys.includes(this.#c.teamKey)) await this.syncProject(project);
+  }
+
+  /**
+   * Gives an open project a channel through Linear's own Slack integration, so Linear posts its
+   * updates there and syncs their threads, then files it in the projects section with Leon and
+   * Hermes in it. A closed project's channel is archived; reopening unarchives it. Linear names,
+   * renames, topics and populates the channel itself.
+   */
+  async syncProject(project: LinearProject): Promise<ProjectRecord | null> {
+    const prev = this.#store.project(project.id);
+    if (project.gone || this.#c.closedProjectTypes.includes(project.status.type)) {
+      const channelId = project.slackChannelId ?? prev?.channelId ?? null;
+      if (!channelId && !prev) return null;
+      const rec: ProjectRecord = {
+        projectId: project.id,
+        name: project.name,
+        statusName: project.status.name,
+        channelId,
+        section: prev?.section ?? null,
+        archived: prev?.archived === true && prev.channelId === channelId,
+        requestedAt: prev?.requestedAt ?? null,
+      };
+      await this.#closeProject(rec);
+      return this.#store.project(project.id);
+    }
+
+    const channelId = project.slackChannelId ?? (await this.#requestProjectChannel(project, prev));
+    if (!channelId) return prev;
+    const same = prev?.channelId === channelId;
+    const rec: ProjectRecord = {
+      projectId: project.id,
+      name: project.name,
+      statusName: project.status.name,
+      channelId,
+      section: same ? prev.section : null,
+      archived: false,
+      requestedAt: prev?.requestedAt ?? null,
+    };
+    if (same && prev.archived) {
+      if (!this.#session)
+        throw new Error(
+          `project channel ${channelId} is archived and there is no session to unarchive it`,
+        );
+      await tolerate(this.#session("conversations.unarchive", { channel: channelId }), [
+        "not_archived",
+      ]);
+    }
+    if (!same || prev.archived) await this.#joinProject(channelId);
+    const section = this.#c.projectSection;
+    if (rec.section !== section && (await this.#place(channelId, section))) rec.section = section;
+    this.#store.putProject(rec);
+    if (!same) this.#log("project_channel", { project: project.name, channel: channelId });
+    return rec;
+  }
+
+  /** Takes a closed or deleted project's channel out of the sidebar and archives it. */
+  async #closeProject(rec: ProjectRecord): Promise<void> {
+    if (rec.channelId && !rec.archived) {
+      await this.#unplace(rec.channelId);
+      await this.#archive(rec.channelId);
+      this.#log("archived_project_channel", { project: rec.name, channel: rec.channelId });
+    }
+    this.#store.putProject({ ...rec, archived: true, section: null });
+  }
+
+  /**
+   * Asks Linear to create and connect the project's channel, then waits a few seconds for it.
+   * Returns the channel, or null when it isn't there yet (a later webhook or tick picks it up).
+   */
+  async #requestProjectChannel(
+    project: LinearProject,
+    prev: ProjectRecord | null,
+  ): Promise<string | null> {
+    const now = this.#now();
+    const ready = project.createdAt + PROJECT_GRACE_MS;
+    if (now < ready) {
+      this.#store.enqueue(`project:${project.id}:grace`, "project", { id: project.id }, now, ready);
+      return null;
+    }
+    if (prev?.requestedAt && now - prev.requestedAt < PROJECT_RETRY_MS) return null;
+    if (this.#projectChannels === undefined)
+      this.#projectChannels = await this.#linear.projectChannelSettings();
+    const settings = this.#projectChannels;
+    if (!settings) {
+      this.#log("project_channels_off", { project: project.name });
+      return null;
+    }
+    const name = await this.#freeName(
+      projectChannelName(settings.prefix, project.name, this.#c.channelNameMax),
+    );
+    await this.#linear.createProjectChannel({
+      projectId: project.id,
+      name,
+      integrationId: settings.integrationId,
+    });
+    this.#store.putProject({
+      projectId: project.id,
+      name: project.name,
+      statusName: project.status.name,
+      channelId: null,
+      section: null,
+      archived: false,
+      requestedAt: now,
+    });
+    this.#log("requested_project_channel", { project: project.name, channel: name });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await this.#sleep(2_000);
+      const fresh = await this.#linear.project(project.id);
+      if (fresh?.slackChannelId) {
+        this.#channels = null;
+        return fresh.slackChannelId;
+      }
+    }
+    return null;
+  }
+
+  /** `base`, or `base-2`, `base-3`… when a channel already has the name. */
+  async #freeName(base: string): Promise<string> {
+    const taken = new Set((await this.#listChannels()).map((c) => c.name));
+    if (!taken.has(base)) return base;
+    for (let n = 2; n < 10; n++) {
+      const name = `${base.slice(0, this.#c.channelNameMax - 3)}-${n}`;
+      if (!taken.has(name)) return name;
+    }
+    throw new Error(`no free channel name for ${base}`);
+  }
+
+  /**
+   * Linear invites the project's members; this makes sure Leon and Hermes are in too. The channel
+   * is public, so Leon joins it himself. The bot stays out: it needs nothing there.
+   */
+  async #joinProject(channelId: string): Promise<void> {
+    if (this.#session) {
+      await tolerate(this.#session("conversations.join", { channel: channelId }), [
+        "already_in_channel",
+      ]);
+      await tolerate(
+        this.#session("conversations.invite", { channel: channelId, users: this.#c.hermesUserId }),
+        ["already_in_channel", "cant_invite_self"],
+      );
+      return;
+    }
+    await tolerate(this.#bot("conversations.join", { channel: channelId }), ["already_in_channel"]);
+    for (const user of [this.#c.leonUserId, this.#c.hermesUserId])
+      await tolerate(this.#bot("conversations.invite", { channel: channelId, users: user }), [
+        "already_in_channel",
+        "cant_invite_self",
+        "user_not_found",
+      ]);
+  }
+
   // ── Slack → Linear ─────────────────────────────────────────────────────────
 
   async onSlackMessage(event: SlackMessageEvent): Promise<void> {
@@ -371,9 +552,35 @@ export class Sync {
         this.#store.putIssue({ ...rec, archived: true, section: null });
       } else await this.syncIssue(issue, "live");
     }
+    await this.#reconcileProjects();
   }
 
-  /** Adopts or creates a channel for every open issue and archives channels of closed ones, quietly. */
+  /** Syncs every open project that isn't settled, and closes the ones that left the open list. */
+  async #reconcileProjects(): Promise<void> {
+    const projects = await this.#linear.openProjects(this.#c.teamKey, this.#c.closedProjectTypes);
+    for (const project of projects) {
+      const rec = this.#store.project(project.id);
+      if (
+        !rec ||
+        rec.archived ||
+        rec.channelId !== project.slackChannelId ||
+        rec.section !== this.#c.projectSection
+      )
+        await this.syncProject(project);
+    }
+    const open = new Set(projects.map((p) => p.id));
+    for (const rec of this.#store.allProjects()) {
+      if (rec.archived || open.has(rec.projectId)) continue;
+      const project = await this.#linear.project(rec.projectId);
+      if (project) await this.syncProject(project);
+      else await this.#closeProject(rec);
+    }
+  }
+
+  /**
+   * Adopts or creates a channel for every open issue and archives channels of closed ones, quietly.
+   * Then gives every open project its channel.
+   */
   async backfill(): Promise<void> {
     this.#channels = null;
     const issues = await this.#linear.openIssues(this.#c.teamKey, this.#c.closedStateTypes);
@@ -397,6 +604,7 @@ export class Sync {
         });
       this.#log("archived_closed", { issue: issue.identifier, channel: channel.name });
     }
+    await this.#reconcileProjects();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -579,19 +787,23 @@ export class Sync {
     return false;
   }
 
-  /** Files the channel in the section named after the status. False when there's no session. */
-  async #place(channelId: string, stateName: string): Promise<boolean> {
+  /** The managed sections, top to bottom: the statuses, then projects. */
+  #order(): string[] {
+    const { sectionOrder, projectSection } = this.#c;
+    return sectionOrder.includes(projectSection) ? sectionOrder : [...sectionOrder, projectSection];
+  }
+
+  /** Files the channel in the named section (a status, or projects). False when there's no session. */
+  async #place(channelId: string, name: string): Promise<boolean> {
     if (!this.#sidebar) return false;
-    const order = this.#c.sectionOrder.includes(stateName)
-      ? this.#c.sectionOrder
-      : [...this.#c.sectionOrder, stateName];
-    const sections = await this.#sidebar.ensure(order, [stateName]);
-    await this.#sidebar.move(channelId, stateName, sections, order);
+    const order = this.#order().includes(name) ? this.#order() : [...this.#order(), name];
+    const sections = await this.#sidebar.ensure(order, [name]);
+    await this.#sidebar.move(channelId, name, sections, order);
     return true;
   }
 
   async #unplace(channelId: string): Promise<void> {
-    await this.#sidebar?.release(channelId, this.#c.sectionOrder);
+    await this.#sidebar?.release(channelId, this.#order());
   }
 
   #mentions(issue: LinearIssue): string {

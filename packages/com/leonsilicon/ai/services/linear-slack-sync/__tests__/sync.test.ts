@@ -2,14 +2,23 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { loadConfig } from "#config";
-import type { LinearApi, LinearComment, LinearIssue, LinearState } from "#linear";
+import type {
+  LinearApi,
+  LinearComment,
+  LinearIssue,
+  LinearProject,
+  LinearState,
+  ProjectChannelSettings,
+} from "#linear";
 import { SlackError, type SlackCall, type SlackParams } from "#slack";
 import { Store, type Sql, type SqlValue } from "#store";
-import { Sync } from "#sync";
+import { PROJECT_GRACE_MS, Sync } from "#sync";
 
 const LEON = "U0LEON00001";
 const HERMES = "U0HERMES001";
 const BOT = "U0SYNCBOT1";
+/** Linear's own Slack app, which creates and owns project channels. */
+const LINEAR_BOT = "U0LINEARBOT";
 
 const STATES: LinearState[] = [
   "Awaiting Clarification:backlog",
@@ -35,8 +44,23 @@ function memorySql(): Sql {
   };
 }
 
-function fakeLinear() {
+/** Linear's side of a project channel: it creates a public channel and invites project members. */
+type MakeChannel = (name: string) => { id: string };
+
+function fakeLinear(makeChannel: MakeChannel) {
   const issues = new Map<string, LinearIssue>();
+  const projects = new Map<string, LinearProject>();
+  const channelRequests: { projectId: string; name: string; integrationId: string }[] = [];
+  const linearSide = {
+    settings: { integrationId: "int-slack", prefix: "p-" } as ProjectChannelSettings | null,
+    /** When true, Linear accepts a request but the channel doesn't appear until `finish`. */
+    slow: false,
+    pending: [] as { projectId: string; name: string }[],
+  };
+  const finish = () => {
+    for (const { projectId, name } of linearSide.pending.splice(0))
+      projects.get(projectId)!.slackChannelId = makeChannel(name).id;
+  };
   const comments = new Map<string, LinearComment>();
   const created: { id: string; issueId: string; body: string; parentId?: string }[] = [];
   const updates: { id: string; input: { stateId?: string; title?: string } }[] = [];
@@ -69,6 +93,36 @@ function fakeLinear() {
       if (input.stateId) issue.state = STATES.find((s) => s.id === input.stateId)!;
       if (input.title) issue.title = input.title;
     },
+    project: async (id) => projects.get(id) ?? null,
+    openProjects: async (team, closed) =>
+      [...projects.values()].filter(
+        (p) => p.teamKeys.includes(team) && !p.gone && !closed.includes(p.status.type),
+      ),
+    projectChannelSettings: async () => linearSide.settings,
+    createProjectChannel: async (input) => {
+      channelRequests.push(input);
+      linearSide.pending.push({ projectId: input.projectId, name: input.name });
+      if (!linearSide.slow) finish();
+    },
+  };
+  const addProject = (
+    name: string,
+    status = "Backlog:backlog",
+    createdAt = Date.UTC(2026, 10, 1),
+  ) => {
+    const [statusName, type] = status.split(":") as [string, string];
+    const project: LinearProject = {
+      id: `project-${projects.size + 1}`,
+      name,
+      url: `https://linear.app/leonsilicon/project/${projects.size + 1}`,
+      status: { name: statusName, type },
+      slackChannelId: null,
+      teamKeys: ["LEON"],
+      createdAt,
+      gone: false,
+    };
+    projects.set(project.id, project);
+    return project;
   };
   const addIssue = (number: number, title: string, status: string, description = "") => {
     const issue: LinearIssue = {
@@ -84,7 +138,19 @@ function fakeLinear() {
     issues.set(issue.id, issue);
     return issue;
   };
-  return { api, issues, comments, created, updates, addIssue };
+  return {
+    api,
+    issues,
+    comments,
+    created,
+    updates,
+    addIssue,
+    projects,
+    addProject,
+    channelRequests,
+    linearSide,
+    finish,
+  };
 }
 
 interface Channel {
@@ -159,11 +225,18 @@ function fakeSlack() {
           c.members.add(String(params.users));
           return { ok: true };
         }
+        case "conversations.join": {
+          const c = find(params.channel);
+          if (c.private) throw new SlackError(method, "method_not_supported_for_channel_type");
+          if (c.archived) throw new SlackError(method, "is_archived");
+          c.members.add(me);
+          return { ok: true };
+        }
         case "conversations.list":
           return {
             ok: true,
             channels: channels
-              .filter((c) => c.members.has(me))
+              .filter((c) => !c.private || c.members.has(me))
               .map((c) => ({ id: c.id, name: c.name, is_archived: c.archived })),
           };
         case "conversations.setTopic": {
@@ -282,6 +355,20 @@ function fakeSlack() {
     channels.push(c);
     return c;
   };
+  /** A public channel made by Linear's Slack app, with the members Linear invited. */
+  const addLinearChannel = (name: string, members = [LEON]) => {
+    if (channels.some((c) => c.name === name)) throw new SlackError("x", "name_taken");
+    const c: Channel = {
+      id: `C${++seq}`,
+      name,
+      private: false,
+      archived: false,
+      members: new Set([LINEAR_BOT, ...members]),
+      topic: "",
+    };
+    channels.push(c);
+    return c;
+  };
   return {
     bot: client("bot"),
     session: client("leon"),
@@ -292,12 +379,13 @@ function fakeSlack() {
     sectionOf,
     order,
     addLeonChannel,
+    addLinearChannel,
   };
 }
 
 function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
-  const linear = fakeLinear();
   const slack = fakeSlack();
+  const linear = fakeLinear((name) => slack.addLinearChannel(name));
   const store = new Store(memorySql());
   const clock = { now };
   const sync = new Sync({
@@ -307,12 +395,14 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     bot: slack.bot,
     session: slack.session,
     now: () => clock.now,
+    sleep: async () => {},
   });
   return { linear, slack, store, sync, clock };
 }
 
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
 const commentHook = (id: string, action = "create") => ({ action, type: "Comment", data: { id } });
+const projectHook = (id: string, action = "update") => ({ action, type: "Project", data: { id } });
 
 test("a new issue gets a private channel, an intro, a topic and its status section", async () => {
   const { linear, slack, sync } = setup();
@@ -566,6 +656,156 @@ test("tick starts dated issues, expires listeners and repairs drift", async () =
   clock.now += 24 * 3600_000;
   await sync.run("tick", {});
   assert.equal(later.state.name, "Awaiting Start");
+});
+
+test("an open project gets a channel from Linear's Slack app, filed under Projects", async () => {
+  const { linear, slack, sync, store } = setup();
+  const project = linear.addProject("UofT Creators Club");
+  await sync.run("linear", projectHook(project.id));
+
+  assert.deepEqual(linear.channelRequests, [
+    { projectId: project.id, name: "p-uoft-creators-club", integrationId: "int-slack" },
+  ]);
+  const channel = slack.channels.find((c) => c.id === project.slackChannelId)!;
+  assert.equal(channel.name, "p-uoft-creators-club");
+  assert.equal(channel.private, false);
+  assert.deepEqual(
+    [...channel.members].sort(),
+    [LINEAR_BOT, LEON, HERMES].sort(),
+    "Hermes is invited; the sync's own bot stays out",
+  );
+  assert.equal(slack.sectionOf(channel.id), "Projects");
+  assert.equal(store.project(project.id)!.channelId, channel.id);
+  assert.equal(slack.posts.length, 0, "Linear posts in its own channel; the sync doesn't");
+
+  // A redelivered webhook changes nothing.
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(linear.channelRequests.length, 1);
+  assert.equal(slack.channels.length, 1);
+});
+
+test("a project that already has a Linear channel is adopted, and Leon joins it", async () => {
+  const { linear, slack, sync } = setup();
+  const channel = slack.addLinearChannel("p-agent-operations", []);
+  const project = linear.addProject("Agent operations");
+  project.slackChannelId = channel.id;
+  await sync.run("linear", projectHook(project.id));
+
+  assert.equal(linear.channelRequests.length, 0);
+  assert.deepEqual([...channel.members].sort(), [LINEAR_BOT, LEON, HERMES].sort());
+  assert.equal(slack.sectionOf(channel.id), "Projects");
+});
+
+test("project channels sit below the status sections", async () => {
+  const { linear, slack, sync } = setup();
+  await sync.run("linear", projectHook(linear.addProject("unduo.me").id));
+  linear.addIssue(1, "task", "Executing");
+  await sync.run("linear", issueHook("issue-1", "create"));
+  linear.addIssue(2, "task", "Awaiting Leon");
+  await sync.run("linear", issueHook("issue-2", "create"));
+  assert.deepEqual(slack.order(), ["Awaiting Leon", "Executing", "Projects"]);
+});
+
+test("a new project waits for Linear's own channel before asking for one", async () => {
+  const { linear, slack, sync, store, clock } = setup();
+  const project = linear.addProject("Launch", "Backlog:backlog", clock.now - 60_000);
+  await sync.run("linear", projectHook(project.id, "create"));
+  assert.equal(linear.channelRequests.length, 0);
+  assert.equal(store.dueJobs(clock.now, 10).length, 0, "nothing runs during the grace period");
+  const [job] = store.dueJobs(project.createdAt + PROJECT_GRACE_MS, 10);
+  assert.equal(job!.kind, "project");
+
+  // Linear's "Create channel for new projects" made one meanwhile: the delayed check adopts it.
+  const auto = slack.addLinearChannel("p-launch");
+  project.slackChannelId = auto.id;
+  clock.now = project.createdAt + PROJECT_GRACE_MS;
+  await sync.run(job!.kind, JSON.parse(job!.payload));
+  assert.equal(linear.channelRequests.length, 0);
+  assert.equal(slack.sectionOf(auto.id), "Projects");
+
+  // A project made through the API gets none from Linear, so the delayed check asks for it.
+  const api = linear.addProject("From the API", "Planned:planned", clock.now);
+  await sync.run("linear", projectHook(api.id, "create"));
+  clock.now += PROJECT_GRACE_MS;
+  await sync.run("project", { id: api.id });
+  assert.equal(linear.channelRequests.at(-1)!.name, "p-from-the-api");
+  assert.equal(slack.sectionOf(api.slackChannelId!), "Projects");
+});
+
+test("a taken name gets a suffix, and a slow channel is picked up later without asking twice", async () => {
+  const { linear, slack, sync, store, clock } = setup();
+  slack.addLeonChannel("p-unduo-me");
+  linear.linearSide.slow = true;
+  const project = linear.addProject("unduo.me");
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(linear.channelRequests[0]!.name, "p-unduo-me-2");
+  assert.equal(store.project(project.id)!.channelId, null);
+  assert.equal(store.project(project.id)!.requestedAt, clock.now);
+
+  await sync.run("tick", {});
+  assert.equal(linear.channelRequests.length, 1, "no second request while the first is fresh");
+
+  linear.finish();
+  clock.now += 15 * 60_000;
+  await sync.run("tick", {});
+  assert.equal(linear.channelRequests.length, 1);
+  assert.equal(slack.sectionOf(project.slackChannelId!), "Projects");
+});
+
+test("closing a project archives its channel; reopening unarchives it; deleting archives it", async () => {
+  const { linear, slack, sync } = setup();
+  const project = linear.addProject("Creator accounts and payouts");
+  await sync.run("linear", projectHook(project.id));
+  const channel = slack.channels.find((c) => c.id === project.slackChannelId)!;
+
+  project.status = { name: "Completed", type: "completed" };
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(channel.archived, true);
+  assert.equal(slack.sectionOf(channel.id), null);
+  assert.deepEqual(slack.order(), [], "the emptied Projects section is removed");
+
+  project.status = { name: "In Progress", type: "started" };
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(channel.archived, false);
+  assert.equal(slack.sectionOf(channel.id), "Projects");
+  assert.equal(linear.channelRequests.length, 1, "the same channel comes back");
+
+  await sync.run("linear", projectHook(project.id, "remove"));
+  assert.equal(channel.archived, true);
+});
+
+test("projects of other teams, and closed projects without a channel, are left alone", async () => {
+  const { linear, slack, sync } = setup();
+  const other = linear.addProject("Elsewhere");
+  other.teamKeys = ["OTHER"];
+  const closed = linear.addProject("School", "Canceled:canceled");
+  await sync.run("linear", projectHook(other.id));
+  await sync.run("linear", projectHook(closed.id));
+  await sync.run("backfill", {});
+  assert.equal(linear.channelRequests.length, 0);
+  assert.equal(slack.channels.length, 0);
+});
+
+test("with project channels off in Linear, nothing is requested", async () => {
+  const { linear, sync } = setup();
+  linear.linearSide.settings = null;
+  await sync.run("linear", projectHook(linear.addProject("Agent operations").id));
+  assert.equal(linear.channelRequests.length, 0);
+});
+
+test("tick gives open projects channels and archives the ones that closed or vanished", async () => {
+  const { linear, slack, sync } = setup();
+  const a = linear.addProject("Agent operations");
+  const b = linear.addProject("UofT Creators Club");
+  await sync.run("tick", {});
+  assert.equal(linear.channelRequests.length, 2);
+
+  const channelB = slack.channels.find((c) => c.id === b.slackChannelId)!;
+  linear.projects.delete(b.id);
+  a.status = { name: "Canceled", type: "canceled" };
+  await sync.run("tick", {});
+  assert.equal(slack.channels.find((c) => c.id === a.slackChannelId)!.archived, true);
+  assert.equal(channelB.archived, true);
 });
 
 test("loadConfig needs both Slack user IDs, which have no built-in defaults", () => {

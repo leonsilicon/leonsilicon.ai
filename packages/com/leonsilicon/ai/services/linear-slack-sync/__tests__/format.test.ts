@@ -8,6 +8,7 @@ import {
   linearToSlack,
   metaInstant,
   parseTitle,
+  projectChannelName,
   slackToLinear,
 } from "#format";
 import { hmacHex, verifyLinear, verifySlack } from "#verify";
@@ -135,4 +136,15 @@ test("Slack and Linear signatures verify, and stale or forged ones don't", async
   assert.equal(await verifyLinear("whsec", sig, hook, now + 1000), true);
   assert.equal(await verifyLinear("whsec", sig, hook, now + 10 * 60_000), false);
   assert.equal(await verifyLinear("other", sig, hook, now), false);
+});
+
+test("projectChannelName uses Linear's prefix and cuts at a word", () => {
+  assert.equal(projectChannelName("p-", "UofT Creators Club", 60), "p-uoft-creators-club");
+  assert.equal(projectChannelName("p-", "unduo.me", 60), "p-unduo-me");
+  assert.equal(projectChannelName("project-", "Café & Co.", 60), "project-cafe-co");
+  assert.equal(projectChannelName("p-", "!!!", 60), "p-project");
+  assert.equal(
+    projectChannelName("p-", "Creator accounts and payouts for every platform", 25),
+    "p-creator-accounts-and",
+  );
 });

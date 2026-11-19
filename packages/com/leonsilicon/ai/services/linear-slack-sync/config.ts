@@ -26,6 +26,10 @@ export interface SyncConfig {
   listenerExpiredTarget: string;
   /** Time zone for bare dates in title metadata. */
   timeZone: string;
+  /** The sidebar section for project channels, below the status sections. */
+  projectSection: string;
+  /** Linear project status types that close a project; its channel is archived. */
+  closedProjectTypes: string[];
 }
 
 const list = (value: string | undefined, fallback: string[]) =>
@@ -71,5 +75,7 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     listenerState: env.LISTENER_STATE ?? "Awaiting Listener",
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
+    projectSection: env.PROJECT_SECTION ?? "Projects",
+    closedProjectTypes: list(env.CLOSED_PROJECT_TYPES, ["completed", "canceled"]),
   };
 }

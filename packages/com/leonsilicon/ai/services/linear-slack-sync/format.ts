@@ -88,15 +88,17 @@ function zonedMidnight(year: number, month: number, day: number, timeZone: strin
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-/** `leon-205-switch-to-rogers`: prefix, issue number, then the title name, cut at a word. */
-export function channelName(prefix: string, number: number, name: string, max: number): string {
-  const head = `${prefix}-${number}`;
-  const slug = name
+/** Lowercase words joined by hyphens, accents dropped: what Slack allows in a channel name. */
+const slugify = (name: string) =>
+  name
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+/** `head` + `-` + `slug`, cut at a hyphen so it fits in `max`, never shorter than `head`. */
+function joinCut(head: string, slug: string, max: number): string {
   if (!slug) return head;
   let out = `${head}-${slug}`;
   if (out.length <= max) return out;
@@ -104,6 +106,21 @@ export function channelName(prefix: string, number: number, name: string, max: n
   const cut = out.lastIndexOf("-");
   out = cut > head.length ? out.slice(0, cut) : out.slice(0, max);
   return out.replace(/-+$/, "");
+}
+
+/** `leon-205-switch-to-rogers`: prefix, issue number, then the title name, cut at a word. */
+export function channelName(prefix: string, number: number, name: string, max: number): string {
+  return joinCut(`${prefix}-${number}`, slugify(name), max);
+}
+
+/**
+ * `p-uoft-creators-club`: Linear's project channel prefix (which ends in a hyphen) and the project
+ * name, cut at a word.
+ */
+export function projectChannelName(prefix: string, name: string, max: number): string {
+  const slug = slugify(name) || "project";
+  const out = `${prefix}${slug}`;
+  return out.length <= max ? out : joinCut(prefix.replace(/-+$/, ""), slug, max);
 }
 
 /** The number in a channel name made by `channelName`, or null. */

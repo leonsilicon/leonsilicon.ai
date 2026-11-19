@@ -135,7 +135,7 @@ export default {
       )
         return json({ error: "bad signature" }, 401);
       const payload = JSON.parse(body) as { type: string; action: string; data: { id: string } };
-      if (payload.type === "Issue" || payload.type === "Comment") {
+      if (payload.type === "Issue" || payload.type === "Comment" || payload.type === "Project") {
         const delivery =
           request.headers.get("linear-delivery") ??
           `${payload.type}:${payload.action}:${payload.data.id}:${now}`;
