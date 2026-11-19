@@ -129,6 +129,8 @@ const issueTimer = (issueId: string) => `timer:${issueId}`;
 const DAYS_TIMER = "days";
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
+/** Recorded once a Hermes message's ping to Leon has been acted on, so edits of it don't act again. */
+const pingKey = (channelId: string, ts: string) => `ping:${channelId}:${ts}`;
 /** A notice for a due time (not a bare day) this late says "Overdue". */
 const LATE_MS = 3600_000;
 
@@ -611,6 +613,9 @@ export class Sync {
     if (event.type !== "message") return;
     if (event.subtype === "message_changed") {
       const edited = event.message;
+      // Hermes streams some replies by editing them, so its ping can first show up in an edit.
+      if (edited?.user === this.#c.hermesUserId)
+        return this.#onHermesMessage(event.channel, edited.ts, edited.text ?? "");
       if (!edited || edited.bot_id || !edited.user) return;
       const known = this.#store.commentBySlack(event.channel, edited.ts);
       if (known?.origin === "slack")
@@ -624,7 +629,8 @@ export class Sync {
     if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
       return;
     // Hermes's posts aren't mirrored, but one that pings Leon hands him the issue.
-    if (event.user === this.#c.hermesUserId) return this.#onHermesMessage(event);
+    if (event.user === this.#c.hermesUserId)
+      return this.#onHermesMessage(event.channel, event.ts, event.text ?? "");
     if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
@@ -682,17 +688,22 @@ export class Sync {
    * Hermes mentioning Leon in an issue channel means it needs something from him (Leon's rule,
    * 2026-11-19: Hermes pings him whenever it does), so the issue moves to Awaiting Leon, unless it
    * already waits on him (a status that mentions him). The channel follows at once, without
-   * mentioning Leon again; Hermes's message already did.
+   * mentioning Leon again; Hermes's message already did. Each message acts once: a later edit of
+   * it (Hermes streams some replies that way) doesn't pull the issue back after Leon moves it on.
    */
-  async #onHermesMessage(event: SlackMessageEvent): Promise<void> {
+  async #onHermesMessage(channelId: string, ts: string, text: string): Promise<void> {
     const { leonPingState, leonUserId, mentionLeonStates } = this.#c;
-    if (!mentions(event.text ?? "", leonUserId)) return;
-    const issue = await this.#openIssueIn(event.channel);
+    if (!mentions(text, leonUserId)) return;
+    const key = pingKey(channelId, ts);
+    if (this.#store.fired(key)) return;
+    const issue = await this.#openIssueIn(channelId);
     if (!issue) return;
     const from = issue.state.name;
-    if (from === leonPingState || mentionLeonStates.includes(from)) return;
-    await this.#moveNow(issue, leonPingState, { note: "(Hermes pinged Leon)", quietLeon: true });
-    this.#log("hermes_pinged_leon", { issue: issue.identifier, from });
+    if (from !== leonPingState && !mentionLeonStates.includes(from)) {
+      await this.#moveNow(issue, leonPingState, { note: "(Hermes pinged Leon)", quietLeon: true });
+      this.#log("hermes_pinged_leon", { issue: issue.identifier, from });
+    }
+    this.#store.markFired(key, this.#now());
   }
 
   /** The open issue whose channel this is, read fresh from Linear. Null for any other channel. */

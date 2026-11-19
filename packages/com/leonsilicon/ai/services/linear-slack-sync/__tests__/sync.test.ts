@@ -781,6 +781,38 @@ test("Hermes pinging Leon in an issue channel moves the issue to Awaiting Leon, 
   );
 });
 
+test("a ping that first shows up in Hermes's edit (a streamed reply) moves the issue, once per message", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(9, "x", "Awaiting Hermes");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!.id;
+  const edit = (text: string) => ({
+    type: "message",
+    subtype: "message_changed",
+    channel,
+    ts: "5.9",
+    message: { ts: "5.1", user: HERMES, bot_id: "B0HERMES01", text },
+  });
+
+  await sync.run("slack", hermesSays(channel, "Checking", { ts: "5.1" }));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  await sync.run("slack", edit(`Checking. <@${LEON}> the connector needs you.`));
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(linear.created.length, 0, "Hermes's edit isn't mirrored either");
+
+  // Leon hands it back; the stream's last edit of the same message doesn't take it again.
+  issue.state = state("Awaiting Hermes");
+  await sync.run("linear", issueHook(issue.id));
+  const updates = linear.updates.length;
+  await sync.run("slack", edit(`Checking. <@${LEON}> the connector needs you. Link: x`));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  assert.equal(linear.updates.length, updates);
+
+  // A new message pings again.
+  await sync.run("slack", hermesSays(channel, `<@${LEON}> one more thing`, { ts: "6.1" }));
+  assert.equal(issue.state.name, "Awaiting Leon");
+});
+
 test("Hermes's posts without a ping, others' pings and closed or waiting issues don't move", async () => {
   const { linear, slack, sync } = setup();
   const issue = linear.addIssue(9, "x", "Executing");

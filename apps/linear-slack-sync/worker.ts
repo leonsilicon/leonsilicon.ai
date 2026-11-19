@@ -79,8 +79,8 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 }
 
 /**
- * Slack events worth queueing: people's messages and edits in channels, Hermes's messages that
- * mention Leon, and 👀 reactions to messages (the sync checks who reacted to whom, and where).
+ * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
+ * that mention Leon, and 👀 reactions to messages (the sync checks who reacted to whom, and where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
@@ -90,11 +90,17 @@ function wantedSlackEvent(event: Record<string, unknown> | undefined, config: Sy
     );
   if (!event || event.type !== "message") return false;
   if (event.channel_type !== "channel" && event.channel_type !== "group") return false;
-  if (event.subtype === "message_changed") return true;
+  const hermesPing = (message: Record<string, unknown> | undefined) =>
+    typeof message?.text === "string" && mentions(message.text, config.leonUserId);
+  if (event.subtype === "message_changed") {
+    // People's edits, and Hermes's edits that ping Leon (it streams some replies by editing).
+    const edited = event.message as Record<string, unknown> | undefined;
+    if (edited?.user === config.hermesUserId) return hermesPing(edited);
+    return !edited?.bot_id;
+  }
   if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
     return false;
-  if (event.user === config.hermesUserId)
-    return typeof event.text === "string" && mentions(event.text, config.leonUserId);
+  if (event.user === config.hermesUserId) return hermesPing(event);
   return !event.bot_id;
 }
 
