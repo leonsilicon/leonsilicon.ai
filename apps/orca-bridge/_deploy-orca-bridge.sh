@@ -20,26 +20,31 @@ if [[ "${1:-}" == "--start" ]]; then
   ENV_FILE=$(vpx _env-file orca-bridge)
   printf '%s\n' "$ENV_FILE" | ssh "$HOST" "umask 077 && cat > ~/.config/orca-bridge/env.new && mv ~/.config/orca-bridge/env.new ~/.config/orca-bridge/env"
   echo "Wrote $HOST:~/.config/orca-bridge/env"
+  # The bridge, then the watchdog that restarts the mini's Orca serve when it stops becoming ready.
   ssh "$HOST" 'bash -s' <<REMOTE
 set -euo pipefail
-PLIST=~/Library/LaunchAgents/$LABEL.plist
-sed -e "s|__NODE__|/opt/homebrew/bin/node|" -e "s|__HOME__|\$HOME|g" ~/$APP/apps/orca-bridge/@assets/$LABEL.plist > "\$PLIST"
-if launchctl print "gui/\$(id -u)/$LABEL" >/dev/null 2>&1; then
-  launchctl bootout "gui/\$(id -u)/$LABEL" || true
-  # bootout returns before the job is gone; bootstrapping too early fails with "5: Input/output error".
-  for _ in \$(seq 1 30); do
-    launchctl print "gui/\$(id -u)/$LABEL" >/dev/null 2>&1 || break
-    sleep 1
-  done
-fi
-for attempt in 1 2 3 4 5; do
-  if launchctl bootstrap "gui/\$(id -u)" "\$PLIST"; then
-    echo "Started $LABEL"
-    exit 0
+start() {
+  local label=\$1 plist=\$HOME/Library/LaunchAgents/\$1.plist
+  sed -e "s|__NODE__|/opt/homebrew/bin/node|" -e "s|__HOME__|\$HOME|g" ~/$APP/apps/orca-bridge/@assets/\$label.plist > "\$plist"
+  if launchctl print "gui/\$(id -u)/\$label" >/dev/null 2>&1; then
+    launchctl bootout "gui/\$(id -u)/\$label" || true
+    # bootout returns before the job is gone; bootstrapping too early fails with "5: Input/output error".
+    for _ in \$(seq 1 30); do
+      launchctl print "gui/\$(id -u)/\$label" >/dev/null 2>&1 || break
+      sleep 1
+    done
   fi
-  sleep \$((attempt * 2))
-done
-echo "Could not start $LABEL; run: launchctl bootstrap gui/\$(id -u) \$PLIST" >&2
-exit 1
+  for attempt in 1 2 3 4 5; do
+    if launchctl bootstrap "gui/\$(id -u)" "\$plist"; then
+      echo "Started \$label"
+      return 0
+    fi
+    sleep \$((attempt * 2))
+  done
+  echo "Could not start \$label; run: launchctl bootstrap gui/\$(id -u) \$plist" >&2
+  return 1
+}
+start $LABEL
+start com.leonsilicon.orca-watchdog
 REMOTE
 fi

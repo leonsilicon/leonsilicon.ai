@@ -26,10 +26,19 @@ failures=0
 [ -f "$STATE" ] && read -r failures < "$STATE"
 case "$failures" in '' | *[!0-9]*) failures=0 ;; esac
 
+# Runs a command for at most $1 seconds, then kills its whole process group (exit 142), so a child that
+# holds stdout open can't stall the check. macOS has no timeout(1).
+with_timeout() {
+  perl -e '$t = shift; $pid = fork // exit 127;
+    if (!$pid) { setpgrp(0, 0); exec @ARGV; exit 127 }
+    $SIG{ALRM} = sub { kill "KILL", -$pid; exit 142 }; alarm $t;
+    waitpid($pid, 0); exit($? & 127 ? 128 + ($? & 127) : $? >> 8)' "$@"
+}
+
 # Prints "ready" when the local runtime serves, else what `orca status` reported. The CLI gets 45 s.
 runtime_state() {
   local out rc state code
-  out=$(perl -e 'alarm shift; exec @ARGV' 45 "$ORCA" status --json 2>/dev/null)
+  out=$(with_timeout 45 "$ORCA" status --json 2>/dev/null)
   rc=$?
   [ -n "$out" ] || { echo "orca status printed nothing (exit $rc)"; return; }
   state=$(printf '%s' "$out" | plutil -extract result.runtime.state raw -o - - 2>/dev/null)
