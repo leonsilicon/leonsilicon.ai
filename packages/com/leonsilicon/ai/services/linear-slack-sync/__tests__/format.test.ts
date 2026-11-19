@@ -10,6 +10,7 @@ import {
   linearToSlack,
   localDay,
   localLabel,
+  mentions,
   metaInstant,
   parseTitle,
   projectChannelName,
@@ -209,4 +210,11 @@ test("localDay is the calendar day in the given time zone", () => {
   // 04:30 UTC on Nov 20 is still Nov 19 in Toronto.
   assert.equal(localDay(Date.UTC(2026, 10, 20, 4, 30), "America/Toronto"), "2026-11-19");
   assert.equal(localDay(Date.UTC(2026, 10, 20, 5, 0), "America/Toronto"), "2026-11-20");
+});
+
+test("mentions finds a user's Slack mention, with or without a label", () => {
+  assert.equal(mentions("<@U0LEON00001> please look", "U0LEON00001"), true);
+  assert.equal(mentions("thanks <@U0LEON00001|leon>", "U0LEON00001"), true);
+  assert.equal(mentions("<@U0LEON000012> is someone else", "U0LEON00001"), false);
+  assert.equal(mentions("@Leon in plain text", "U0LEON00001"), false);
 });

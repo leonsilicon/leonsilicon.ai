@@ -11,6 +11,7 @@ import {
   linearToSlack,
   localDay,
   localLabel,
+  mentions,
   metaInstant,
   parseTitle,
   projectChannelName,
@@ -69,6 +70,8 @@ interface StatusPost {
   note?: string;
   /** Leaves Hermes unpinged, when it already has the issue. */
   quietHermes?: boolean;
+  /** Leaves Leon unmentioned, when he was just pinged. */
+  quietLeon?: boolean;
 }
 
 export interface SyncDeps {
@@ -617,9 +620,12 @@ export class Sync {
         );
       return;
     }
-    if (event.bot_id || !event.user) return;
+    if (!event.user) return;
     if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
       return;
+    // Hermes's posts aren't mirrored, but one that pings Leon hands him the issue.
+    if (event.user === this.#c.hermesUserId) return this.#onHermesMessage(event);
+    if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
     const rec = this.#store.issueByChannel(event.channel);
@@ -662,19 +668,50 @@ export class Sync {
     const { hermesAckReaction, hermesAckState } = this.#c;
     if (event.reaction !== hermesAckReaction || event.user !== this.#c.hermesUserId) return;
     if (event.item_user !== this.#c.leonUserId || event.item.type !== "message") return;
-    const rec = event.item.channel ? this.#store.issueByChannel(event.item.channel) : null;
-    if (!rec || rec.archived) return;
+    const issue = event.item.channel ? await this.#openIssueIn(event.item.channel) : null;
+    if (!issue || issue.state.name === hermesAckState) return;
+    const from = issue.state.name;
+    await this.#moveNow(issue, hermesAckState, {
+      note: `(Hermes reacted :${hermesAckReaction}: to Leon's message)`,
+      quietHermes: true,
+    });
+    this.#log("hermes_ack", { issue: issue.identifier, from });
+  }
+
+  /**
+   * Hermes mentioning Leon in an issue channel means it needs something from him (Leon's rule,
+   * 2026-11-19: Hermes pings him whenever it does), so the issue moves to Awaiting Leon, unless it
+   * already waits on him (a status that mentions him). The channel follows at once, without
+   * mentioning Leon again; Hermes's message already did.
+   */
+  async #onHermesMessage(event: SlackMessageEvent): Promise<void> {
+    const { leonPingState, leonUserId, mentionLeonStates } = this.#c;
+    if (!mentions(event.text ?? "", leonUserId)) return;
+    const issue = await this.#openIssueIn(event.channel);
+    if (!issue) return;
+    const from = issue.state.name;
+    if (from === leonPingState || mentionLeonStates.includes(from)) return;
+    await this.#moveNow(issue, leonPingState, { note: "(Hermes pinged Leon)", quietLeon: true });
+    this.#log("hermes_pinged_leon", { issue: issue.identifier, from });
+  }
+
+  /** The open issue whose channel this is, read fresh from Linear. Null for any other channel. */
+  async #openIssueIn(channelId: string): Promise<LinearIssue | null> {
+    const rec = this.#store.issueByChannel(channelId);
+    if (!rec || rec.archived) return null;
     const issue = await this.#linear.issue(rec.issueId);
-    if (!issue || this.#c.closedStateTypes.includes(issue.state.type)) return;
-    if (issue.state.name === hermesAckState) return;
-    await this.#move(issue, hermesAckState);
-    this.#log("hermes_ack", { issue: issue.identifier, from: issue.state.name });
+    if (!issue || this.#c.closedStateTypes.includes(issue.state.type)) return null;
+    return issue;
+  }
+
+  /**
+   * Moves an issue for something said in Slack and brings its channel along at once, posting the
+   * move as `post` shapes it. Linear's webhook for the move then finds nothing left to do.
+   */
+  async #moveNow(issue: LinearIssue, to: string, post: StatusPost): Promise<void> {
+    await this.#move(issue, to);
     const moved = await this.#linear.issue(issue.id);
-    if (moved)
-      await this.syncIssue(moved, "live", {
-        note: `(Hermes reacted :${hermesAckReaction}: to Leon's message)`,
-        quietHermes: true,
-      });
+    if (moved) await this.syncIssue(moved, "live", post);
   }
 
   // ── Times ──────────────────────────────────────────────────────────────────
@@ -1187,7 +1224,8 @@ export class Sync {
   #mentions(issue: LinearIssue, post: StatusPost = {}): string {
     const status = issue.state.name;
     const lines: string[] = [];
-    if (this.#c.mentionLeonStates.includes(status)) lines.push(`<@${this.#c.leonUserId}>`);
+    if (this.#c.mentionLeonStates.includes(status) && !post.quietLeon)
+      lines.push(`<@${this.#c.leonUserId}>`);
     if (this.#c.pingHermesStates.includes(status) && !post.quietHermes)
       lines.push(
         `<@${this.#c.hermesUserId}> ${issue.identifier} is now ${status}: ${

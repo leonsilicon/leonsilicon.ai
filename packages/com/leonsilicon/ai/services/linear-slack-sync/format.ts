@@ -255,6 +255,10 @@ export function channelTopic(stateName: string, meta: TitleMeta, url: string): s
   return head + tail;
 }
 
+/** Whether Slack message text mentions the user: `<@U…>`, or `<@U…|name>` from older clients. */
+export const mentions = (text: string, userId: string) =>
+  text.includes(`<@${userId}>`) || text.includes(`<@${userId}|`);
+
 export const escapeSlack = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 

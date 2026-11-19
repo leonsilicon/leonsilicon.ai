@@ -30,6 +30,11 @@ export interface SyncConfig {
    */
   hermesAckReaction: string;
   hermesAckState: string;
+  /**
+   * When Hermes mentions Leon in an issue channel, it needs something from him, so the issue moves
+   * to this status, unless it is already in one of `mentionLeonStates`.
+   */
+  leonPingState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
   /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
@@ -84,6 +89,7 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
     hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
+    leonPingState: env.LEON_PING_STATE ?? "Awaiting Leon",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",

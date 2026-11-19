@@ -716,6 +716,107 @@ test("other reactions, reactors, authors and channels don't move an issue", asyn
   assert.equal(issue.state.name, "Done", "a closed issue stays closed");
 });
 
+/** Hermes's own post, as its Slack app sends it: a bot message under its user, often in a thread. */
+const hermesSays = (channel: string, text: string, overrides: Record<string, unknown> = {}) => ({
+  type: "message",
+  channel,
+  user: HERMES,
+  bot_id: "B0HERMES01",
+  text,
+  ts: "1794100100.000001",
+  thread_ts: "1794100000.000001",
+  ...overrides,
+});
+
+test("Hermes pinging Leon in an issue channel moves the issue to Awaiting Leon, without a second ping", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(
+    388,
+    "restore the daily destination `{event: connector live, stop: 2026-12-01, owner: Leon}`",
+    "Awaiting Listener",
+  );
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!;
+
+  await sync.run("slack", hermesSays(channel.id, `<@${LEON}> please reauthorize the connector`));
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(
+    issue.title,
+    "restore the daily destination `{owner: Leon}`",
+    "the listener's keys leave with it; others stay",
+  );
+  assert.equal(
+    slack.posts.at(-1)!.text,
+    "*Awaiting Listener* → *Awaiting Leon* (Hermes pinged Leon)",
+    "Hermes's message already pinged Leon, so the move doesn't",
+  );
+  assert.equal(slack.sectionOf(channel.id), "Awaiting Leon");
+  assert.equal(linear.created.length, 0, "Hermes's post isn't mirrored to Linear");
+
+  // Linear's webhook for the move finds the channel already done.
+  const posts = slack.posts.length;
+  await sync.run("linear", issueHook(issue.id));
+  assert.equal(slack.posts.length, posts);
+
+  // Another ping while it's Awaiting Leon changes nothing.
+  const updates = linear.updates.length;
+  await sync.run("slack", hermesSays(channel.id, `<@${LEON}> reminder`, { ts: "2.2" }));
+  assert.equal(linear.updates.length, updates);
+  assert.equal(slack.posts.length, posts);
+
+  // 👀 hands it to Hermes, and Hermes's next ping hands it back, from any open status.
+  await sync.run("slack", eyes(channel.id));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  await sync.run(
+    "slack",
+    hermesSays(channel.id, `Done on my side. <@${LEON}|leon>, can you confirm?`, {
+      ts: "3.3",
+      subtype: "thread_broadcast",
+    }),
+  );
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(
+    slack.posts.at(-1)!.text,
+    "*Awaiting Hermes* → *Awaiting Leon* (Hermes pinged Leon)",
+  );
+});
+
+test("Hermes's posts without a ping, others' pings and closed or waiting issues don't move", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(9, "x", "Executing");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!.id;
+  for (const event of [
+    hermesSays(channel, "Working on it."),
+    hermesSays(channel, `<@${HERMES}> note to self`),
+    hermesSays(channel, `<@${LEON}> has joined`, { subtype: "channel_join" }),
+    hermesSays("C-unmapped", `<@${LEON}> elsewhere`),
+    { type: "message", channel, ts: "4.1", user: BOT, bot_id: "B0SYNC", text: `<@${LEON}>` },
+    {
+      type: "message",
+      channel,
+      ts: "4.2",
+      user: LEON,
+      text: `<@${LEON}> as Leon`,
+      client_msg_id: "de1e6a7e-0000-4000-8000-000000000000",
+    },
+  ])
+    await sync.run("slack", event);
+  assert.equal(issue.state.name, "Executing");
+  assert.equal(linear.updates.length, 0);
+
+  // Awaiting Clarification already waits on Leon, so it stays.
+  issue.state = state("Awaiting Clarification");
+  await sync.run("linear", issueHook(issue.id));
+  await sync.run("slack", hermesSays(channel, `<@${LEON}> which one?`));
+  assert.equal(issue.state.name, "Awaiting Clarification");
+
+  issue.state = state("Done");
+  await sync.run("linear", issueHook(issue.id));
+  await sync.run("slack", hermesSays(channel, `<@${LEON}> closed it`));
+  assert.equal(issue.state.name, "Done", "a closed issue stays closed");
+});
+
 test("backfill adopts existing issue channels quietly and archives closed ones", async () => {
   const { linear, slack, sync, store } = setup();
   const open = slack.addLeonChannel("leon-315-migrate-instagram-payout-setup-from-us-to");

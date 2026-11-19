@@ -2,12 +2,18 @@ import {
   botClient,
   LinearClient,
   loadConfig,
+  mentions,
   Store,
   Sync,
   verifyLinear,
   verifySlack,
 } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
-import type { SlackCall, Sql, SqlValue } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
+import type {
+  SlackCall,
+  Sql,
+  SqlValue,
+  SyncConfig,
+} from "@-/com.leonsilicon.ai.services.linear-slack-sync";
 import { sessionClient } from "@-/com.leonsilicon.ai.services.slack-as-leon";
 import { serveSite, type Assets } from "@-/com.leonsilicon.www";
 
@@ -73,23 +79,23 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 }
 
 /**
- * Slack events worth queueing: people's messages and edits in channels, and 👀 reactions to
- * messages (the sync checks who reacted to whom).
+ * Slack events worth queueing: people's messages and edits in channels, Hermes's messages that
+ * mention Leon, and 👀 reactions to messages (the sync checks who reacted to whom, and where).
  */
-function wantedSlackEvent(
-  event: Record<string, unknown> | undefined,
-  ackReaction: string,
-): boolean {
+function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
-      event.reaction === ackReaction &&
+      event.reaction === config.hermesAckReaction &&
       (event.item as { type?: string } | undefined)?.type === "message"
     );
   if (!event || event.type !== "message") return false;
   if (event.channel_type !== "channel" && event.channel_type !== "group") return false;
   if (event.subtype === "message_changed") return true;
-  if (event.bot_id) return false;
-  return !event.subtype || event.subtype === "file_share" || event.subtype === "thread_broadcast";
+  if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
+    return false;
+  if (event.user === config.hermesUserId)
+    return typeof event.text === "string" && mentions(event.text, config.leonUserId);
+  return !event.bot_id;
 }
 
 const authorized = (request: Request, env: Env) =>
@@ -131,8 +137,8 @@ export default {
       );
       if (!ok) return json({ error: "bad signature" }, 401);
       if (payload.type === "url_verification") return json({ challenge: payload.challenge });
-      const ackReaction = env.HERMES_ACK_REACTION ?? "eyes";
-      if (payload.type === "event_callback" && wantedSlackEvent(payload.event, ackReaction))
+      const config = loadConfig(env as Record<string, string | undefined>);
+      if (payload.type === "event_callback" && wantedSlackEvent(payload.event, config))
         await enqueue(env, `slack:${payload.event_id}`, "slack", payload.event);
       return json({ ok: true });
     }

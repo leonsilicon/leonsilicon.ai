@@ -10,6 +10,7 @@ export {
   linearToSlack,
   localDay,
   localLabel,
+  mentions,
   metaInstant,
   parseTitle,
   projectChannelName,
