@@ -129,8 +129,11 @@ const issueTimer = (issueId: string) => `timer:${issueId}`;
 const DAYS_TIMER = "days";
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
-/** Recorded once a Hermes message's ping to Leon has been acted on, so edits of it don't act again. */
-const pingKey = (channelId: string, ts: string) => `ping:${channelId}:${ts}`;
+/**
+ * Recorded once a ping to Leon has been acted on, so edits of the message or comment that carried
+ * it don't act again: `ping:<channel>:<ts>` for Hermes's Slack posts, `ping:comment:<id>` for Linear.
+ */
+const pingKey = (...parts: string[]) => `ping:${parts.join(":")}`;
 /** A notice for a due time (not a bare day) this late says "Overdue". */
 const LATE_MS = 3600_000;
 
@@ -236,14 +239,15 @@ export class Sync {
     const comment = await this.#linear.comment(id);
     if (!comment) return;
     if (known) {
+      const text = this.#text(comment.body);
       await tolerate(
-        this.#bot("chat.update", {
-          channel: known.channelId,
-          ts: known.slackTs,
-          text: this.#text(comment.body),
-        }),
+        this.#bot("chat.update", { channel: known.channelId, ts: known.slackTs, text }),
         ["message_not_found", "cant_update_message", "channel_not_found", ...ARCHIVED],
       );
+      const key = pingKey("comment", id);
+      if (!mentions(text, this.#c.leonUserId) || this.#store.fired(key)) return;
+      const issue = await this.#openIssueIn(known.channelId);
+      if (issue) await this.#handToLeon(issue, key, comment.authorName);
       return;
     }
     const issue = await this.#linear.issue(comment.issueId);
@@ -252,9 +256,10 @@ export class Sync {
     if (!rec || rec.archived) return;
     const parent = comment.parentId ? this.#store.comment(comment.parentId) : null;
     const threadTs = parent ? (parent.threadTs ?? parent.slackTs) : undefined;
+    const text = this.#text(comment.body);
     const posted = await this.#bot("chat.postMessage", {
       channel: rec.channelId,
-      text: this.#text(comment.body),
+      text,
       username: comment.authorName,
       icon_url: comment.authorAvatar ?? undefined,
       thread_ts: threadTs,
@@ -270,6 +275,9 @@ export class Sync {
       rootCommentId: parent ? parent.rootCommentId : id,
       origin: "linear",
     });
+    // A comment that pings Leon (an agent asking him something) hands him the issue.
+    if (mentions(text, this.#c.leonUserId))
+      await this.#handToLeon(issue, pingKey("comment", id), comment.authorName);
   }
 
   /**
@@ -692,16 +700,25 @@ export class Sync {
    * it (Hermes streams some replies that way) doesn't pull the issue back after Leon moves it on.
    */
   async #onHermesMessage(channelId: string, ts: string, text: string): Promise<void> {
-    const { leonPingState, leonUserId, mentionLeonStates } = this.#c;
-    if (!mentions(text, leonUserId)) return;
+    if (!mentions(text, this.#c.leonUserId)) return;
     const key = pingKey(channelId, ts);
     if (this.#store.fired(key)) return;
     const issue = await this.#openIssueIn(channelId);
-    if (!issue) return;
+    if (issue) await this.#handToLeon(issue, key, "Hermes");
+  }
+
+  /**
+   * Leon was pinged about an open issue, by Hermes in its channel or by anyone in a Linear comment:
+   * the issue moves to Awaiting Leon unless it already waits on him, and the post doesn't mention
+   * him again. `key` names the message or comment, which acts once.
+   */
+  async #handToLeon(issue: LinearIssue, key: string, who: string): Promise<void> {
+    if (this.#store.fired(key)) return;
+    const { leonPingState, mentionLeonStates } = this.#c;
     const from = issue.state.name;
     if (from !== leonPingState && !mentionLeonStates.includes(from)) {
-      await this.#moveNow(issue, leonPingState, { note: "(Hermes pinged Leon)", quietLeon: true });
-      this.#log("hermes_pinged_leon", { issue: issue.identifier, from });
+      await this.#moveNow(issue, leonPingState, { note: `(${who} pinged Leon)`, quietLeon: true });
+      this.#log("leon_pinged", { issue: issue.identifier, from, by: who });
     }
     this.#store.markFired(key, this.#now());
   }

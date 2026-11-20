@@ -218,3 +218,10 @@ test("mentions finds a user's Slack mention, with or without a label", () => {
   assert.equal(mentions("<@U0LEON000012> is someone else", "U0LEON00001"), false);
   assert.equal(mentions("@Leon in plain text", "U0LEON00001"), false);
 });
+
+test("linearToSlack keeps a Slack user mention written into Linear, outside code", () => {
+  assert.equal(linearToSlack("<@U0LEON00001> can you approve?"), "<@U0LEON00001> can you approve?");
+  assert.equal(linearToSlack("\\<@U0LEON00001\\> escaped"), "<@U0LEON00001> escaped");
+  assert.equal(linearToSlack("`<@U0LEON00001>` in code"), "`&lt;@U0LEON00001&gt;` in code");
+  assert.equal(linearToSlack("a <b> tag"), "a &lt;b&gt; tag");
+});

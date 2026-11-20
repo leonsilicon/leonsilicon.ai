@@ -813,6 +813,41 @@ test("a ping that first shows up in Hermes's edit (a streamed reply) moves the i
   assert.equal(issue.state.name, "Awaiting Leon");
 });
 
+test("a Linear comment that pings Leon pings him in Slack and moves the issue to Awaiting Leon", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(9, "x", "Executing");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const comment = (id: string, body: string) =>
+    linear.comments.set(id, {
+      id,
+      body,
+      issueId: issue.id,
+      parentId: null,
+      authorName: "Hermes",
+      authorAvatar: null,
+    });
+
+  comment("c1", "Progress: drafted the email.");
+  await sync.run("linear", commentHook("c1"));
+  assert.equal(issue.state.name, "Executing", "a comment without a ping moves nothing");
+
+  comment("c2", `<@${LEON}> can you approve the **draft**?`);
+  await sync.run("linear", commentHook("c2"));
+  assert.equal(slack.posts.at(-2)!.text, `<@${LEON}> can you approve the *draft*?`);
+  assert.equal(slack.posts.at(-1)!.text, "*Executing* → *Awaiting Leon* (Hermes pinged Leon)");
+  assert.equal(issue.state.name, "Awaiting Leon");
+
+  // Leon hands it back; editing that comment doesn't take it again, a new pinging one does.
+  issue.state = state("Executing");
+  await sync.run("linear", issueHook(issue.id));
+  comment("c2", `<@${LEON}> can you approve the draft? (typo fixed)`);
+  await sync.run("linear", commentHook("c2", "update"));
+  assert.equal(issue.state.name, "Executing");
+  comment("c1", `Progress: drafted the email. <@${LEON}> one question.`);
+  await sync.run("linear", commentHook("c1", "update"));
+  assert.equal(issue.state.name, "Awaiting Leon", "an edit that adds a ping counts once");
+});
+
 test("Hermes's posts without a ping, others' pings and closed or waiting issues don't move", async () => {
   const { linear, slack, sync } = setup();
   const issue = linear.addIssue(9, "x", "Executing");

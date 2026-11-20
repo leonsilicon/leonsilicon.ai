@@ -283,6 +283,9 @@ export function linearToSlack(markdown: string): string {
     )
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label: string, url: string) => `<${url}|${label}>`)
     .replace(/&lt;(https?:\/\/[^\s&]+(?:&amp;[^\s&]+)*)&gt;/g, "<$1>")
+    // A Slack user mention written into Linear (`<@U…>`, maybe Markdown-escaped) stays one, so an
+    // agent's comment can ping Leon. In code it stays text.
+    .replace(/\\?&lt;@([UW][A-Z0-9]+)\\?&gt;/g, "<@$1>")
     .replace(/^(\s*)[*-]\s+/gm, "$1• ")
     .replace(/^#{1,6}\s+(.+?)\s*#*\s*$/gm, "\uE001$1\uE001")
     .replace(/\*\*([^*\n]+)\*\*/g, "\uE001$1\uE001")

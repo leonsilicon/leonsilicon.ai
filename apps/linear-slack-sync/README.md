@@ -56,7 +56,7 @@ Since 2026-11-18, Hermes's `issue-execution-sweep` and `leon-messaging-voice` sk
 
 Hermes's Slack setting `allow_bots: mentions` means it answers the bot's posts only when they mention it. That is what the Awaiting Hermes and Awaiting Start pings rely on, and why mirrored comments don't loop.
 
-The hand-offs run on Slack itself: Hermes reacting 👀 to Leon's message in an issue channel moves the issue to Awaiting Hermes, and Hermes @mentioning Leon there (since 2026-11-19) moves it to Awaiting Leon. A plain-text "@Leon" isn't a mention and moves nothing. The Worker queues Hermes's messages only when they mention Leon.
+The hand-offs run on Slack itself: Hermes reacting 👀 to Leon's message in an issue channel moves the issue to Awaiting Hermes, and pinging Leon (since 2026-11-19) moves it to Awaiting Leon: Hermes @mentioning him there, or any Linear comment on the issue with his Slack mention token `<@U…>`, which the mirrored post keeps as a real mention. A plain-text "@Leon" isn't a mention and moves nothing. Hermes's `SOUL.md` and its `issue-execution-sweep` and `leon-messaging-voice` skills tell it to ping this way. The Worker queues Hermes's messages and edits only when they mention Leon.
 
 ## Security
 
