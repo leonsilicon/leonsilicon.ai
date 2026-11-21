@@ -5,6 +5,7 @@ import {
   StdioServerTransport,
 } from "@-/com.npmjs.modelcontextprotocol__sdk";
 import { ensureDaemon, type DaemonLauncher } from "#client";
+import type { DaemonExtension } from "#extension";
 import { VERSION } from "#inbox";
 import { callIpc, IpcError } from "#ipc";
 import { ensureDirectories, inboxPaths } from "#paths";
@@ -15,31 +16,40 @@ import { INSTRUCTIONS, TOOLS } from "#tools";
  * goes to the daemon over its socket, so any number of Hermes processes can run one of these while the
  * crypto store keeps a single writer. It also starts the daemon when Hermes starts, and checks on it
  * every minute, so background sync survives gateway restarts and machine restarts.
+ *
+ * With an `extension` it serves that extension's tools instead (`mcp_servers.grok` runs
+ * `beeper-inbox.mjs mcp grok-relay`), through the same daemon.
  */
 export async function runMcpServer(
   launcher: DaemonLauncher,
   env: NodeJS.ProcessEnv = process.env,
+  extension?: DaemonExtension,
 ): Promise<void> {
   const paths = inboxPaths(env);
   ensureDirectories(paths);
   const server = new Server(
-    { name: "beeper-inbox", version: VERSION },
-    { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
+    extension
+      ? { name: extension.server.name, version: extension.server.version }
+      : { name: "beeper-inbox", version: VERSION },
+    {
+      capabilities: { tools: {} },
+      instructions: extension ? extension.server.instructions : INSTRUCTIONS,
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS.map((tool) => ({ ...tool })),
+    tools: (extension ? extension.server.tools : TOOLS).map((tool) => ({ ...tool })),
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       await ensureDaemon(paths, launcher);
-      const result = (await callIpc(
-        paths.socket,
-        "tool",
-        { name: request.params.name, arguments: request.params.arguments ?? {} },
-        175_000,
-      )) as Record<string, unknown>;
+      const call = { name: request.params.name, arguments: request.params.arguments ?? {} };
+      const result = (await (extension
+        ? callIpc(paths.socket, "extension", { extension: extension.name, ...call }, 175_000)
+        : callIpc(paths.socket, "tool", call, 175_000))) as Record<string, unknown>;
       return {
+        // An extension reports a refused call as `ok: false` (the Grok relay's budget, for example).
+        ...(result.ok === false ? { isError: true } : {}),
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 1) }],
         structuredContent: result,
       };

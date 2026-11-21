@@ -32,6 +32,7 @@ Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp ─unix socket─▶ beeper-inbox
 - **Library.** [Pickle](https://github.com/beeper/pickle) (`@beeper/pickle`, mautrix-go and goolm compiled to WebAssembly) with its SQLite state adapter, built from the pinned revision in [`apps/beeper-inbox/@assets/pickle.json`](../../../../../../apps/beeper-inbox/@assets/pickle.json). It isn't on npm, so it is vendored, and loaded at run time by `pickle.ts`; `types.ts` describes the slice used.
 - **One writer.** Pickle requires exactly one writer per device store. The daemon is the only process that opens `pickle.db` and `inbox.db`, and only while it holds `state/owner.lock`: an open SQLite `BEGIN EXCLUSIVE` transaction, which the kernel releases when the process dies by any cause, so there is no stale lock to clear. A second daemon exits with code 75. Both databases are also opened with `locking_mode=EXCLUSIVE`.
 - **Thin adapters.** Hermes may start the MCP server in several processes (the gateway, cron runs, dashboard chats). Each is a stateless client of the daemon's socket. The first call, or the adapter's start, launches the daemon detached (`setsid`), outside the process group Hermes kills when an MCP server exits; every adapter checks on it once a minute.
+- **Extensions** (`extension.ts`). The daemon can serve a second set of tools from the same process, each with its own MCP server (`beeper-inbox.mjs mcp <name>`) and its own directory under the home. An extension reaches Beeper only through the tools above. The [Grok relay](../grok-relay/README.md) is one: it needs a single owner for its queue and budget, which this daemon already is.
 - **Background sync** keeps to-device room keys, device lists and the directory current. It never creates Hermes tasks or contacts anyone.
 - **Pickle's `fetch`** goes through `matrix-fetch.ts`, which adds what Pickle doesn't expose:
   - Send retries in Pickle get fresh transaction IDs, so a lost response could post twice. The wrapper pins each send to one transaction ID derived from its idempotency key, and the homeserver deduplicates by it.
@@ -39,9 +40,18 @@ Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp ─unix socket─▶ beeper-inbox
   - Pickle silently drops events it can't decrypt from history. The raw `/messages` and `/event` responses are captured so the tools account for every event.
   - Pickle's state store re-serializes its whole cache on every state event, and Beeper ignores `types: []` and `limit: 0` in sync filters (measured: 23,049 state events across 1,415 rooms). The sync filter gets `not_types: ["*"]` for room state, which Beeper honours (54 events). Pickle fetches encryption state and members itself before a send.
   - `/relations` 403s in a room are cached for ten minutes, timeouts are set on every request, and sync health is recorded.
+  - Pickle asks the homeserver for the sender's devices again for every event it decrypts when the sender has none, as every bridged contact does: 5 `POST /keys/query` for 5 messages, about a second of waiting (measured 2026-11-21). An answer is reused for a minute. A send clears the reused answers and never sees one, because encrypting needs the recipients' current devices.
 - **Sends** are serialized and recorded in a ledger (`inbox.db`). The same idempotency key, or without one the same content to the same room within 15 minutes, never sends twice: overlapping calls wait and get the first result. When delivery is uncertain (a timeout after the request went out), the result says so. Calling again within 30 minutes reuses the transaction ID, which is safe; after that the tool asks for a new key.
 - **Directory.** `list_conversations` searches a metadata table (no message text) built from one filtered, stateless `/sync`. It is rebuilt when older than 6 hours, or with `refresh: true`, and updated from live sync.
 - **Files** travel as paths on the shared volume, never through tool output. `send_file` refuses hidden files (`.env`, `.ssh`), anything under the service's state, and names that look like credentials.
+
+## What a read costs
+
+Measured on Hermes Cloud, 2026-11-21, in a Grok bot's chat: a page of 10 messages took 5.9 s, of which 0.7 s was the homeserver and 0.6 s SQLite. During it Pickle wrote its saved state 196 times, 119 MB in all: it rewrites the whole blob (about 600 KB for this account) roughly 20 times per decrypted event, and building that blob is where the rest of the time goes. So a page costs about half a second per message, every time, and that can't be changed from outside Pickle. 20 messages took 11.9 s and 50 took 19.6 s.
+
+- A page slower than 3 s is logged as `slow read`, with its requests by kind and its store writes by key (`store-trace.ts`).
+- Reads run one at a time. Pages of 30 and 100 events asked for at once kept the Matrix core busy for over 20 s, and the daemon's health check restarted it (twice on 2026-11-21, back in 5 s on the same device).
+- So anything that needs new messages often, such as the Grok relay waiting for a reply or a feed of every chat, must take them from sync as they arrive, not by reading history again and again. That isn't built yet.
 
 ## State and secrets
 
@@ -66,4 +76,4 @@ node --test packages/com/leonsilicon/ai/services/beeper-inbox/__tests__/*.test.t
 
 Offline, with a fake homeserver and a fake Pickle that retries sends with fresh transaction IDs as the real one does. Covers the lock across processes (including SIGKILL), the ledger, overlapping and ambiguous sends, decryption accounting, the plaintext guard, the sync filter, the directory, the upload guard, and a daemon restart that keeps the device. Live checks are in the app README.
 
-Public API (`+server.ts`): `runCli`, `startDaemon`, `runMcpServer`, `Inbox`, `TOOLS`, `runTool`, `OwnerLock`, `SendLedger`, `RoomDirectory`, `MatrixFetch` and helpers.
+Public API (`+server.ts`): `runCli`, `startDaemon`, `runMcpServer`, `Inbox`, `TOOLS`, `runTool`, `OwnerLock`, `SendLedger`, `RoomDirectory`, `MatrixFetch`, the `DaemonExtension` types and helpers.

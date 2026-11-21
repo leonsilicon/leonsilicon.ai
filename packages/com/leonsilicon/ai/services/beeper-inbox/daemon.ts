@@ -1,5 +1,7 @@
-import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import type net from "node:net";
+import { join } from "node:path";
+import type { DaemonExtension, RunningExtension } from "#extension";
 import { Inbox, VERSION } from "#inbox";
 import { serveIpc } from "#ipc";
 import { OwnerLock } from "#lock";
@@ -31,6 +33,8 @@ export interface DaemonOptions {
   pickle?: () => Promise<PickleRuntime>;
   baseFetch?: typeof fetch;
   bridgeStatusWaitMs?: number;
+  /** More tools served by this daemon (the Grok relay), each reached with `mcp <name>`. */
+  extensions?: readonly DaemonExtension[];
   /** Tests: don't install signal handlers or exit the process. */
   embedded?: boolean;
 }
@@ -73,6 +77,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
       ? { bridgeStatusWaitMs: options.bridgeStatusWaitMs }
       : {}),
   });
+  const extensions = new Map<string, RunningExtension>();
   let server: net.Server | null = null;
   let stopping: Promise<void> | null = null;
   let watchdog: NodeJS.Timeout | null = null;
@@ -83,6 +88,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
       log("info", "daemon stopping", { code });
       if (watchdog) clearInterval(watchdog);
       server?.close();
+      for (const [name, extension] of extensions) {
+        try {
+          await extension.stop?.();
+        } catch (error) {
+          log("error", "extension stop failed", { extension: name, error: String(error) });
+        }
+      }
       try {
         await inbox.stop();
       } catch (error) {
@@ -103,6 +115,31 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
     clearTimeout(timer);
   };
 
+  // Extensions share this process, so their state has the store's single writer. One that fails to
+  // start is left out; the inbox itself still runs.
+  for (const extension of options.extensions ?? []) {
+    try {
+      const home = join(paths.home, extension.name);
+      mkdirSync(home, { recursive: true, mode: 0o700 });
+      extensions.set(
+        extension.name,
+        await extension.start({
+          home,
+          log: fileLogger(paths.logFile, extension.name),
+          tool: async (name, args) => {
+            await waitReady();
+            return runTool(inbox, name, args);
+          },
+        }),
+      );
+    } catch (error) {
+      log("error", "extension failed to start", {
+        extension: extension.name,
+        error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+      });
+    }
+  }
+
   server = await serveIpc(
     paths.socket,
     async (method, params) => {
@@ -120,6 +157,20 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
             typeof input.name === "string" ? input.name : "",
             input.arguments ?? {},
           );
+        case "extension": {
+          const name = typeof input.extension === "string" ? input.extension : "";
+          const extension = extensions.get(name);
+          if (!extension)
+            throw Object.assign(new Error(`this daemon has no extension "${name}"`), {
+              code: "bad_method",
+            });
+          return extension.callTool(
+            typeof input.name === "string" ? input.name : "",
+            (input.arguments && typeof input.arguments === "object"
+              ? input.arguments
+              : {}) as Record<string, unknown>,
+          );
+        }
         case "reload":
           await inbox.reload();
           return inbox.status();

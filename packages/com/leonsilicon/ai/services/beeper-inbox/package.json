@@ -9,6 +9,7 @@
     "#client": "./client.ts",
     "#daemon": "./daemon.ts",
     "#directory": "./directory.ts",
+    "#extension": "./extension.ts",
     "#fetch": "./matrix-fetch.ts",
     "#format": "./format.ts",
     "#inbox": "./inbox.ts",
@@ -19,6 +20,7 @@
     "#paths": "./paths.ts",
     "#pickle": "./pickle.ts",
     "#secrets": "./secrets.ts",
+    "#store-trace": "./store-trace.ts",
     "#tools": "./tools.ts",
     "#types": "./types.ts"
   },

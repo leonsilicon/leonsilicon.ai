@@ -567,3 +567,62 @@ test("daemon without a login reports needs_login instead of failing", async () =
   assert.equal(readFileSync(keyFile, "utf8"), firstKey);
   await daemon.shutdown();
 });
+
+test("extensions: served by the same daemon, reach Beeper through the inbox's tools, stopped with it", async () => {
+  const { env, paths, server, pickle } = setup();
+  const stopped: string[] = [];
+  const serverInfo = { name: "x", version: "0", instructions: "", tools: [] };
+  const daemon = await startDaemon({
+    env,
+    pickle,
+    baseFetch: server.fetch,
+    embedded: true,
+    bridgeStatusWaitMs: 20,
+    extensions: [
+      {
+        name: "echo",
+        server: serverInfo,
+        start: (context) => ({
+          callTool: async (name, args) => {
+            const found = await context.tool("list_conversations", { query: "sam" });
+            return { ok: true, name, args, home: context.home, rooms: found.total };
+          },
+          stop: () => {
+            stopped.push("echo");
+          },
+        }),
+      },
+      {
+        name: "broken",
+        server: serverInfo,
+        start: () => {
+          throw new Error("boom");
+        },
+      },
+    ],
+  });
+  assert.ok(daemon, "an extension that fails to start doesn't stop the inbox");
+  await daemon.ready;
+  const direct = await tool(paths.socket, "list_conversations", { query: "sam" });
+  assert.deepEqual(
+    await callIpc(paths.socket, "extension", {
+      extension: "echo",
+      name: "hello",
+      arguments: { a: 1 },
+    }),
+    {
+      ok: true,
+      name: "hello",
+      args: { a: 1 },
+      home: join(paths.home, "echo"),
+      rooms: direct.total,
+    },
+  );
+  assert.ok(existsSync(join(paths.home, "echo")), "the extension gets its own directory");
+  await assert.rejects(
+    callIpc(paths.socket, "extension", { extension: "broken", name: "x" }),
+    /no extension "broken"/,
+  );
+  await daemon.shutdown();
+  assert.deepEqual(stopped, ["echo"]);
+});

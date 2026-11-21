@@ -50,6 +50,7 @@ import {
   storeHasCrypto,
   writeJsonAtomic,
 } from "#secrets";
+import { TracedStore } from "#store-trace";
 import {
   InboxError,
   type InboxAccount,
@@ -62,6 +63,8 @@ import {
 } from "#types";
 
 export const VERSION = "0.1.0";
+/** A page of history that takes longer than this is logged with where its time went. */
+const SLOW_READ_MS = 3000;
 
 export const LIMITS = {
   defaultPage: 30,
@@ -176,6 +179,7 @@ export class Inbox {
   readonly #fetch: MatrixFetch;
   #db: DatabaseSync | null = null;
   #pickleDb: DatabaseSync | null = null;
+  #store: TracedStore | null = null;
   #directory: RoomDirectory | null = null;
   #ledger: SendLedger | null = null;
   #client: PickleClient | null = null;
@@ -255,7 +259,8 @@ export class Inbox {
       const needsVerification =
         Boolean(secrets.recoveryKey) && verified?.deviceId !== account.deviceId;
       const runtime = await this.#pickle();
-      const store = runtime.createStore(this.#pickleDb as DatabaseSync);
+      const store = new TracedStore(runtime.createStore(this.#pickleDb as DatabaseSync));
+      this.#store = store;
       const client = runtime.createMatrixClient({
         account: {
           accessToken: secrets.accessToken,
@@ -710,8 +715,12 @@ export class Inbox {
     const direction = args.direction === "forward" ? "forward" : "backward";
     if (direction === "forward" && !cursor)
       throw new InboxError("bad_argument", "direction forward needs a cursor from an earlier page");
-    const { page, raw } = await this.#read.run(async () => {
+    const requested = Date.now();
+    const { page, raw, readMs, trace, stored } = await this.#read.run(async () => {
+      const started = Date.now();
       const capture = this.#fetch.beginCapture("messages", roomId);
+      const requests = this.#fetch.beginTrace();
+      const stored = this.#store?.begin() ?? null;
       try {
         const result = await client.messages.list({
           roomId,
@@ -721,12 +730,50 @@ export class Inbox {
         });
         await this.#fetch.endCapture();
         const first = capture.bodies[0] as { chunk?: RawEvent[] } | undefined;
-        return { page: result, raw: first?.chunk ?? null };
+        return {
+          page: result,
+          raw: first?.chunk ?? null,
+          readMs: Date.now() - started,
+          trace: requests,
+          stored,
+        };
       } catch (error) {
         await this.#fetch.endCapture();
         throw error;
+      } finally {
+        this.#fetch.endTrace(requests);
+        if (stored) this.#store?.end(stored);
       }
     });
+    const elapsed = Date.now() - requested;
+    if (elapsed > SLOW_READ_MS) {
+      // Where a slow page spent its time: waiting its turn, on the homeserver, or decrypting.
+      const kinds = new Map<string, { count: number; ms: number }>();
+      for (const request of trace.requests) {
+        const kind = kinds.get(request.kind) ?? { count: 0, ms: 0 };
+        kind.count += 1;
+        kind.ms += request.ms;
+        kinds.set(request.kind, kind);
+      }
+      this.#log("warn", "slow read", {
+        roomId,
+        limit,
+        events: raw?.length ?? null,
+        messages: page.messages.length,
+        ms: elapsed,
+        queuedMs: elapsed - readMs,
+        requests: trace.requests.length,
+        requestMs: trace.requests.reduce((sum, request) => sum + request.ms, 0),
+        byKind: Object.fromEntries([...kinds].sort((a, b) => b[1].ms - a[1].ms).slice(0, 6)),
+        storeMs: Math.round([...(stored?.ops.values() ?? [])].reduce((sum, op) => sum + op.ms, 0)),
+        store: Object.fromEntries(
+          [...(stored?.ops ?? [])]
+            .sort((a, b) => b[1].bytes - a[1].bytes)
+            .slice(0, 8)
+            .map(([kind, op]) => [kind, { ...op, ms: Math.round(op.ms) }]),
+        ),
+      });
+    }
     const returned = new Set(page.messages.map((message) => message.eventId));
     const accounting = raw ? accountPage(raw, returned, this.#decryptErrors) : null;
     const reactions = raw ? reactionsByTarget(raw) : new Map();

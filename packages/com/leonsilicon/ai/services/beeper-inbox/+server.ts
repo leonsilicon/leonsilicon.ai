@@ -1,6 +1,12 @@
 export { runCli, USAGE } from "#cli";
 export { startDaemon, EXIT_ALREADY_OWNED } from "#daemon";
 export type { RunningDaemon } from "#daemon";
+export type {
+  DaemonExtension,
+  ExtensionContext,
+  ExtensionTool,
+  RunningExtension,
+} from "#extension";
 export { Inbox, LIMITS, VERSION } from "#inbox";
 export { runMcpServer } from "#mcp";
 export { INSTRUCTIONS, TOOLS, runTool } from "#tools";

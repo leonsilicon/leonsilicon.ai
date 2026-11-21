@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { RoomDirectory, normalizeNetwork, roomsFromSync } from "#directory";
 import { accountPage, refusedUploadReason, safeFilename } from "#format";
-import { MatrixFetch, slimSyncFilter } from "#fetch";
+import { keysQueryKey, MatrixFetch, requestKind, slimSyncFilter } from "#fetch";
 import { SendLedger, idempotencyKey, payloadHash, txnIdFor } from "#ledger";
 import { OwnerLock } from "#lock";
 import {
@@ -383,4 +383,64 @@ test("pickle key: created once per device, migrated from .env only for an existi
     "BEEPER_INBOX_ACCESS_TOKEN=EsTc 1234 abcd EFGH 5678 ijkm NPQR 9abc defg hijk mnop qrst\n",
   );
   assert.match(readEnvSecrets(envFile, {}).fatal.join(), /holds what looks like a recovery key/);
+});
+
+test("matrix fetch: a /keys/query answer is reused for a while, but never while sending", async () => {
+  let calls = 0;
+  const base = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ device_keys: {}, n: calls }), { status: 200 });
+  }) as typeof fetch;
+  const wrapper = new MatrixFetch(base, quiet, { keysQueryTtlMs: 40 });
+  const query = (users: Record<string, string[]>) =>
+    wrapper
+      .fetch("https://hs/_matrix/client/v3/keys/query", {
+        method: "POST",
+        body: JSON.stringify({ device_keys: users, timeout: 10000 }),
+      })
+      .then((response) => response.json() as Promise<{ n: number }>);
+  const trace = wrapper.beginTrace();
+  assert.equal((await query({ "@ghost:beeper.local": [] })).n, 1);
+  assert.equal(
+    (await query({ "@ghost:beeper.local": [] })).n,
+    1,
+    "the same question is answered once",
+  );
+  assert.equal((await query({ "@other:beeper.local": [] })).n, 2, "another user is asked about");
+  wrapper.endTrace(trace);
+  assert.deepEqual(
+    trace.requests.map((request) => request.kind),
+    ["POST /keys/query", "POST /keys/query (reused)", "POST /keys/query"],
+  );
+
+  const guard = wrapper.beginSend({ roomId: "!r:beeper.local", txnId: "t", expectEncrypted: true });
+  assert.equal((await query({ "@ghost:beeper.local": [] })).n, 3, "a send asks afresh");
+  assert.equal((await query({ "@ghost:beeper.local": [] })).n, 4, "and keeps asking");
+  wrapper.endSend();
+  void guard;
+  assert.equal(
+    (await query({ "@ghost:beeper.local": [] })).n,
+    5,
+    "nothing from before the send is left",
+  );
+  assert.equal((await query({ "@ghost:beeper.local": [] })).n, 5);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal((await query({ "@ghost:beeper.local": [] })).n, 6, "it expires");
+
+  assert.equal(
+    keysQueryKey(JSON.stringify({ device_keys: { "@b:x": ["D2", "D1"], "@a:x": [] } })),
+    keysQueryKey(
+      new TextEncoder().encode(
+        JSON.stringify({ device_keys: { "@a:x": [], "@b:x": ["D1", "D2"] } }),
+      ),
+    ),
+  );
+  assert.equal(keysQueryKey("not json"), null);
+  assert.equal(
+    requestKind(
+      "GET",
+      "/_matrix/client/v3/rooms/!abc%3Abeeper.local/relations/%24ev/m.replace/m.room.message",
+    ),
+    "GET /rooms/:id/relations/:id/m.replace/m.room.message",
+  );
 });

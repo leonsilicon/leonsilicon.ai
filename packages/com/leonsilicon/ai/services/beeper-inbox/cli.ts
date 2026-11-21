@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { daemonPid, ensureDaemon, stopDaemon, type DaemonLauncher } from "#client";
 import { EXIT_ALREADY_OWNED, fileLogger, startDaemon } from "#daemon";
+import type { DaemonExtension } from "#extension";
 import { callIpc } from "#ipc";
 import { runMcpServer } from "#mcp";
 import { ensureDirectories, inboxPaths } from "#paths";
@@ -8,7 +9,7 @@ import { readAccount, writeJsonAtomic } from "#secrets";
 
 export const USAGE = `beeper-inbox <command>
 
-  mcp                    stdio MCP server (what Hermes runs)
+  mcp [EXTENSION]        stdio MCP server (what Hermes runs); with a name, that extension's tools
   daemon                 the store owner (started by mcp/start; exits 75 if one is running)
   start                  start the daemon if needed and print its status
   status                 print the daemon's status (doesn't start it)
@@ -18,24 +19,40 @@ export const USAGE = `beeper-inbox <command>
   refresh-directory      rebuild the conversation directory
   install-account FILE   install a device's account.json (homeserver, userId, deviceId; no secrets)
   tool NAME [JSON]       call one tool through the daemon, as Hermes would
+  extension EXT NAME [JSON]   call one of an extension's tools through the daemon
 `;
+
+export interface CliOptions {
+  /** More tools the daemon serves, such as the Grok relay; `mcp <name>` is each one's MCP server. */
+  extensions?: readonly DaemonExtension[];
+}
 
 export async function runCli(
   argv: readonly string[],
   entry: string,
   env: NodeJS.ProcessEnv = process.env,
+  options: CliOptions = {},
 ): Promise<number> {
   const [command, ...rest] = argv;
+  const extensions = options.extensions ?? [];
+  const extensionNamed = (name: string): DaemonExtension => {
+    const found = extensions.find((extension) => extension.name === name);
+    if (!found)
+      throw new Error(
+        `no extension "${name}"; this build has: ${extensions.map((extension) => extension.name).join(", ") || "none"}`,
+      );
+    return found;
+  };
   const launcher: DaemonLauncher = { command: [process.execPath, entry, "daemon"], env };
   const paths = inboxPaths(env);
   const print = (value: unknown) => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   switch (command) {
     case "mcp":
-      await runMcpServer(launcher, env);
+      await runMcpServer(launcher, env, rest[0] ? extensionNamed(rest[0]) : undefined);
       return -1; // keeps running
     case "daemon": {
       try {
-        const daemon = await startDaemon({ env });
+        const daemon = await startDaemon({ env, extensions });
         if (!daemon) return EXIT_ALREADY_OWNED;
       } catch (error) {
         // Started detached with no stderr: the log file is the only place this can go.
@@ -97,6 +114,17 @@ export async function runCli(
       const args = rest[1] ? (JSON.parse(rest[1]) as unknown) : {};
       await ensureDaemon(paths, launcher);
       print(await callIpc(paths.socket, "tool", { name, arguments: args }, 175_000));
+      return 0;
+    }
+    case "extension": {
+      const [extension, name, json] = rest;
+      if (!extension || !name) throw new Error("extension needs an extension name and a tool name");
+      extensionNamed(extension);
+      const args = json ? (JSON.parse(json) as unknown) : {};
+      await ensureDaemon(paths, launcher);
+      print(
+        await callIpc(paths.socket, "extension", { extension, name, arguments: args }, 175_000),
+      );
       return 0;
     }
     default:

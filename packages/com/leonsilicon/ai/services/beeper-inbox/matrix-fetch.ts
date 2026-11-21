@@ -83,9 +83,57 @@ export interface FetchStats {
   requests: number;
 }
 
+/** The requests made while one operation ran, so a slow one can say where its time went. */
+export interface RequestTrace {
+  requests: Array<{ kind: string; status: number | null; ms: number }>;
+}
+
+/** A request path with its IDs replaced, e.g. `GET /rooms/:id/messages`. */
+export function requestKind(method: string, path: string): string {
+  const shape = redactPath(path)
+    .split("/")
+    .map((part) => (/^(!|%21|\$|%24|@|%40)/.test(part) || part.length > 24 ? ":id" : part))
+    .join("/");
+  return `${method} ${shape}`;
+}
+
 export interface MatrixFetchOptions {
   requestTimeoutMs?: number;
   mediaTimeoutMs?: number;
+  /** How long a `/keys/query` answer is reused (default one minute; 0 turns it off). */
+  keysQueryTtlMs?: number;
+}
+
+const KEYS_QUERY_MAX = 500;
+
+/**
+ * Which users and devices a `/keys/query` body asks about, as a stable string, or null when it can't
+ * be read.
+ */
+export function keysQueryKey(body: unknown): string | null {
+  const text =
+    typeof body === "string"
+      ? body
+      : body instanceof Uint8Array
+        ? new TextDecoder().decode(body)
+        : body instanceof ArrayBuffer
+          ? new TextDecoder().decode(new Uint8Array(body))
+          : null;
+  if (text === null) return null;
+  try {
+    const users = (JSON.parse(text) as { device_keys?: Record<string, unknown> }).device_keys;
+    if (!users || typeof users !== "object") return null;
+    return JSON.stringify(
+      Object.entries(users)
+        .map(([user, devices]): [string, string[]] => [
+          user,
+          Array.isArray(devices) ? devices.map(String).sort((a, b) => (a < b ? -1 : 1)) : [],
+        ])
+        .sort(([a], [b]) => (a < b ? -1 : 1)),
+    );
+  } catch {
+    return null;
+  }
 }
 
 export class MatrixFetch {
@@ -93,9 +141,12 @@ export class MatrixFetch {
   readonly #log: Logger;
   readonly #requestTimeoutMs: number;
   readonly #mediaTimeoutMs: number;
+  readonly #keysQueryTtlMs: number;
+  readonly #keysQueries = new Map<string, { at: number; body: string }>();
   readonly #relationsBlocked = new Map<string, number>();
   #send: SendGuard | null = null;
   #capture: RawCapture | null = null;
+  readonly #traces = new Set<RequestTrace>();
   readonly stats: FetchStats = {
     lastSyncOkAt: null,
     lastSyncErrorAt: null,
@@ -110,14 +161,28 @@ export class MatrixFetch {
     this.#log = log;
     this.#requestTimeoutMs = options.requestTimeoutMs ?? 90_000;
     this.#mediaTimeoutMs = options.mediaTimeoutMs ?? 300_000;
+    this.#keysQueryTtlMs = options.keysQueryTtlMs ?? 60_000;
   }
 
   /** The function handed to Pickle. */
   readonly fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
     this.#fetch(input, init);
 
+  /** Records every request but `/sync` until `endTrace`. */
+  beginTrace(): RequestTrace {
+    const trace: RequestTrace = { requests: [] };
+    this.#traces.add(trace);
+    return trace;
+  }
+
+  endTrace(trace: RequestTrace): void {
+    this.#traces.delete(trace);
+  }
+
   beginSend(guard: Omit<SendGuard, "attempts">): SendGuard {
     if (this.#send) throw new Error("a send is already in flight");
+    // Encrypting needs the recipients' current devices, so a send never sees a reused answer.
+    this.#keysQueries.clear();
     this.#send = { ...guard, attempts: [] };
     return this.#send;
   }
@@ -171,6 +236,24 @@ export class MatrixFetch {
       }
     }
 
+    // Pickle asks for the sender's devices again for every event it decrypts when the sender has
+    // none, as every bridged contact does: one request per message, measured at a second each in a
+    // page of history. The answer is reused for a minute, except while a send is in flight.
+    const keysQuery =
+      method === "POST" && path.endsWith("/keys/query") && this.#keysQueryTtlMs > 0 && !this.#send
+        ? keysQueryKey(init.body)
+        : null;
+    if (keysQuery !== null) {
+      const cached = this.#keysQueries.get(keysQuery);
+      if (cached && Date.now() - cached.at < this.#keysQueryTtlMs) {
+        this.#traced(method, `${path} (reused)`, 200, 0);
+        return new Response(cached.body, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
     let attempt: SendAttempt | null = null;
     const sendMatch = method === "PUT" ? SEND_PATH.exec(path) : null;
     if (sendMatch && this.#send && safeDecode(sendMatch[1] ?? "") === this.#send.roomId) {
@@ -206,6 +289,7 @@ export class MatrixFetch {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       if (attempt) attempt.error = message;
       if (isSync) this.#syncFailed(message);
+      else this.#traced(method, path, null, Date.now() - started);
       this.#log("warn", "matrix request failed", {
         method,
         path: redactPath(path),
@@ -215,6 +299,16 @@ export class MatrixFetch {
       throw error;
     }
     if (attempt) attempt.status = response.status;
+    if (!isSync) this.#traced(method, path, response.status, Date.now() - started);
+    if (keysQuery !== null && response.ok) {
+      try {
+        const body = await response.clone().text();
+        if (this.#keysQueries.size >= KEYS_QUERY_MAX) this.#keysQueries.clear();
+        this.#keysQueries.set(keysQuery, { at: Date.now(), body });
+      } catch {
+        // an unreadable answer just isn't reused
+      }
+    }
     if (isSync) {
       if (response.ok) {
         this.stats.syncs += 1;
@@ -254,6 +348,12 @@ export class MatrixFetch {
       });
     }
     return response;
+  }
+
+  #traced(method: string, path: string, status: number | null, ms: number): void {
+    if (!this.#traces.size) return;
+    const entry = { kind: requestKind(method, path), status, ms };
+    for (const trace of this.#traces) trace.requests.push(entry);
   }
 
   #syncFailed(message: string): void {
