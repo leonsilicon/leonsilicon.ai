@@ -65,7 +65,6 @@ export default defineConfig({
           ...[
             "autolinear",
             "beeper-inbox",
-            "beeper-watch",
             "dailylinear",
             "gmail-feed",
             "grok-bot-roster",

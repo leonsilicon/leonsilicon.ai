@@ -14,7 +14,7 @@ that flag on top-level channel messages from people. With no thread, the session
 so Hermes keeps one conversation per channel: an issue channel reads as one exchange.
 
 Left as they were: thread replies (answered in their thread), DMs and group DMs, messages from bots
-(slack22linear's pings, the feed bots' wake-ups, Beeper Watch), and reaction-triggered turns.
+(slack22linear's pings, Gmail feed wake-ups), and reaction-triggered turns.
 
 autolinear's plugin calls ``_session_thread_ts`` for the copy of Leon's message it moves into a new
 issue channel, so that copy is answered at the top of the channel too, whichever plugin is wired

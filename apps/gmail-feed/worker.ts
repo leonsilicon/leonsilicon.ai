@@ -1,5 +1,5 @@
-import { decisionsScreener, type Screener } from "@-/ai.leonsilicon.services.beeper-watch/screen";
 import {
+  decisionsScreener,
   EMAIL_PROMPT,
   GmailClient,
   GmailFeed,
@@ -116,7 +116,7 @@ export class FeedObject {
   #make(): GmailFeed {
     if (this.#feed) return this.#feed;
     const config = loadConfig(this.#env as Record<string, string | undefined>);
-    const screener: Screener = decisionsScreener({
+    const screener = decisionsScreener({
       apiKey: config.openaiApiKey,
       model: config.screen.model,
       timeoutMs: config.screen.timeoutMs,

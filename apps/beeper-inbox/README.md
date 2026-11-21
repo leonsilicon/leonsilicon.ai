@@ -69,9 +69,7 @@ With the recovery key, the first start fetches the cross-signing keys from secre
   - A file: encrypted, 40 bytes, SHA-256 `cd7db378ba0484422aadf9d944586ab404e088cd943f8b36d90854625453becd`, matched on round trip.
   - `download_attachment` decrypted it to `downloads/2026-11-19/`, and Hermes opened it with its own file tool.
   - Repeating send 1 returned `deduplicated` with the same event.
-  - Beeper Watch copied the posts to #feed-beeper.
 - **Overlap:** two simultaneous identical sends, with a key and without one, each made one event; the second call reported `deduplicated`. A second `daemon` exited 75 at once. `/proc/locks` showed only the owner holding `owner.lock`, `pickle.db` and `inbox.db`.
-- **Identifiers:** four chat IDs from #feed-whatsapp and #feed-instagram posts resolved to joined rooms with the same network and name.
 - **Restarts** (on the first device, before the replacement), all on the same device:
   - `restart`: clean stop, then start.
   - Two gateway restarts: the daemon kept running, and the new gateway's adapter attached to it.
@@ -96,7 +94,6 @@ $B restart                   # same device and store
 $B tool list_conversations '{"query":"note to self"}'
 $B journal                   # what sync delivered lately, without text; '{"after":N,"room_id":"!…"}' narrows it
 $B extension grok-relay grok_bots   # one of the Grok relay's tools, as Hermes would call it
-$B extension beeper-watch beeper_watch_list   # Beeper Watch's open watches
 tail /opt/data/beeper-inbox/logs/daemon.log
 ```
 

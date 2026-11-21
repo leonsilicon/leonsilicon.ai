@@ -5,7 +5,6 @@
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
-    "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
     "@-/ai.leonsilicon.services.gmail-feed": "workspace:*"
   },
   "varlock": {

@@ -1,3 +1,4 @@
+import { DEFAULT_THRESHOLDS } from "#decisions";
 import type { FeedConfig, FeedWake } from "#feed";
 import type { GmailCredentials } from "#gmail";
 
@@ -22,8 +23,7 @@ const number = (value: string | undefined, fallback: number): number => {
 
 /**
  * Reads the Worker's env: the `#gmail-feed` items of the root .env.schema (Gmail's OAuth client and
- * refresh token, the admin token), plus the feed bot's Slack token, the OpenAI key and the held
- * channels it shares with Beeper Watch.
+ * refresh token, the admin token), plus the feed bot's Slack token, the OpenAI key and the held channels.
  */
 export function loadConfig(env: Record<string, string | undefined>): GmailFeedConfig {
   const wake = (env.GMAIL_FEED_WAKE ?? "screened").trim() as FeedWake;
@@ -52,12 +52,10 @@ export function loadConfig(env: Record<string, string | undefined>): GmailFeedCo
     screen: {
       model: env.SCREEN_MODEL?.trim() || "gpt-6-luna",
       timeoutMs: number(env.SCREEN_TIMEOUT_SECONDS, 30) * 1000,
-      // Email's own: Beeper's 0.3 held 7% of real mail (bank, Apple, Google and e-transfer notices
-      // that pass DMARC); 0.7 held 1%, and synthetic phishing, scams and injection scored 0.97+.
-      unsafe: number(env.GMAIL_FEED_UNSAFE_THRESHOLD, 0.7),
+      unsafe: number(env.GMAIL_FEED_UNSAFE_THRESHOLD, DEFAULT_THRESHOLDS.unsafe),
       // Email's own: 0.9 matched 80% of the old Gmail monitor's alerts while waking Hermes for
       // about a quarter of mail (the screener scores most notifications 0.8 or more).
-      wake: number(env.GMAIL_FEED_WAKE_THRESHOLD, 0.9),
+      wake: number(env.GMAIL_FEED_WAKE_THRESHOLD, DEFAULT_THRESHOLDS.wake),
     },
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Slack as the feed bot (the Beeper Watch app, shared by every #feed- channel), through `fetch`. Its
+ * Slack as the Gmail feed bot, through `fetch`. Its
  * scopes: chat:write, chat:write.public, channels:read, groups:read and channels:manage.
  */
 

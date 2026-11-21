@@ -1,5 +1,6 @@
 export { loadConfig } from "#config";
 export type { GmailFeedConfig } from "#config";
+export { decisionsScreener } from "#decisions";
 export { FEED_LIMITS, GmailFeed, isInbound } from "#feed";
 export type { EmailVerdict, FeedConfig, FeedWake, GmailFeedDeps, Logger, LogLevel } from "#feed";
 export { chunks, emailPost, gmailLink, labelNames, MAX_BODY, MESSAGE_LIMIT } from "#format";

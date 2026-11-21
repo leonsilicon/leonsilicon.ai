@@ -81,12 +81,11 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack-as-leon",
     "slack22linear",
   ]);
-  // The Gmail feed uses Beeper Watch's screener, so a change there redeploys it.
-  assert.deepEqual(affected("packages/ai/leonsilicon/services/beeper-watch/screen.ts"), [
+  assert.deepEqual(affected("packages/ai/leonsilicon/services/gmail-feed/decisions.ts"), [
     "gmail-feed",
   ]);
   // Things that don't run on Cloudflare: the mini, Hermes, docs and tests.
-  assert.deepEqual(affected("apps/beeper-watch/main.ts"), []);
+  assert.deepEqual(affected("apps/beeper-inbox/_beeper-inbox.ts"), []);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/beeper-inbox/inbox.ts"), []);
   assert.deepEqual(
     affected("packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard/__init__.py"),

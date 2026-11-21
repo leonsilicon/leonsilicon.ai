@@ -1,12 +1,12 @@
 {
   "display_information": {
-    "name": "Beeper Watch",
-    "description": "Wakes Hermes when someone replies in a watched Beeper chat.",
+    "name": "Gmail Feed",
+    "description": "Screens and copies incoming Gmail to Slack.",
     "background_color": "#1f2933"
   },
   "features": {
     "bot_user": {
-      "display_name": "Beeper Watch",
+      "display_name": "Gmail Feed",
       "always_online": true
     }
   },

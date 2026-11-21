@@ -1,5 +1,0 @@
-name: beeper-watch-notification-guard
-version: "0.2.0"
-description: Local opt-in Beeper Watch notification chain isolation; private runtime compatibility workaround, not catalog portable.
-provides_hooks:
-  - pre_gateway_dispatch

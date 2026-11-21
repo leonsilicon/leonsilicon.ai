@@ -9,7 +9,7 @@
 # - A restart quits Beeper, then sends TERM, then KILL: a stuck update dialog blocked both quit and TERM.
 # - Tailscale app not running: launch it.
 # - With the file $OFF present, Beeper is left alone and only Tailscale is kept running. Since 2026-11-21
-#   Hermes Cloud reads Beeper itself (its inbox, the Grok relay and Beeper Watch all run there), so nothing
+#   Hermes Cloud reads Beeper itself (its inbox and the Grok relay run there), so nothing
 #   needs Beeper Desktop here. It had also been freezing about 20 s after every launch since 2026-11-19, and
 #   each forced restart left its helper processes behind: 1,122 of them holding 7.6 GB by 2026-11-21.
 # Test hooks: BEEPER_API, BEEPER_TOKEN_FILE, WATCHDOG_STATE, WATCHDOG_LOG, and WATCHDOG_DRY_RUN=1, which

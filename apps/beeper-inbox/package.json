@@ -9,7 +9,6 @@
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-    "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
     "@-/ai.leonsilicon.services.grok-relay": "workspace:*"
   }
 }

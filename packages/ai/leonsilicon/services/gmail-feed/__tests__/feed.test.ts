@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import type { Screener, Verdict } from "@-/ai.leonsilicon.services.beeper-watch/screen";
+import type { Screener, Verdict } from "#decisions";
 import { FEED_LIMITS, GmailFeed, isInbound, type FeedConfig } from "#feed";
 import { GmailError, type GmailApi, type HistoryPage } from "#gmail";
 import type { GmailMessage } from "#mime";

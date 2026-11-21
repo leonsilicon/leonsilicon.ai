@@ -2,7 +2,7 @@
 
 Hermes's direct Beeper Cloud inbox: it lists, reads, downloads from and sends in Leon's existing Beeper conversations over Matrix, as its own end-to-end-encrypted device of Leon's Beeper account. It needs neither Beeper Desktop nor any of Leon's computers. The app that runs it on Hermes Cloud, and how to deploy it, is in [`apps/beeper-inbox`](../../../../../apps/beeper-inbox/README.md).
 
-Leon's Beeper messages are still copied to the Slack #feed- channels by [Beeper Watch](../beeper-watch/README.md), and Slack is still where Hermes searches. This adds actions on the original conversations: open the chat behind a feed post, read the original message, fetch its attachment, reply.
+Use `list_conversations` to find a chat and `list_messages` to read it. The inbox gives Hermes access to Beeper conversations on demand.
 
 ## Tools
 
@@ -18,7 +18,7 @@ Leon's Beeper messages are still copied to the Slack #feed- channels by [Beeper 
 | `send_reaction`       | An emoji reaction.                                                                                                                                                                                                                |
 | `inbox_status`        | Device, encryption and key backup state, sync health, directory size, recent sends, limits and what isn't supported.                                                                                                              |
 
-Room IDs are opaque and used exactly as the homeserver gives them (`:beeper.local` is normal for bridged rooms; room version 12 IDs have no server part). The chat ID in a #feed- post is the room ID. A Slack ts is not an event ID; the tools refuse one with a pointer to `list_messages`.
+Room IDs are opaque and used exactly as the homeserver gives them (`:beeper.local` is normal for bridged rooms; room version 12 IDs have no server part). Chat IDs in historical Slack feed posts are room IDs. A Slack ts is not an event ID; the tools refuse one with a pointer to `list_messages`.
 
 Not implemented: starting conversations with new contacts, edits and deletions, Beeper's merged chats (each bridged room is its own conversation), network-specific actions, and thread replies in bridged rooms (Beeper answers `/relations` with 403 there).
 
@@ -38,7 +38,7 @@ Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp ─unix socket─▶ beeper-inbox
 - **Library.** [Pickle](https://github.com/beeper/pickle) (`@beeper/pickle`, mautrix-go and goolm compiled to WebAssembly) with its SQLite state adapter, built from the pinned revision in [`apps/beeper-inbox/@assets/pickle.json`](../../../../../apps/beeper-inbox/@assets/pickle.json). It isn't on npm, so it is vendored, and loaded at run time by `pickle.ts`; `types.ts` describes the slice used.
 - **One writer.** Pickle requires exactly one writer per device store. The daemon is the only process that opens `pickle.db` and `inbox.db`, and only while it holds `state/owner.lock`: an open SQLite `BEGIN EXCLUSIVE` transaction, which the kernel releases when the process dies by any cause, so there is no stale lock to clear. A second daemon exits with code 75. Both databases are also opened with `locking_mode=EXCLUSIVE`.
 - **Thin adapters.** Hermes may start the MCP server in several processes (the gateway, cron runs, dashboard chats). Each is a stateless client of the daemon's socket. The first call, or the adapter's start, launches the daemon detached (`setsid`), outside the process group Hermes kills when an MCP server exits; every adapter checks on it once a minute.
-- **Extensions** (`extension.ts`). The daemon can serve a second set of tools from the same process, each with its own MCP server (`beeper-inbox.mjs mcp <name>`) and its own directory under the home. An extension reaches Beeper only through the tools above and what the daemon hands it: the journal, room details (name, network, connection, whether Leon muted the room) and sender names. The [Grok relay](../grok-relay/README.md) and [Beeper Watch](../beeper-watch/README.md) are extensions: each needs a single owner for its state, which this daemon already is. `status` shows each one's own health under `extensions`.
+- **Extensions** (`extension.ts`). The daemon can serve a second set of tools from the same process, each with its own MCP server (`beeper-inbox.mjs mcp <name>`) and its own directory under the home. An extension reaches Beeper only through the tools above and what the daemon hands it: the journal, room details (name, network, connection, whether Leon muted the room) and sender names. The [Grok relay](../grok-relay/README.md) runs as an extension with its own status under `extensions`.
 - **Background sync** keeps to-device room keys, device lists and the directory current. It never creates Hermes tasks or contacts anyone.
 - **Pickle's `fetch`** goes through `matrix-fetch.ts`, which adds what Pickle doesn't expose:
   - Send retries in Pickle get fresh transaction IDs, so a lost response could post twice. The wrapper pins each send to one transaction ID derived from its idempotency key, and the homeserver deduplicates by it.

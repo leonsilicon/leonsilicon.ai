@@ -35,17 +35,7 @@
       },
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-        "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
         "@-/ai.leonsilicon.services.grok-relay": "workspace:*",
-      },
-    },
-    "apps/beeper-watch": {
-      "name": "@-apps/beeper-watch",
-      "bin": {
-        "_deploy-beeper-watch": "./_deploy-beeper-watch.sh",
-      },
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
       },
     },
     "apps/cronometer": {
@@ -64,7 +54,6 @@
       "name": "@-apps/gmail-feed",
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
-        "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
         "@-/ai.leonsilicon.services.gmail-feed": "workspace:*",
       },
     },
@@ -191,16 +180,6 @@
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/beeper-watch": {
-      "name": "@-/ai.leonsilicon.services.beeper-watch",
-      "version": "1.0.0",
-      "dependencies": {
-        "@-/com.npmjs.beeper__desktop-api": "workspace:*",
-        "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
-        "@-/com.npmjs.openai": "workspace:*",
-        "@-/com.npmjs.slack__web-api": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/dailylinear": {
       "name": "@-/ai.leonsilicon.services.dailylinear",
       "version": "1.0.0",
@@ -212,7 +191,6 @@
       "name": "@-/ai.leonsilicon.services.gmail-feed",
       "version": "1.0.0",
       "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
       },
     },
@@ -260,10 +238,6 @@
       "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
       "version": "1.0.0",
     },
-    "packages/com/leonsilicon/hermes/plugins/beeper-watch-notification-guard": {
-      "name": "@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard",
-      "version": "0.2.0",
-    },
     "packages/com/leonsilicon/hermes/plugins/dropbox-task-memory": {
       "name": "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory",
       "version": "1.0.0",
@@ -288,12 +262,6 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
       "version": "1.0.0",
     },
-    "packages/com/npmjs/beeper__desktop-api": {
-      "name": "@-/com.npmjs.beeper__desktop-api",
-      "dependencies": {
-        "@beeper/desktop-api": "catalog:",
-      },
-    },
     "packages/com/npmjs/krzysztofkobra__orca-mcp": {
       "name": "@-/com.npmjs.krzysztofkobra__orca-mcp",
       "dependencies": {
@@ -310,12 +278,6 @@
       "name": "@-/com.npmjs.openai",
       "dependencies": {
         "openai": "catalog:",
-      },
-    },
-    "packages/com/npmjs/slack__web-api": {
-      "name": "@-/com.npmjs.slack__web-api",
-      "dependencies": {
-        "@slack/web-api": "catalog:",
       },
     },
     "packages/com/npmjs/yaml": {
@@ -380,10 +342,8 @@
     },
   },
   "catalog": {
-    "@beeper/desktop-api": "6.0.0",
     "@krzysztofkobra/orca-mcp": "0.1.1",
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@slack/web-api": "8.3.0",
     "@todoist/automations-cli": "2.2.0",
     "@types/node": "24.19.2",
     "@varlock/cloudflare-integration": "1.6.3",
@@ -418,8 +378,6 @@
 
     "@-/ai.leonsilicon.services.beeper-inbox": ["@-/ai.leonsilicon.services.beeper-inbox@workspace:packages/ai/leonsilicon/services/beeper-inbox"],
 
-    "@-/ai.leonsilicon.services.beeper-watch": ["@-/ai.leonsilicon.services.beeper-watch@workspace:packages/ai/leonsilicon/services/beeper-watch"],
-
     "@-/ai.leonsilicon.services.dailylinear": ["@-/ai.leonsilicon.services.dailylinear@workspace:packages/ai/leonsilicon/services/dailylinear"],
 
     "@-/ai.leonsilicon.services.gmail-feed": ["@-/ai.leonsilicon.services.gmail-feed@workspace:packages/ai/leonsilicon/services/gmail-feed"],
@@ -438,8 +396,6 @@
 
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
 
-    "@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard": ["@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard@workspace:packages/com/leonsilicon/hermes/plugins/beeper-watch-notification-guard"],
-
     "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory": ["@-/com.leonsilicon.hermes.plugins.dropbox-task-memory@workspace:packages/com/leonsilicon/hermes/plugins/dropbox-task-memory"],
 
     "@-/com.leonsilicon.hermes.plugins.slack-always-react": ["@-/com.leonsilicon.hermes.plugins.slack-always-react@workspace:packages/com/leonsilicon/hermes/plugins/slack-always-react"],
@@ -452,15 +408,11 @@
 
     "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply"],
 
-    "@-/com.npmjs.beeper__desktop-api": ["@-/com.npmjs.beeper__desktop-api@workspace:packages/com/npmjs/beeper__desktop-api"],
-
     "@-/com.npmjs.krzysztofkobra__orca-mcp": ["@-/com.npmjs.krzysztofkobra__orca-mcp@workspace:packages/com/npmjs/krzysztofkobra__orca-mcp"],
 
     "@-/com.npmjs.modelcontextprotocol__sdk": ["@-/com.npmjs.modelcontextprotocol__sdk@workspace:packages/com/npmjs/modelcontextprotocol__sdk"],
 
     "@-/com.npmjs.openai": ["@-/com.npmjs.openai@workspace:packages/com/npmjs/openai"],
-
-    "@-/com.npmjs.slack__web-api": ["@-/com.npmjs.slack__web-api@workspace:packages/com/npmjs/slack__web-api"],
 
     "@-/com.npmjs.yaml": ["@-/com.npmjs.yaml@workspace:packages/com/npmjs/yaml"],
 
@@ -485,8 +437,6 @@
     "@-apps/autolinear": ["@-apps/autolinear@workspace:apps/autolinear"],
 
     "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
-
-    "@-apps/beeper-watch": ["@-apps/beeper-watch@workspace:apps/beeper-watch"],
 
     "@-apps/cronometer": ["@-apps/cronometer@workspace:apps/cronometer"],
 
@@ -515,8 +465,6 @@
     "@babel/helper-validator-identifier": ["@babel/helper-validator-identifier@7.29.7", "", {}, "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg=="],
 
     "@babel/runtime": ["@babel/runtime@7.29.14", "", {}, "sha512-Y5tqevQaUAZhhj82BpYMNC1ssvLQTVAfwKdm8iy8qwmhvC2/CpcAu8OC+QEtjM7pMk7knx83u1Qj8gzkicyelw=="],
-
-    "@beeper/desktop-api": ["@beeper/desktop-api@6.0.0", "", {}, "sha512-dpFltNVoUg4gKwFp/czJwA1PAxiBOOmcwJTlTyXOaBgGE0dMbneoHaKcFU3dfSQ48qwHZpM0lT5uetW+Qyx/uA=="],
 
     "@blazediff/core": ["@blazediff/core@1.10.0", "", {}, "sha512-AOQff0zgR7cGsZL+4E7hVkmujoPUpm0J9xzWGWZj5wCjd3gmxESXAPfKyuzs93VdpQNFhHlBhfOjrcZ+XTERtQ=="],
 
@@ -826,12 +774,6 @@
 
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
-    "@slack/logger": ["@slack/logger@5.0.0", "", { "dependencies": { "@types/node": ">=20" } }, "sha512-VGXhmmgsAo9shdQYh4tFDndd+7nsgp0Y5h0UPDaUp8K359pBasI6YdkMqFW3mCOxLQkq09qj7o7cq6f3DuXcJQ=="],
-
-    "@slack/types": ["@slack/types@3.3.0", "", {}, "sha512-11r2kM9Zy/UlaV6OwPibZueVlyNJ5xtHEHK/iYDnPLyhQcxRtsifNAwNhJ1Lm0nszW4jrWCHThXCHCNJC/hvqg=="],
-
-    "@slack/web-api": ["@slack/web-api@8.3.0", "", { "dependencies": { "@slack/logger": "^5.0.0", "@slack/types": "^3.3.0", "@types/node": ">=20", "@types/retry": "0.12.5", "eventemitter3": "^5.0.1", "p-queue": "^6.6.2", "p-retry": "^4.6.2", "retry": "^0.13.1" } }, "sha512-rGHDZggzG658Uc4yebenp3rVfVVToL0w8aOis40EfrstZCxg8FWS+ECGDIkw498Q9jxF/LVKgGbPfUeYntTrUQ=="],
-
     "@speed-highlight/core": ["@speed-highlight/core@1.2.24", "", {}, "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
@@ -855,8 +797,6 @@
     "@types/estree": ["@types/estree@1.0.10", "", {}, "sha512-lTyOMnOcmRBzdCv6/4zUZCrEhV0xrqQiUZBZtVcbmLHBXKLnN8q89v/wKRF/Q0HbwVsqbIG3o5HDoFl9sduM+g=="],
 
     "@types/node": ["@types/node@24.19.2", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-93d49wCWJkCyN87MxLpNN6KXPCwFw7bVUg79mGUV1OS40JGWwVCr8n61DXCSqz7CV6/VfPkb7xec7uP2M+QHWQ=="],
-
-    "@types/retry": ["@types/retry@0.12.5", "", {}, "sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw=="],
 
     "@typescript/typescript-aix-ppc64": ["@typescript/typescript-aix-ppc64@7.0.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ=="],
 
@@ -1062,8 +1002,6 @@
 
     "etag": ["etag@1.8.1", "", {}, "sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg=="],
 
-    "eventemitter3": ["eventemitter3@5.0.4", "", {}, "sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw=="],
-
     "eventsource": ["eventsource@3.0.7", "", { "dependencies": { "eventsource-parser": "^3.0.1" } }, "sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA=="],
 
     "eventsource-parser": ["eventsource-parser@3.1.1", "", {}, "sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ=="],
@@ -1210,14 +1148,6 @@
 
     "oxlint-tsgolint": ["oxlint-tsgolint@7.0.2005", "", { "optionalDependencies": { "@oxlint-tsgolint/darwin-arm64": "7.0.2005", "@oxlint-tsgolint/darwin-x64": "7.0.2005", "@oxlint-tsgolint/linux-arm64": "7.0.2005", "@oxlint-tsgolint/linux-x64": "7.0.2005", "@oxlint-tsgolint/win32-arm64": "7.0.2005", "@oxlint-tsgolint/win32-x64": "7.0.2005" }, "bin": { "tsgolint": "./bin/tsgolint.js" } }, "sha512-6ccPGu4u4J9bwYPHXBFPee3RZrX3BboRdU7k14zRDDB1lvN3O7J/vPRFdaEfa1+CWx4xnQQOp4ctoaF66oO0uw=="],
 
-    "p-finally": ["p-finally@1.0.0", "", {}, "sha512-LICb2p9CB7FS+0eR1oqWnHhp0FljGLZCWBE9aix0Uye9W8LTQPwMTYVGWQWIw9RdQiDg4+epXQODwIYJtSJaow=="],
-
-    "p-queue": ["p-queue@6.6.2", "", { "dependencies": { "eventemitter3": "^4.0.4", "p-timeout": "^3.2.0" } }, "sha512-RwFpb72c/BhQLEXIZ5K2e+AhgNVmIejGlTgiB9MzZ0e93GRvqZ7uSi0dvRF7/XIXDeNkra2fNHBxTyPDGySpjQ=="],
-
-    "p-retry": ["p-retry@4.6.2", "", { "dependencies": { "@types/retry": "0.12.0", "retry": "^0.13.1" } }, "sha512-312Id396EbJdvRONlngUx0NydfrIQ5lsYu0znKVUzVvArzEIt08V1qhtyESbGVd1FGX7UKtiFp5uwKZdM8wIuQ=="],
-
-    "p-timeout": ["p-timeout@3.2.0", "", { "dependencies": { "p-finally": "^1.0.0" } }, "sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg=="],
-
     "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
 
     "path-key": ["path-key@3.1.1", "", {}, "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q=="],
@@ -1251,8 +1181,6 @@
     "react-is": ["react-is@17.0.2", "", {}, "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w=="],
 
     "require-from-string": ["require-from-string@2.0.2", "", {}, "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw=="],
-
-    "retry": ["retry@0.13.1", "", {}, "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg=="],
 
     "rolldown": ["rolldown@1.2.19", "", { "dependencies": { "@oxc-project/types": "=0.156.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.19", "@rolldown/binding-android-arm64": "1.2.19", "@rolldown/binding-darwin-arm64": "1.2.19", "@rolldown/binding-darwin-x64": "1.2.19", "@rolldown/binding-freebsd-x64": "1.2.19", "@rolldown/binding-linux-arm-gnueabihf": "1.2.19", "@rolldown/binding-linux-arm64-gnu": "1.2.19", "@rolldown/binding-linux-arm64-musl": "1.2.19", "@rolldown/binding-linux-ppc64-gnu": "1.2.19", "@rolldown/binding-linux-s390x-gnu": "1.2.19", "@rolldown/binding-linux-x64-gnu": "1.2.19", "@rolldown/binding-linux-x64-musl": "1.2.19", "@rolldown/binding-openharmony-arm64": "1.2.19", "@rolldown/binding-wasm32-wasi": "1.2.19", "@rolldown/binding-win32-arm64-msvc": "1.2.19", "@rolldown/binding-win32-x64-msvc": "1.2.19" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-QIiV1J9d0pzN4jeeTH4sjPy0AZ6cAy2cG0ExeoE1+U8Rvj+hR3gYkokx0YbeUNGlZqiQJJ2utcETe0oKXwzsuA=="],
 
@@ -1375,10 +1303,6 @@
     "miniflare/ws": ["ws@8.21.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g=="],
 
     "negotiator/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
-
-    "p-queue/eventemitter3": ["eventemitter3@4.0.7", "", {}, "sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw=="],
-
-    "p-retry/@types/retry": ["@types/retry@0.12.0", "", {}, "sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA=="],
 
     "rolldown/@oxc-project/types": ["@oxc-project/types@0.156.0", "", {}, "sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw=="],
 

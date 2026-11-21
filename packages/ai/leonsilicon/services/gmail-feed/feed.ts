@@ -1,8 +1,4 @@
-import {
-  FAIL_CLOSED,
-  type Screener,
-  type Verdict,
-} from "@-/ai.leonsilicon.services.beeper-watch/screen";
+import { FAIL_CLOSED, type Screener, type Verdict } from "#decisions";
 import { emailPost, outageText, recoveredText, type PostVerdict } from "#format";
 import { GmailError, type GmailApi } from "#gmail";
 import { parseEmail, pendingParts, type GmailMessage } from "#mime";
