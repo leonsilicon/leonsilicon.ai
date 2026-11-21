@@ -589,7 +589,7 @@ const projectHook = (id: string, action = "update") => ({ action, type: "Project
 
 test("publishes full issue and icon metadata to a private feed on the next batch", async () => {
   const { linear, slack, store, sync, clock, drain } = setup();
-  const title = "Describe the issue <with> & examples ".repeat(14).trim();
+  const title = "Describe the issue <with> & examples, café ".repeat(90).trim();
   const issue = linear.addIssue(701, `${title} \`{start: 2026-12-01}\``, "Awaiting Date");
   issue.priority = 2;
   await sync.run("linear", issueHook(issue.id));
@@ -600,27 +600,37 @@ test("publishes full issue and icon metadata to a private feed on the next batch
   assert.equal(feed.private, true);
   assert.deepEqual(feed.members, new Set([LEON, BOT]));
   const snapshot = () => slack.posts.filter(({ channel }) => channel === feed.id).at(-1)!;
-  const prefix = "zami-issues:v1 ";
+  const prefix = "zami-issues:v2 ";
   assert.ok(snapshot().text.startsWith(prefix));
-  assert.deepEqual(JSON.parse(snapshot().text.slice(prefix.length)), [
-    {
-      channel: store.issue(issue.id)!.channelId,
-      identifier: issue.identifier,
-      title,
-      priority: 2,
-      statusName: "Awaiting Date",
-      statusType: issue.state.type,
-      statusColor: issue.state.color,
-      url: issue.url,
-      dueDate: null,
-      meta: { start: "2026-12-01" },
-    },
-  ]);
+  const published = slack.calls.findLast(
+    ({ method, params }) => method === "chat.postMessage" && params.channel === feed.id,
+  )!;
+  const blocks = JSON.parse(String(published.params.blocks)) as { text: { text: string } }[];
+  assert.ok(blocks.length > 1);
+  assert.ok(blocks.every(({ text }) => text.text.length <= 3000));
+  assert.equal(blocks.map(({ text }) => text.text).join(""), snapshot().text);
+  assert.deepEqual(
+    JSON.parse(Buffer.from(snapshot().text.slice(prefix.length), "base64").toString("utf8")),
+    [
+      {
+        channel: store.issue(issue.id)!.channelId,
+        identifier: issue.identifier,
+        title,
+        priority: 2,
+        statusName: "Awaiting Date",
+        statusType: issue.state.type,
+        statusColor: issue.state.color,
+        url: issue.url,
+        dueDate: null,
+        meta: { start: "2026-12-01" },
+      },
+    ],
+  );
   issue.state = state("Done");
   await sync.run("linear", issueHook(issue.id));
   clock.now += 30_000;
   await drain();
-  assert.equal(snapshot().text, `${prefix}[]`);
+  assert.equal(snapshot().text, `${prefix}W10=`);
   feed.members.add("USOMEONE");
   await assert.rejects(sync.run("issue-metadata", {}), /Unexpected access/);
 });

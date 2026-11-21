@@ -143,10 +143,11 @@ interface ChannelInfo {
 const PROJECT_VISIBILITY_CHANNEL = "zami-project-visibility";
 const PROJECT_VISIBILITY_PREFIX = "zami-projects:v1";
 const ISSUE_METADATA_CHANNEL = "zami-issue-metadata";
-const ISSUE_METADATA_PREFIX = "zami-issues:v1";
+const ISSUE_METADATA_PREFIX = "zami-issues:v2";
 const ISSUE_METADATA_INTERVAL = 30_000;
 // Keep room for the Matrix event envelope and Beeper's encryption overhead.
-const ISSUE_METADATA_MAX_BYTES = 24_000;
+const ISSUE_METADATA_MAX_CHARS = 24_000;
+const SLACK_SECTION_TEXT_MAX = 2_900;
 
 /** A UUID derived from a string, so retries of the same Slack message reuse one Linear comment ID. */
 export async function stableUuid(seed: string): Promise<string> {
@@ -713,16 +714,15 @@ export class Sync {
         ];
       })
       .sort((a, b) => a.channel.localeCompare(b.channel));
-    // Escape Slack's special markup characters before the bridge converts the message.
-    const json = JSON.stringify(records).replace(
-      /[<>&]/g,
-      (char) => `\\u00${char.charCodeAt(0).toString(16)}`,
-    );
-    let text = `${ISSUE_METADATA_PREFIX} ${json}`;
-    if (new TextEncoder().encode(text).length > ISSUE_METADATA_MAX_BYTES) {
+    const bytes = new TextEncoder().encode(JSON.stringify(records));
+    const maxBytes =
+      Math.floor((ISSUE_METADATA_MAX_CHARS - ISSUE_METADATA_PREFIX.length - 1) / 4) * 3;
+    let encoded: string;
+    if (bytes.length > maxBytes) {
       this.#log("issue_metadata_too_large", { records: records.length });
-      text = `${ISSUE_METADATA_PREFIX} []`;
-    }
+      encoded = btoa("[]");
+    } else encoded = btoa(String.fromCharCode(...bytes));
+    const text = `${ISSUE_METADATA_PREFIX} ${encoded}`;
 
     this.#channels = null;
     const existing = (await this.#listChannels()).find(
@@ -769,10 +769,19 @@ export class Sync {
       Number(latest.ts) * 1000 > this.#now() - 24 * 3600_000
     )
       return;
+    // Slack splits long plain messages. Sections keep the snapshot in one timeline event.
+    const blocks = [];
+    for (let offset = 0; offset < text.length; offset += SLACK_SECTION_TEXT_MAX) {
+      blocks.push({
+        type: "section",
+        text: { type: "plain_text", text: text.slice(offset, offset + SLACK_SECTION_TEXT_MAX) },
+      });
+    }
     await this.#bot("chat.postMessage", {
       channel,
       text,
-      mrkdwn: false,
+      blocks: JSON.stringify(blocks),
+      parse: "none",
       unfurl_links: false,
       unfurl_media: false,
     });
