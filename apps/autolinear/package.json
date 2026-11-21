@@ -6,8 +6,8 @@
   "dependencies": {
     "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
     "@-/ai.leonsilicon.services.autolinear": "workspace:*",
-    "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
-    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*"
+    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+    "@-/ai.leonsilicon.services.slack22linear": "workspace:*"
   },
   "varlock": {
     "loadPath": "../../",

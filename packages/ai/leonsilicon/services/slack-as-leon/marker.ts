@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 /**
  * First group of the `client_msg_id` on every message this service posts. Slack keeps the id and
  * delivers it in the message event. Everything that reacts to Leon's own messages skips posts that
- * carry it (autolinear, Linear Sync, Hermes's autolinear plugin): they are not his words. Messages
+ * carry it (autolinear, slack22linear, Hermes's autolinear plugin): they are not his words. Messages
  * Leon types get a random UUID from his Slack client. Keep in sync with `MARKER` in Hermes's
  * `slack-as-leon-guard` and `autolinear` plugins.
  */

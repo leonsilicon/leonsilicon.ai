@@ -12,7 +12,7 @@ Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker o
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | [`cronometer`](www/ai/leonsilicon/cronometer/index.html)       | [Cronometer](apps/cronometer/README.md)                                             | Its own Cloudflare Worker (Python), since 2026-11-21 |
 | [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html)   | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                         | Its own Cloudflare Worker                            |
-| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html)   | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                             | Its own Cloudflare Worker                            |
+| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html)   | [slack22linear](apps/slack22linear/README.md) syncs Slack and Linear both ways      | Its own Cloudflare Worker                            |
 | [`autolinear`](www/ai/leonsilicon/autolinear/index.html)       | [autolinear: an issue and channel per Slack message](apps/autolinear/README.md)     | Its own Cloudflare Worker                            |
 | [`dailylinear`](www/ai/leonsilicon/dailylinear/index.html)     | [dailylinear: the day's Linear project and its channel](apps/dailylinear/README.md) | Its own Cloudflare Worker, since 2026-11-21          |
 | [`grokbot-admin`](www/ai/leonsilicon/grokbot-admin/index.html) | [Grok Bot admin: bots list and delete any bot](apps/grok-bot-roster/README.md)      | Its own Cloudflare Worker, since 2026-11-21          |

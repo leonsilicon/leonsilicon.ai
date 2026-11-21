@@ -7,14 +7,14 @@ import {
   Sync,
   verifyLinear,
   verifySlack,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import type {
   Adoption,
   SlackCall,
   Sql,
   SqlValue,
   SyncConfig,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
 import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
@@ -66,6 +66,12 @@ const log = (event: string, fields: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ event, ...fields }));
 
 const stub = (env: Env) => env.SYNC.get(env.SYNC.idFromName("sync"));
+const slackArchiveEvents = new Set([
+  "channel_archive",
+  "channel_unarchive",
+  "group_archive",
+  "group_unarchive",
+]);
 
 async function enqueue(env: Env, id: string, kind: string, payload: unknown): Promise<void> {
   const response = await stub(env).fetch(
@@ -145,8 +151,13 @@ export default {
       if (!ok) return json({ error: "bad signature" }, 401);
       if (payload.type === "url_verification") return json({ challenge: payload.challenge });
       const config = loadConfig(env as Record<string, string | undefined>);
-      if (payload.type === "event_callback" && wantedSlackEvent(payload.event, config))
-        await enqueue(env, `slack:${payload.event_id}`, "slack", payload.event);
+      if (payload.type === "event_callback" && payload.event) {
+        const { type, subtype } = payload.event;
+        if (slackArchiveEvents.has(String(type === "message" ? subtype : type)))
+          await enqueue(env, `slack:${payload.event_id}`, "project-visibility", {});
+        else if (wantedSlackEvent(payload.event, config))
+          await enqueue(env, `slack:${payload.event_id}`, "slack", payload.event);
+      }
       return json({ ok: true });
     }
 

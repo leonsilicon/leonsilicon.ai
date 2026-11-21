@@ -58,6 +58,7 @@ export interface LinearApi {
   openIssues(teamKey: string, closedTypes: string[]): Promise<LinearIssue[]>;
   project(id: string): Promise<LinearProject | null>;
   openProjects(teamKey: string, closedTypes: string[]): Promise<LinearProject[]>;
+  closedProjectChannels(teamKey: string, closedTypes: string[]): Promise<string[]>;
   /** Null when project channels are off, or no Slack workspace is connected. */
   projectChannelSettings(): Promise<ProjectChannelSettings | null>;
   /**
@@ -259,6 +260,33 @@ export class LinearClient implements LinearApi {
       after = data.projects.pageInfo.hasNextPage ? data.projects.pageInfo.endCursor : null;
     } while (after);
     return projects;
+  }
+
+  async closedProjectChannels(teamKey: string, closedTypes: string[]): Promise<string[]> {
+    const channels: string[] = [];
+    let after: string | null = null;
+    do {
+      const data: {
+        projects: {
+          nodes: Pick<ProjectNode, "slackChannelId" | "archivedAt" | "trashed" | "status">[];
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        };
+      } = await this.gql(
+        `query($team: String!, $after: String) {
+          projects(first: 100, after: $after, includeArchived: true, filter: {
+            accessibleTeams: { some: { key: { eq: $team } } } }) {
+            nodes { slackChannelId archivedAt trashed status { type } }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        { team: teamKey, after },
+      );
+      for (const { slackChannelId, archivedAt, trashed, status } of data.projects.nodes)
+        if (slackChannelId && (archivedAt || trashed || closedTypes.includes(status.type)))
+          channels.push(slackChannelId);
+      after = data.projects.pageInfo.hasNextPage ? data.projects.pageInfo.endCursor : null;
+    } while (after);
+    return channels;
   }
 
   async projectChannelSettings() {

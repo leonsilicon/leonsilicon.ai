@@ -1,0 +1,15 @@
+{
+  "name": "@-apps/slack22linear",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+    "@-/ai.leonsilicon.services.slack22linear": "workspace:*"
+  },
+  "varlock": {
+    "loadPath": "../../",
+    "filter": "#slack22linear"
+  }
+}

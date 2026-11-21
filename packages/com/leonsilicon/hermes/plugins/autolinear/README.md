@@ -9,7 +9,7 @@ Leon's rule (2026-11-21): every message he sends in Slack becomes a new issue in
 ## What happens
 
 1. Leon writes to Hermes outside an issue channel: a DM, `#general`, a project channel, a reply under a `#feed-` post.
-2. autolinear has usually started already: its Slack app gets Leon's message straight from Slack, before Hermes does. Either way, as soon as the message reaches Hermes and has passed dedup and the bot check, the plugin calls autolinear's `POST /intake` in the background, and gets the running or finished intake for it. autolinear creates the issue, opens its channel `leon-<n>-<first words>`, edits Leon's message to end with `→ #leon-<n>-…`, and posts his message again in the channel as Leon, all in about a second.
+2. AutoLinear's Slack app usually starts intake before Hermes receives the message. Once the message reaches Hermes and passes dedup and the bot check, the plugin calls `POST /intake` in the background to get the running or finished intake. AutoLinear creates the issue, opens its `leon-<n>-<first words>` channel, and posts a copy of the message there as Leon. Once Slack confirms the copy, AutoLinear replaces the original message with the channel link.
 3. Meanwhile Hermes reads the thread and downloads files as usual. When it builds the turn, the plugin waits for autolinear's answer and builds the turn as if Leon had written that copy: same text, files and thread history, in the new channel, with a one-line note naming the issue. Hermes's reply, its session and its 👀 → ✅ reactions all land in the issue channel. With [slack-flat-replies](../slack-flat-replies/README.md), the reply is at the top of the channel, not in a thread.
 4. Nothing moves while Hermes works. When it has answered, a ping to Leon in its answer leaves the issue in Awaiting Leon, and an answer without one (to his "thanks", say) closes it as Done. A failed turn goes to Awaiting Leon. A status Hermes sets during its turn, such as Awaiting Others, stands.
 
@@ -21,7 +21,7 @@ A message moves when Hermes answers it, Leon (`AUTOLINEAR_USER_ID`) wrote it, it
 
 The early start, before Hermes's own gates have run (`_prefilter_inbound`), is only for messages Hermes always answers: also no `/` or `!` at the start and no mention of anyone but Hermes. Anything else that Hermes ends up answering starts when its turn is built (`_build_message_event`, which runs only after the gates), a little later. An early start whose message Hermes then doesn't answer is logged (`made LEON-… but Hermes didn't answer that message`).
 
-A thread reply's thread goes along: Hermes keeps the thread history it read, and Linear Sync quotes the thread's first message in the issue. A message in a project's channel files the issue in that project.
+A thread reply's thread goes along: Hermes keeps the thread history it read, and slack22linear quotes the thread's first message in the issue. A message in a project's channel files the issue in that project.
 
 ## Failure
 
@@ -38,7 +38,7 @@ In `$HERMES_HOME/.env` (the dashboard's Keys page), from the `#hermes` items of 
 | `AUTOLINEAR_TOKEN`          | autolinear's `AUTOLINEAR_TOKEN`                                           |
 | `AUTOLINEAR_USER_ID`        | Leon's Slack user ID                                                      |
 | `AUTOLINEAR_URL`            | Optional; default `https://autolinear.leonsilicon.ai/intake`              |
-| `AUTOLINEAR_CHANNEL_PREFIX` | Optional; default `leon`, Linear Sync's channel prefix                    |
+| `AUTOLINEAR_CHANNEL_PREFIX` | Optional; default `leon`, slack22linear's channel prefix                  |
 | `AUTOLINEAR_SKIP_CHANNELS`  | Optional; comma-separated channel IDs whose messages Hermes answers there |
 
 They're read on every message, so removing the token turns the plugin off once Hermes's env reloads.

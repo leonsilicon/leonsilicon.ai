@@ -1,4 +1,4 @@
-import { DEFAULT_SECTION_ORDER } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { DEFAULT_SECTION_ORDER } from "@-/ai.leonsilicon.services.slack22linear";
 
 /** Settings for dailylinear, read from the Worker's vars. */
 export interface DailyConfig {
@@ -14,7 +14,7 @@ export interface DailyConfig {
   doneStatus: string;
   /** Linear project status types that close a project. */
   closedProjectTypes: string[];
-  /** Linear Sync's status sections, top to bottom, so the projects section is made below them. */
+  /** slack22linear's status sections, top to bottom, so the projects section is made below them. */
   sectionOrder: string[];
   /** The sidebar section a day's channel goes to once its day has passed. */
   projectSection: string;

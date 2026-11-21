@@ -6,15 +6,14 @@ import {
   parseTitle,
   SlackError,
   slackToLinear,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import type {
   Adoption,
   LinearIssue,
   LinearTeam,
   NewIssue,
   SlackCall,
-  SlackParams,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import { newClientMsgId } from "@-/ai.leonsilicon.services.slack-as-leon";
 import type { AutolinearConfig } from "#config";
 
@@ -84,7 +83,7 @@ export interface IntakeDeps {
   };
   /** Leon's Slack web session: autolinear acts as him. */
   session: SlackCall;
-  /** Hands the channel over to Linear Sync (its Durable Object's `/adopt`). */
+  /** Hands the channel over to slack22linear (its Durable Object's `/adopt`). */
   adopt: (adoption: Adoption) => Promise<void>;
   progress: { get(): Promise<Progress>; put(progress: Progress): Promise<void> };
   cache?: IntakeCache;
@@ -99,10 +98,9 @@ export interface IntakeDeps {
  * 1. Creates the issue in Awaiting Init, one request: the team and status IDs come from config or
  *    a cache, and the title and description from the message itself.
  * 2. Creates its private channel `leon-<n>-<first words>` as Leon, so he is in it already.
- * 3. At once, in parallel: edits his message to end with `→ #leon-<n>-…`, posts the message again
- *    in the channel as him (marked like slack-as-leon's posts, so Hermes doesn't answer that copy on
- *    its own; its plugin hands Hermes the original, moved there), and hands the channel to Linear
- *    Sync, which invites its bot and Hermes and does the rest (topic, section, intro, project).
+ * 3. Posts a copy in the new channel and hands the channel to slack22linear in parallel.
+ *    The copy carries slack-as-leon's marker, so Hermes handles it through its plugin.
+ * 4. Once the copy is saved, replaces the original message with the channel link.
  *
  * Each step is recorded, so a retry carries on where the last try stopped.
  */
@@ -175,19 +173,19 @@ export class Intake {
     const reply = Boolean(msg.threadTs && msg.threadTs !== msg.ts);
     const where = escapeSlack(msg.where);
     const lead = `From Leon's ${reply ? "reply" : "message"} in ${permalink ? `<${permalink}|${where}>` : where}.`;
+    const copyAndLink = async () => {
+      if (!p.copyTs) {
+        p.copyTs = await this.#copy(msg, channel.id);
+        mark("copy");
+        await save();
+      }
+      if (!p.linked) {
+        p.linked = await this.#link(msg, channel.id);
+        mark("linked");
+      }
+    };
     const steps = await Promise.allSettled([
-      p.linked
-        ? null
-        : this.#link(msg, channel.id).then((done) => {
-            p.linked = done;
-            mark("linked");
-          }),
-      p.copyTs
-        ? null
-        : this.#copy(msg, channel.id).then((ts) => {
-            p.copyTs = ts;
-            mark("copy");
-          }),
+      copyAndLink(),
       p.adopted
         ? null
         : this.#d
@@ -321,27 +319,16 @@ export class Intake {
     throw new Error(`no free channel name for ${base}`);
   }
 
-  /**
-   * Ends Leon's message with a link to the channel. A message with blocks gets one more rich-text
-   * block, since Slack shows the blocks, not the text. True once done; a refusal (an old message,
-   * say) is logged, not fatal.
-   */
+  /** Replaces Leon's message with the channel link. Logs any Slack refusal and returns false. */
   async #link(msg: IntakeMessage, channelId: string): Promise<boolean> {
-    const params: SlackParams = {
-      channel: msg.channel,
-      ts: msg.ts,
-      text: msg.text ? `${msg.text}\n→ <#${channelId}>` : `→ <#${channelId}>`,
-    };
-    if (msg.blocks?.length)
-      params.blocks = JSON.stringify([
-        ...msg.blocks,
-        richText([
-          { type: "text", text: "→ " },
-          { type: "channel", channel_id: channelId },
-        ]),
-      ]);
     try {
-      await this.#d.session("chat.update", params);
+      await this.#d.session("chat.update", {
+        channel: msg.channel,
+        ts: msg.ts,
+        text: `<#${channelId}>`,
+        blocks: JSON.stringify([richText([{ type: "channel", channel_id: channelId }])]),
+        attachments: "[]",
+      });
       return true;
     } catch (error) {
       if (!(error instanceof SlackError)) throw error;
@@ -378,7 +365,9 @@ export class Intake {
         posted = await post();
       }
     } else posted = await post();
-    return posted.ts as string;
+    if (typeof posted.ts !== "string" || !posted.ts)
+      throw new Error("Slack chat.postMessage returned no timestamp");
+    return posted.ts;
   }
 }
 

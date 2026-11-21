@@ -8,8 +8,8 @@ import type {
   Progress,
   SlackMessageEvent,
 } from "@-/ai.leonsilicon.services.autolinear";
-import { LinearClient, verifySlack } from "@-/ai.leonsilicon.services.linear-slack-sync";
-import type { Adoption } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { LinearClient, verifySlack } from "@-/ai.leonsilicon.services.slack22linear";
+import type { Adoption } from "@-/ai.leonsilicon.services.slack22linear";
 import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
 import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
@@ -37,7 +37,7 @@ interface DurableObjectState {
 interface Env {
   /** One Durable Object per message. */
   INTAKE: DurableObjectNamespace;
-  /** Linear Sync's Durable Object (script linear-slack-sync), which adopts the channels. */
+  /** slack22linear's Durable Object (script linear-slack-sync), which adopts the channels. */
   SYNC: DurableObjectNamespace;
   /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/autolinear/index.html. */
   ASSETS: Assets;
@@ -48,7 +48,7 @@ interface Env {
    * before Hermes asks. Until it's set, /slack/events answers only Slack's URL check.
    */
   AUTOLINEAR_SLACK_SIGNING_SECRET?: string;
-  /** Personal API key of the Linear account issues are created as (Linear Sync's). */
+  /** Personal API key of the Linear account issues are created as (slack22linear's). */
   LINEAR_API_KEY: string;
   /** Leon's Slack web session: autolinear acts as him. */
   SLACK_SESSION_TOKEN: string;
@@ -287,7 +287,7 @@ export class IntakeObject {
         const response = await sync.fetch(
           new Request("https://sync/adopt", { method: "POST", body: JSON.stringify(adoption) }),
         );
-        if (!response.ok) throw new Error(`Linear Sync's /adopt answered ${response.status}`);
+        if (!response.ok) throw new Error(`slack22linear's /adopt answered ${response.status}`);
       },
       progress: {
         get: async () => (await storage.get<Progress>("progress")) ?? {},

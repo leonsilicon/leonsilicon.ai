@@ -12,7 +12,7 @@ Hermes's Slack adapter already answers single events at the top of the channel: 
 
 - **One conversation per channel.** With no thread, the session is the channel's, so each of Leon's top-level messages in an issue channel continues the same conversation.
 - **Threads stay threads.** A message written in a thread is answered in that thread, in that thread's own session.
-- **Left alone:** DMs and group DMs, messages from bots (Linear Sync's pings, the feed bots' wake-ups, Beeper Watch) and reaction-triggered turns keep their threads, so unrelated notifications don't share one channel-wide session.
+- **Left alone:** DMs and group DMs, messages from bots (slack22linear's pings, the feed bots' wake-ups, Beeper Watch) and reaction-triggered turns keep their threads, so unrelated notifications don't share one channel-wide session.
 
 autolinear's plugin calls `_session_thread_ts` for the copy of Leon's message it moves into a new issue channel, so that copy is answered at the top of the channel too, whichever plugin is wired first. Without the seams it relies on, the plugin logs a warning and changes nothing; the whole-workspace alternative, `slack.extra.reply_in_thread: false`, would also flatten the bots' threads.
 

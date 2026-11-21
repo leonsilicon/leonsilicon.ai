@@ -7,7 +7,7 @@ export interface AutolinearConfig {
   intakeStateId: string | null;
   /** The status new issues start in: Linear's default, Awaiting Init. */
   intakeState: string;
-  /** Channel names start with this, then the issue number: `leon-401-check-rogers` (Linear Sync's). */
+  /** Channel names start with this, then the issue number: `leon-401-check-rogers` (slack22linear's). */
   channelPrefix: string;
   /** Longest channel name to generate (Slack allows 80). */
   channelNameMax: number;

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isAutolinearIssue, SlackError } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { isAutolinearIssue, SlackError } from "@-/ai.leonsilicon.services.slack22linear";
 import type {
   Adoption,
   LinearIssue,
   NewIssue,
   SlackParams,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import { loadConfig } from "#config";
 import { Intake, type IntakeCache, type IntakeMessage, type Progress } from "#intake";
 
@@ -19,8 +19,7 @@ const WORKSPACE = "https://leonsilicon.slack.com";
 function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
   const log: string[] = [];
   const active = new Set<string>();
-  /** Calls that were running at the same time as another. */
-  const overlapped = new Set<string>();
+  const activeWhenStarted = new Map<string, string[]>();
   const failures: string[] = [];
   const track = async <T>(name: string, run: () => T): Promise<T> => {
     log.push(name);
@@ -28,7 +27,7 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
       failures.shift();
       throw new SlackError(name, "ratelimited");
     }
-    for (const other of active) overlapped.add(other).add(name);
+    activeWhenStarted.set(name, [...active]);
     active.add(name);
     await new Promise((resolve) => setTimeout(resolve, 5));
     active.delete(name);
@@ -126,7 +125,16 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
     },
     cache,
   });
-  return { intake, log, overlapped, failures, slack, created, adopted, progress: () => progress };
+  return {
+    intake,
+    log,
+    activeWhenStarted,
+    failures,
+    slack,
+    created,
+    adopted,
+    progress: () => progress,
+  };
 }
 
 const message = (overrides: Partial<IntakeMessage> = {}): IntakeMessage => ({
@@ -139,24 +147,30 @@ const message = (overrides: Partial<IntakeMessage> = {}): IntakeMessage => ({
   ...overrides,
 });
 
-test("a message becomes an issue, a channel, a link and a copy, in as few steps as can be", async () => {
+test("a message is copied to its new issue channel before being replaced with the link", async () => {
   const t = setup();
   const result = await t.intake.run(message());
   assert.ok(result.ok);
 
-  // Only these calls: no lookups, and the last three at once.
   assert.deepEqual(t.log, [
     "linear.createIssue",
     "conversations.create",
-    "chat.update",
     "chat.postMessage",
     "adopt",
+    "chat.update",
   ]);
-  assert.deepEqual([...t.overlapped].sort(), ["adopt", "chat.postMessage", "chat.update"]);
-  assert.deepEqual(Object.keys(result.ms), ["issue", "channel", "linked", "copy", "adopted"]);
+  assert.deepEqual(t.activeWhenStarted.get("adopt"), ["chat.postMessage"]);
+  assert.ok(!t.activeWhenStarted.get("chat.update")!.includes("chat.postMessage"));
+  assert.deepEqual(Object.keys(result.ms).sort(), [
+    "adopted",
+    "channel",
+    "copy",
+    "issue",
+    "linked",
+  ]);
 
   const made = t.created[0]!;
-  assert.ok(isAutolinearIssue(made.id), "Linear Sync knows to wait for the hand-over");
+  assert.ok(isAutolinearIssue(made.id), "slack22linear knows to wait for the hand-over");
   assert.equal(made.teamId, "team-LEON");
   assert.equal(made.stateId, "state-init");
   assert.equal(made.title, "can you check whether Rogers billed me twice?");
@@ -175,22 +189,24 @@ test("a message becomes an issue, a channel, a link and a copy, in as few steps 
   });
   const edit = t.slack.edits[0]!;
   assert.equal(edit.channel, DM);
-  assert.equal(edit.text, `${message().text}\n→ <#C1>`);
-  assert.deepEqual(JSON.parse(String(edit.blocks)).at(-1), {
-    type: "rich_text",
-    elements: [
-      {
-        type: "rich_text_section",
-        elements: [
-          { type: "text", text: "→ " },
-          { type: "channel", channel_id: "C1" },
-        ],
-      },
-    ],
-  });
+  assert.equal(edit.ts, message().ts);
+  assert.equal(edit.text, "<#C1>");
+  assert.equal(edit.attachments, "[]");
+  assert.deepEqual(JSON.parse(String(edit.blocks)), [
+    {
+      type: "rich_text",
+      elements: [
+        {
+          type: "rich_text_section",
+          elements: [{ type: "channel", channel_id: "C1" }],
+        },
+      ],
+    },
+  ]);
   const copy = t.slack.posts[0]!;
   assert.equal(copy.channel, "C1");
   assert.equal(copy.params.text, message().text);
+  assert.deepEqual(JSON.parse(String(copy.params.blocks)), message().blocks);
   assert.match(String(copy.params.client_msg_id), /^de1e6a7e-/);
   assert.deepEqual(t.adopted, [
     {
@@ -231,7 +247,7 @@ test("without IDs in config, the team and workspace are looked up once, in paral
   const t = setup(env, cache);
   await t.intake.run(message());
   assert.deepEqual(t.log.slice(0, 3), ["linear.team", "auth.test", "linear.createIssue"]);
-  assert.ok(t.overlapped.has("linear.team") && t.overlapped.has("auth.test"));
+  assert.deepEqual(t.activeWhenStarted.get("auth.test"), ["linear.team"]);
   assert.equal(t.created[0]!.stateId, "state-init");
 
   const warm = setup(env, cache);
@@ -244,6 +260,7 @@ test("a retry after a failed step carries on: one issue, one channel, one copy",
   t.failures.push("chat.postMessage");
   await assert.rejects(t.intake.run(message()), /ratelimited/);
   assert.equal(t.progress().adopted, true, "the steps that worked are kept");
+  assert.ok(!t.log.includes("chat.update"), "the original stays intact until the copy succeeds");
   const result = await t.intake.run(message());
   assert.ok(result.ok);
   assert.equal(t.created.length, 1);
@@ -276,7 +293,7 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
   );
   assert.equal(t.adopted[0]!.sourceThreadTs, "1794000000.000004");
   assert.equal(t.adopted[0]!.lead, `From Leon's reply in <${permalink}|a thread in #feed-gmail>.`);
-  assert.equal(t.slack.edits[0]!.blocks, undefined, "no blocks to keep");
+  assert.equal(t.slack.edits[0]!.text, `<#${result.channel.id}>`);
   assert.equal(
     t.slack.posts[0]!.params.text,
     "sure, ask <@U0SYED00001>\n📎 <https://files.slack.com/F1|receipt.png>",

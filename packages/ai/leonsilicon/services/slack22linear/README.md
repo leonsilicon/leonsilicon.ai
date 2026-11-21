@@ -1,6 +1,8 @@
-# @-/ai.leonsilicon.services.linear-slack-sync
+# @-/ai.leonsilicon.services.slack22linear
 
-Keeps one Slack channel per Linear issue, and one per Linear project. Leon works in Slack while his agents collaborate in Linear, so he follows their work through these channels. Each issue channel sits in the sidebar section named exactly after its issue's status, so the sidebar shows at a glance what is blocked on him and what is waiting on someone else. Issue comments are mirrored both ways. Since 2026-11-21 [autolinear](../autolinear/README.md) gives each of Leon's Slack messages an issue and channel at once, and this sync takes the channel over. Project channels belong to Linear's own Slack app, which posts project updates and project comments there and syncs their threads; this sync only makes sure every open project has one. It runs as a Cloudflare Worker; deployment is in [`apps/linear-slack-sync`](../../../../../apps/linear-slack-sync/README.md).
+The `22` in slack22linear stands for two-way sync between Slack and Linear.
+
+Keeps one Slack channel per Linear issue, and one per Linear project. Leon works in Slack while his agents collaborate in Linear, so he follows their work through these channels. Each issue channel sits in the sidebar section named exactly after its issue's status, so the sidebar shows at a glance what is blocked on him and what is waiting on someone else. Issue comments are mirrored both ways. Since 2026-11-21 [autolinear](../autolinear/README.md) gives each of Leon's Slack messages an issue and channel at once, and this sync takes the channel over. Project channels belong to Linear's own Slack app, which posts project updates and project comments there and syncs their threads; this sync only makes sure every open project has one. It runs as a Cloudflare Worker; deployment is in [`apps/slack22linear`](../../../../../apps/slack22linear/README.md).
 
 ## What it does
 
@@ -31,7 +33,7 @@ Keeps one Slack channel per Linear issue, and one per Linear project. Leon works
 
 ## Issue channel topics
 
-Linear Sync writes issue metadata to the Slack channel topic. The Slack bridge exposes it as the Matrix room topic that [Leon for Zami](https://github.com/leonsilicon/zami-plugin-leon) reads. The topic starts with the status name for older plugin versions and uses this format for compact issue rows:
+slack22linear writes issue metadata to the Slack channel topic. The Slack bridge exposes it as the Matrix room topic that [Leon for Zami](https://github.com/leonsilicon/zami-plugin-leon) reads. The topic starts with the status name for older plugin versions and uses this format for compact issue rows:
 
 ```text
 Awaiting Leon · linear:v1 started #f2c94c p2 · https://linear.app/leonsilicon/issue/LEON-381 · Cancel club Fongo Works phone service
@@ -56,7 +58,7 @@ switch to rogers `{event: Rogers unlimited BYOD deal, stop: 2026-12-01}`
 
 [autolinear](../autolinear/README.md) makes each of Leon's Slack messages an issue (Leon's rule, 2026-11-21) and opens its channel itself, as Leon, so the issue and channel appear at once. This sync then takes the channel over, off autolinear's path:
 
-- **Hand-over (`Sync.adopt`).** autolinear calls Linear Sync's Durable Object directly (`/adopt`, through a binding with `script_name: "linear-slack-sync"`; the public Worker doesn't route it) as soon as the channel exists. It invites the bot and Hermes in one call, records the channel, and queues an `adopted` job. Repeating it does nothing.
+- **Hand-over (`Sync.adopt`).** autolinear calls slack22linear's Durable Object directly (`/adopt`, through a binding with `script_name: "linear-slack-sync"`; the public Worker doesn't route it) as soon as the channel exists. It invites the bot and Hermes in one call, records the channel, and queues an `adopted` job. Repeating it does nothing.
 - **The rest (`adopted` job).** Files the issue in the project whose channel Leon wrote in (`projectByChannel`), quotes a reply's thread's first message in the description, posts the intro (`From Leon's message in <link|a DM with Hermes>.`, pinging no one), then sets the topic and Awaiting Init section like any sync.
 - **No second channel.** autolinear's issue IDs start with `a7011ea7` (`AUTOLINEAR_ID_PREFIX`). When the issue's own webhook comes before the hand-over, `syncIssue` leaves the issue alone and looks again two minutes later (`ADOPT_WAIT_MS`); by then the channel is recorded, or, if autolinear failed before handing it over, the issue gets a channel the usual way, adopting autolinear's by its number when it exists.
 
@@ -78,7 +80,7 @@ Linear's own due date is a day with no time, so a time goes in the title: `due: 
 - Without `due`, Linear's own due date counts, at midnight starting that day.
 - When the time comes, the sync posts in `#feed-linear` (`LINEAR_FEED_CHANNEL`): `:date: Due: LEON-401: Send the invoice · due Tue, Dec 1, 5:00 PM · Awaiting Leon · #leon-401-…`, or "Overdue" when it posts more than an hour late (an issue first seen past its due time). It mentions no one.
 - Each due time is announced once (the `fired` table keeps `due:<issue id>:<ms>`). A new due time is announced again.
-- `#feed-linear` is created the first time it's needed (or by the daily tick): public, made by the Linear Sync bot, with Leon and Hermes in it. An archived one is unarchived.
+- `#feed-linear` is created the first time it's needed (or by the daily tick): public, made by the slack22linear bot, with Leon and Hermes in it. An archived one is unarchived.
 
 ## Sidebar sections
 
@@ -100,7 +102,8 @@ Linear's public schema has no way to give an existing project such a channel wit
 - The integration and prefix come from Linear (`organization.slackProjectChannelIntegration`, `slackProjectChannelPrefix`). Without them, no channel is requested.
 - A taken name gets `-2`, `-3`… A channel that still hasn't appeared is requested again after 30 minutes, not before.
 - The sync's own bot doesn't join project channels. Leon's session joins him and invites Hermes, and archives and unarchives.
-- Linear Sync appends `[linear-project:v1 #e99b51]` to the channel topic for Zami, with the project icon identifier after the color when set. It preserves the Slack summary and only appends metadata that fits the topic limit. Project webhooks and the daily tick refresh it, including for open day projects.
+- slack22linear appends `[linear-project:v1 #e99b51]` to the channel topic for Zami, with the project icon identifier after the color when set. It preserves the Slack summary and only appends metadata that fits the topic limit. Project webhooks and the daily tick refresh it, including for open day projects.
+- Zami reads a list of closed project channel IDs from the private `#zami-project-visibility` channel. The sync creates it in Leon's Slack session and invites its bot, which posts a new list when IDs change. The list combines Slack archives with archived, completed, and canceled Linear projects. Project webhooks, the daily tick, backfills, and received Slack archive events refresh it.
 - Messages in a project channel aren't mirrored by this sync: Linear syncs its own threads.
 
 ## Day projects
@@ -122,12 +125,12 @@ A day's project (a project named after a date, `20261122` or `2026-11-22`; `proj
 - `verifySlack` and `verifyLinear`: request signatures with a five-minute window.
 - autolinear's IDs: `AUTOLINEAR_ID_PREFIX`, `autolinearIssueId`, `isAutolinearIssue`.
 - Format helpers: `linearToSlack`, `slackToLinear`, `intakeTitle`, `excerptQuote` (from `#sync`), `channelName`, `projectChannelName`, `projectDay`, `localDay`, `channelNumber` and `channelTopic`, and for times `metaInstant`, `hasTime`, `zonedIso` (RFC 3339 in Toronto's offset), `withDay` (a time moved to another day), `addDays` and `localLabel`.
-- `loadConfig(env)`: settings from the Worker's vars (the `#linear-slack-sync` items of the root `.env.schema`). `SLACK_LEON_USER_ID` and `SLACK_HERMES_USER_ID` are required: they have no built-in default.
+- `loadConfig(env)`: settings from the Worker's vars (the `#slack22linear` items of the root `.env.schema`). `SLACK_LEON_USER_ID` and `SLACK_HERMES_USER_ID` are required: they have no built-in default.
 
 ## Test
 
 ```sh
-node --test packages/ai/leonsilicon/services/linear-slack-sync/__tests__/*.test.ts
+node --test packages/ai/leonsilicon/services/slack22linear/__tests__/*.test.ts
 ```
 
 The tests use a fake Linear (whose Slack app makes project channels), a fake Slack (bot and session views of one workspace, sidebar included) and an in-memory SQLite.

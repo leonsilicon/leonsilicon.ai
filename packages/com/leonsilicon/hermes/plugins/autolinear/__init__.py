@@ -17,7 +17,7 @@ live Slack adapter:
   message, so it sees exactly the messages Hermes answers. It waits for the request started early,
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
   thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there. Once Hermes
-  has answered (its ✅), Linear Sync leaves the issue in Awaiting Leon if the answer pinged him,
+  has answered (its ✅), slack22linear leaves the issue in Awaiting Leon if the answer pinged him,
   and closes it as Done if it didn't.
 
 The copy's own event carries slack-as-leon's marker, so ``slack-as-leon-guard`` drops it and Hermes

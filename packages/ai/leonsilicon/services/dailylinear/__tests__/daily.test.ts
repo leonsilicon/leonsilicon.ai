@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SlackError } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { SlackError } from "@-/ai.leonsilicon.services.slack22linear";
 import type {
   LinearProject,
   NewProject,
   SlackParams,
   SlackResponse,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import { loadConfig } from "#config";
 import {
   CHANNEL_RETRY_MS,

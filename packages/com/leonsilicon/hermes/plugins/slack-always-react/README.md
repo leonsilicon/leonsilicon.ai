@@ -6,7 +6,7 @@ Stock Hermes (checked through upstream `main` on 2026-11-06) registers a Slack m
 
 The plugin hooks `ctx.register_platform_handler("slack", …)`, which hands it the live adapter at connect. It wraps `_build_message_event`, which runs only after the auth, channel, mention and bot gates have accepted a message, and adds that message to the adapter's own reaction tracking. Synthetic reaction-triggered turns are skipped. `slack.reactions: false` still turns everything off. If the adapter internals change, it logs a warning and does nothing.
 
-A Grok bot's post in a task thread (slack-as-leon's marker with second group `b075`, since 2026-11-21) is answered but gets no reactions: it is posted as Leon, and Linear Sync reads Hermes's ✅ on Leon's message in an issue channel as "Hermes answered Leon", which can close the issue or hand it to him.
+A Grok bot's post in a task thread (slack-as-leon's marker with second group `b075`, since 2026-11-21) is answered but gets no reactions: it is posted as Leon, and slack22linear reads Hermes's ✅ on Leon's message in an issue channel as "Hermes answered Leon", which can close the issue or hand it to him.
 
 ## Install
 

@@ -9,7 +9,7 @@ message for the adapter's own reaction lifecycle. The adapter then adds 👀 whe
 (including queued and redirected follow-ups) and swaps it for ✅ or ❌ when processing ends.
 
 An agent's post in a task thread (slack-as-leon's marker with second group ``b075`` for a Grok bot or
-``c0de`` for a Codex session; see the ``slack-as-leon-guard`` plugin) gets no reactions: it is posted as Leon, and Linear Sync reads
+``c0de`` for a Codex session; see the ``slack-as-leon-guard`` plugin) gets no reactions: it is posted as Leon, and slack22linear reads
 Hermes's ✅ on Leon's message in an issue channel as "Hermes answered Leon", which can close the
 issue or ping him. Only Leon's own messages should do that.
 

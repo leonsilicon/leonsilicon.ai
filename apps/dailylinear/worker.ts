@@ -1,6 +1,6 @@
 import { Daily, loadConfig } from "@-/ai.leonsilicon.services.dailylinear";
 import type { DailyResult, DailyState } from "@-/ai.leonsilicon.services.dailylinear";
-import { LinearClient, localDay } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { LinearClient, localDay } from "@-/ai.leonsilicon.services.slack22linear";
 import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
 import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
@@ -28,7 +28,7 @@ interface Env {
   DAILY: DurableObjectNamespace;
   /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/dailylinear/index.html. */
   ASSETS: Assets;
-  /** Personal API key of the Linear account the day's projects are made as (Linear Sync's). */
+  /** Personal API key of the Linear account the day's projects are made as (slack22linear's). */
   LINEAR_API_KEY: string;
   /** Leon's Slack web session: it joins him, renames, stars and files the channels. */
   SLACK_SESSION_TOKEN: string;

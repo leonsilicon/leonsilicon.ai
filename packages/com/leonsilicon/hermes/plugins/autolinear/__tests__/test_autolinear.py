@@ -221,11 +221,11 @@ async def test_the_link_edit_and_the_live_copy_start_no_second_turn(adapter, int
     ts = "1794000000.000050"
     await adapter._handle_slack_message(_message(DM, ts))
 
-    # Linear Sync edits Leon's message to link the channel.
+    # AutoLinear replaces Leon's message with the channel link.
     await adapter._handle_slack_message({
         "type": "message", "subtype": "message_changed", "channel": DM, "channel_type": "im",
         "ts": "1794000001.000001",
-        "message": {**_message(DM, ts), "text": f"can you check…\n→ <#{NEW}>",
+        "message": {**_message(DM, ts), "text": f"<#{NEW}>",
                     "edited": {"user": LEON, "ts": "1794000001.000001"}}})
     # Its copy in the issue channel, posted as Leon with slack-as-leon's marker, and its unfurl.
     copy = {**_message(NEW, COPY_TS), "channel_type": "group",

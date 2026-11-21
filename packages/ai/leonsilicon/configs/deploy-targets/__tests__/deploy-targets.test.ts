@@ -15,8 +15,8 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
-    "linear-slack-sync",
     "slack-as-leon",
+    "slack22linear",
   ]);
   const config = readFileSync(`${root}vite.config.ts`, "utf8");
   for (const app of apps)
@@ -40,18 +40,18 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("packages/ai/leonsilicon/services/dailylinear/daily.ts"), [
     "dailylinear",
   ]);
-  // autolinear and dailylinear build on linear-slack-sync's Linear client and helpers, so all go.
-  assert.deepEqual(affected("packages/ai/leonsilicon/services/linear-slack-sync/sync.ts"), [
+  // autolinear and dailylinear build on slack22linear's Linear client and helpers, so all go.
+  assert.deepEqual(affected("packages/ai/leonsilicon/services/slack22linear/sync.ts"), [
     "autolinear",
     "dailylinear",
-    "linear-slack-sync",
+    "slack22linear",
   ]);
   // They all import slack-as-leon's session client.
   assert.deepEqual(affected("packages/ai/leonsilicon/services/slack-as-leon/slack.ts"), [
     "autolinear",
     "dailylinear",
-    "linear-slack-sync",
     "slack-as-leon",
+    "slack22linear",
   ]);
   // Shared inputs reach every Worker: the pages, the lockfile, the env schema.
   assert.deepEqual(affected("www/ai/leonsilicon/cronometer/index.html"), [
@@ -60,8 +60,8 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
-    "linear-slack-sync",
     "slack-as-leon",
+    "slack22linear",
   ]);
   assert.deepEqual(affected("bun.lock"), [
     "autolinear",
@@ -69,8 +69,8 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
-    "linear-slack-sync",
     "slack-as-leon",
+    "slack22linear",
   ]);
   assert.deepEqual(affected("packages/ai/leonsilicon/configs/cloudflare/page.ts"), [
     "autolinear",
@@ -78,8 +78,8 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
-    "linear-slack-sync",
     "slack-as-leon",
+    "slack22linear",
   ]);
   // The Gmail feed uses Beeper Watch's screener, so a change there redeploys it.
   assert.deepEqual(affected("packages/ai/leonsilicon/services/beeper-watch/screen.ts"), [

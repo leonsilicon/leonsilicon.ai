@@ -70,10 +70,10 @@ export default defineConfig({
             "gmail-feed",
             "grok-bot-roster",
             "grok-relay",
-            "linear-slack-sync",
             "orca-bridge",
             "orca-device",
             "slack-as-leon",
+            "slack22linear",
           ].map((service) => `${ai}/services/${service}/__tests__/*.test.ts`),
         ].join(" "),
       },
@@ -127,12 +127,6 @@ export default defineConfig({
         command:
           "tsc --noEmit && vp build && cd apps/grok-bot-roster && varlock-wrangler deploy -c wrangler.jsonc",
       },
-      "deploy:linear-slack-sync": {
-        cache: false,
-        // Like deploy:slack-as-leon: varlock-wrangler uploads the #linear-slack-sync items.
-        command:
-          "tsc --noEmit && vp build && cd apps/linear-slack-sync && varlock-wrangler deploy -c wrangler.jsonc",
-      },
       "deploy:slack-as-leon": {
         cache: false,
         // varlock-wrangler uploads the #slack-as-leon items of .env.schema (values from Infisical) as
@@ -140,6 +134,12 @@ export default defineConfig({
         // directory, whose package.json sets that filter.
         command:
           "tsc --noEmit && vp build && cd apps/slack-as-leon && varlock-wrangler deploy -c wrangler.jsonc",
+      },
+      "deploy:slack22linear": {
+        cache: false,
+        // Like deploy:slack-as-leon: varlock-wrangler uploads the #slack22linear items.
+        command:
+          "tsc --noEmit && vp build && cd apps/slack22linear && varlock-wrangler deploy -c wrangler.jsonc",
       },
     },
   },

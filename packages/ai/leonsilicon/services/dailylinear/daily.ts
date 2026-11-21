@@ -9,7 +9,7 @@ import {
   SlackError,
   stableUuid,
   tolerate,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import type {
   LinearProject,
   LinearState,
@@ -17,10 +17,10 @@ import type {
   NewProject,
   ProjectChannelSettings,
   SlackCall,
-} from "@-/ai.leonsilicon.services.linear-slack-sync";
+} from "@-/ai.leonsilicon.services.slack22linear";
 import type { DailyConfig } from "#config";
 
-/** What dailylinear needs from Linear. Linear Sync's `LinearClient` has all of it; tests use a fake. */
+/** What dailylinear needs from Linear. slack22linear's `LinearClient` has all of it; tests use a fake. */
 export interface DailyLinear {
   openProjects(teamKey: string, closedTypes: string[]): Promise<LinearProject[]>;
   /** The team's projects with one of these names, closed, archived and trashed ones included. */
@@ -288,7 +288,7 @@ export class Daily {
   /**
    * Marks a past day's project done (`doneStatus`, Linear's Completed) and archives its channel,
    * unstarred and out of the sidebar's sections first. The channel goes first, so a run that fails
-   * partway does it all again: every step tolerates being repeated. Linear Sync, seeing the project
+   * partway does it all again: every step tolerates being repeated. slack22linear, seeing the project
    * close, archives the channel too, which finds it archived already.
    */
   async #finish(project: LinearProject, state: DailyState): Promise<void> {
@@ -440,7 +440,7 @@ export class Daily {
 
   /**
    * Forgets the days whose project closed or was deleted, unstarring the channel first when
-   * dailylinear starred it. Linear Sync archives the channel itself.
+   * dailylinear starred it. slack22linear archives the channel itself.
    */
   async #forgetClosed(open: LinearProject[], state: DailyState): Promise<void> {
     const ids = new Set(open.map((p) => p.id));
@@ -521,7 +521,7 @@ export class Daily {
     return (this.#channels = out);
   }
 
-  /** Linear Sync's managed sections, top to bottom: the statuses, then projects. */
+  /** slack22linear's managed sections, top to bottom: the statuses, then projects. */
   #order(): string[] {
     const { sectionOrder, projectSection } = this.#c;
     return sectionOrder.includes(projectSection) ? sectionOrder : [...sectionOrder, projectSection];

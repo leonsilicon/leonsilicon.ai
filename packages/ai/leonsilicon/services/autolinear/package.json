@@ -13,7 +13,7 @@
     ".": "./+server.ts"
   },
   "dependencies": {
-    "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
-    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*"
+    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+    "@-/ai.leonsilicon.services.slack22linear": "workspace:*"
   }
 }

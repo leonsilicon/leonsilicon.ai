@@ -135,7 +135,11 @@ interface ChannelInfo {
   id: string;
   name: string;
   archived: boolean;
+  private?: boolean;
 }
+
+const PROJECT_VISIBILITY_CHANNEL = "zami-project-visibility";
+const PROJECT_VISIBILITY_PREFIX = "zami-projects:v1";
 
 /** A UUID derived from a string, so retries of the same Slack message reuse one Linear comment ID. */
 export async function stableUuid(seed: string): Promise<string> {
@@ -264,11 +268,18 @@ export class Sync {
       const hook = payload as LinearWebhook;
       if (hook.type === "Issue") await this.onLinearIssue(hook);
       else if (hook.type === "Comment") await this.onLinearComment(hook);
-      else if (hook.type === "Project") await this.onLinearProject(hook);
+      else if (hook.type === "Project") {
+        try {
+          await this.onLinearProject(hook);
+        } finally {
+          await this.#publishProjectVisibility();
+        }
+      }
     } else if (kind === "project") {
       // A delayed look at a new project, once Linear has had time to make its channel.
       const project = await this.#linear.project((payload as { id: string }).id);
       if (project && project.teamKeys.includes(this.#c.teamKey)) await this.syncProject(project);
+      await this.#publishProjectVisibility();
     } else if (kind === "slack") {
       const event = payload as SlackMessageEvent | SlackReactionEvent;
       if (event.type === "reaction_added") await this.onSlackReaction(event as SlackReactionEvent);
@@ -276,8 +287,13 @@ export class Sync {
     } else if (kind === "timer") await this.onTimer((payload as { id: string }).id);
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
-    else if (kind === "tick") await this.tick();
-    else if (kind === "backfill") await this.backfill();
+    else if (kind === "tick") {
+      await this.tick();
+      await this.#publishProjectVisibility();
+    } else if (kind === "backfill") {
+      await this.backfill();
+      await this.#publishProjectVisibility();
+    } else if (kind === "project-visibility") await this.#publishProjectVisibility();
     else this.#log("unknown_job", { kind });
   }
 
@@ -572,6 +588,67 @@ export class Sync {
     if (this.#projectChannels === undefined)
       this.#projectChannels = await this.#linear.projectChannelSettings();
     return this.#projectChannels;
+  }
+
+  /** Publish closed channels together so archives stay visible to the plugin even when
+   * their own topics are frozen. The destination is a private channel for Leon and the bot. */
+  async #publishProjectVisibility(): Promise<void> {
+    const session = this.#session;
+    if (!session) return;
+    this.#channels = null;
+    const channels = await this.#listChannels();
+    const closed = new Set(
+      channels
+        .filter(({ name, archived }) => archived && name.startsWith("project-"))
+        .map(({ id }) => id),
+    );
+    for (const id of await this.#linear.closedProjectChannels(
+      this.#c.teamKey,
+      this.#c.closedProjectTypes,
+    ))
+      closed.add(id);
+    for (const { archived, channelId } of this.#store.allProjects()) {
+      if (archived && channelId) closed.add(channelId);
+    }
+    const text = [PROJECT_VISIBILITY_PREFIX, ...[...closed].sort()].join(" ");
+    if (text.length > 40_000)
+      throw new Error("Slack project visibility snapshot exceeds the message limit");
+
+    const existing = channels.find(({ name }) => name === PROJECT_VISIBILITY_CHANNEL);
+    if (existing && !existing.private)
+      throw new Error(`Expected #${PROJECT_VISIBILITY_CHANNEL} to be private`);
+    if (existing?.archived)
+      await tolerate(session("conversations.unarchive", { channel: existing.id }), [
+        "not_archived",
+      ]);
+    const channel =
+      existing?.id ??
+      (
+        (
+          await session("conversations.create", {
+            name: PROJECT_VISIBILITY_CHANNEL,
+            is_private: true,
+          })
+        ).channel as { id: string }
+      ).id;
+    const botUser = await this.#botUser();
+    let history;
+    try {
+      history = await this.#bot("conversations.history", { channel, limit: 1 });
+    } catch (error) {
+      if (
+        !(error instanceof SlackError) ||
+        !["not_in_channel", "channel_not_found"].includes(error.code)
+      )
+        throw error;
+      await tolerate(session("conversations.invite", { channel, users: botUser }), [
+        "already_in_channel",
+      ]);
+      history = await this.#bot("conversations.history", { channel, limit: 1 });
+    }
+    const latest = (history.messages as SlackMessage[] | undefined)?.[0];
+    if (latest?.text === text && latest.user === botUser) return;
+    await this.#bot("chat.postMessage", { channel, text, mrkdwn: false });
   }
 
   /** Takes a closed or deleted project's channel out of the sidebar and archives it. */
@@ -996,7 +1073,7 @@ export class Sync {
       await this.#linear.createComment({
         id: await stableUuid(`listener-expired:${issue.id}:${stop}`),
         issueId: issue.id,
-        body: `**Linear Sync:** the listener's stop date (${stop}) passed before it fired${event ? `; it was waiting for: ${event}` : ""}. Extend it or cancel the issue.`,
+        body: `**slack22linear:** the listener's stop date (${stop}) passed before it fired${event ? `; it was waiting for: ${event}` : ""}. Extend it or cancel the issue.`,
       });
       this.#log("listener_expired", { issue: issue.identifier });
       moved = true;
@@ -1130,7 +1207,7 @@ export class Sync {
     try {
       await this.#bot("conversations.setPurpose", {
         channel: id,
-        purpose: `Linear issues of team ${this.#c.teamKey} coming due, posted by Linear Sync.`,
+        purpose: `Linear issues of team ${this.#c.teamKey} coming due, posted by slack22linear.`,
       });
     } catch (error) {
       this.#log("feed_purpose_failed", { error: String(error) });
@@ -1340,8 +1417,13 @@ export class Sync {
             limit: 1000,
             cursor: cursor || undefined,
           });
-      for (const c of page.channels as { id: string; name: string; is_archived: boolean }[])
-        out.push({ id: c.id, name: c.name, archived: c.is_archived });
+      for (const c of page.channels as {
+        id: string;
+        name: string;
+        is_archived: boolean;
+        is_private?: boolean;
+      }[])
+        out.push({ id: c.id, name: c.name, archived: c.is_archived, private: c.is_private });
       cursor = (page.response_metadata as { next_cursor?: string } | undefined)?.next_cursor ?? "";
     } while (cursor);
     this.#channels = out;

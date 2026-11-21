@@ -11,7 +11,7 @@
     "bindings": [
       // One per message: makes each intake happen once, however often it's asked for.
       { "name": "INTAKE", "class_name": "IntakeObject" },
-      // Linear Sync's own Durable Object, for handing it the channels autolinear opens (/adopt).
+      // slack22linear's own Durable Object, for handing it the channels autolinear opens (/adopt).
       { "name": "SYNC", "class_name": "SyncObject", "script_name": "linear-slack-sync" },
     ],
   },

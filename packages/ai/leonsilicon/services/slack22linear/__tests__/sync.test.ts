@@ -134,6 +134,12 @@ function fakeLinear(makeChannel: MakeChannel, now: () => number = Date.now) {
       [...projects.values()].filter(
         (p) => p.teamKeys.includes(team) && !p.gone && !closed.includes(p.status.type),
       ),
+    closedProjectChannels: async (team, closed) =>
+      [...projects.values()].flatMap((p) =>
+        p.slackChannelId && p.teamKeys.includes(team) && (p.gone || closed.includes(p.status.type))
+          ? [p.slackChannelId]
+          : [],
+      ),
     projectChannelSettings: async () => linearSide.settings,
     createProjectChannel: async (input) => {
       channelRequests.push(input);
@@ -301,7 +307,12 @@ function fakeSlack() {
             ok: true,
             channels: channels
               .filter((c) => !c.private || c.members.has(me))
-              .map((c) => ({ id: c.id, name: c.name, is_archived: c.archived })),
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                is_archived: c.archived,
+                is_private: c.private,
+              })),
           };
         case "conversations.setPurpose":
           member(find(params.channel));
@@ -979,7 +990,9 @@ test("backfill adopts existing issue channels quietly and archives closed ones",
   assert.equal(other.archived, false);
   const created = slack.channels.find((c) => c.name.startsWith("leon-379-"))!;
   assert.equal(slack.sectionOf(created.id), "Awaiting Start");
-  assert.equal(slack.posts.length, 0, "backfill posts nothing");
+  assert.ok(
+    slack.posts.every(({ channel }) => ![open.id, closed.id, created.id].includes(channel)),
+  );
 });
 
 const updateHook = (id: string, updatedFrom: Record<string, unknown>) => ({
@@ -1192,7 +1205,7 @@ test("the daily tick upgrades old topics and refreshes status colors and priorit
   issue.priority = 0;
   await sync.run("tick", {});
   assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p0 · /);
-  assert.equal(slack.posts.length, 0);
+  assert.equal(slack.posts.filter((post) => post.channel === channel.id).length, 0);
   const topicWrites = slack.calls.filter(
     ({ method }) => method === "conversations.setTopic",
   ).length;
@@ -1221,12 +1234,12 @@ test("an open project gets a channel from Linear's Slack app, filed under Projec
   );
   assert.equal(slack.sectionOf(channel.id), "Projects");
   assert.equal(store.project(project.id)!.channelId, channel.id);
-  assert.equal(slack.posts.length, 0, "Linear posts in its own channel; the sync doesn't");
+  assert.equal(slack.posts.filter((post) => post.channel === channel.id).length, 0);
 
   // A redelivered webhook changes nothing.
   await sync.run("linear", projectHook(project.id));
   assert.equal(linear.channelRequests.length, 1);
-  assert.equal(slack.channels.length, 1);
+  assert.equal(slack.channels.filter(({ name }) => name.startsWith("project-")).length, 1);
 });
 
 test("a project that already has a Linear channel is adopted, and Leon joins it", async () => {
@@ -1264,7 +1277,7 @@ test("project webhooks and the daily tick refresh the bridged icon without repla
   await sync.run("tick", {});
   assert.equal(channel.topic, "Fall semester planning · [linear-project:v1 #5e6ad2 IconBook]");
   assert.equal(topicWrites().length, 2);
-  assert.equal(slack.posts.length, 0);
+  assert.equal(slack.posts.filter((post) => post.channel === channel.id).length, 0);
 });
 
 test("project channels sit below the status sections", async () => {
@@ -1345,6 +1358,35 @@ test("closing a project archives its channel; reopening unarchives it; deleting 
   assert.equal(channel.archived, true);
 });
 
+test("project visibility syncs existing archives, completed projects, and reopened channels", async () => {
+  const { linear, slack, sync } = setup();
+  const archived = slack.addLinearChannel("project-manually-archived");
+  archived.archived = true;
+  const unrelated = slack.addLeonChannel("general-old");
+  unrelated.archived = true;
+  const completed = slack.addLinearChannel("project-completed");
+  const project = linear.addProject("Completed project", "Done:completed");
+  project.slackChannelId = completed.id;
+
+  await sync.run("project-visibility", {});
+  const statusRoom = slack.channels.find(({ name }) => name === "zami-project-visibility")!;
+  assert.equal(statusRoom.private, true);
+  assert.deepEqual([...statusRoom.members].sort(), [BOT, LEON].sort());
+  const messages = () =>
+    slack.posts.filter(({ channel }) => channel === statusRoom.id).map(({ text }) => text);
+  assert.deepEqual(messages(), [
+    `zami-projects:v1 ${[archived.id, completed.id].sort().join(" ")}`,
+  ]);
+  assert.equal(completed.archived, false, "The snapshot reads Linear even before Slack archives");
+  await sync.run("project-visibility", {});
+  assert.equal(messages().length, 1, "An unchanged snapshot is posted once");
+
+  archived.archived = false;
+  project.status = { name: "Started", type: "started" };
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(messages().at(-1), "zami-projects:v1");
+});
+
 test("projects of other teams, and closed projects without a channel, are left alone", async () => {
   const { linear, slack, sync } = setup();
   const other = linear.addProject("Elsewhere");
@@ -1354,7 +1396,7 @@ test("projects of other teams, and closed projects without a channel, are left a
   await sync.run("linear", projectHook(closed.id));
   await sync.run("backfill", {});
   assert.equal(linear.channelRequests.length, 0);
-  assert.equal(slack.channels.length, 0);
+  assert.equal(slack.channels.filter(({ name }) => name.startsWith("project-")).length, 0);
 });
 
 test("with project channels off in Linear, nothing is requested", async () => {

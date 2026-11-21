@@ -23,8 +23,8 @@
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
         "@-/ai.leonsilicon.services.autolinear": "workspace:*",
-        "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
     "apps/beeper-inbox": {
@@ -56,8 +56,8 @@
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
         "@-/ai.leonsilicon.services.dailylinear": "workspace:*",
-        "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
     "apps/gmail-feed": {
@@ -73,14 +73,6 @@
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
         "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*",
-      },
-    },
-    "apps/linear-slack-sync": {
-      "name": "@-apps/linear-slack-sync",
-      "dependencies": {
-        "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
-        "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
-        "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
       },
     },
     "apps/orca-bridge": {
@@ -107,6 +99,14 @@
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+      },
+    },
+    "apps/slack22linear": {
+      "name": "@-apps/slack22linear",
+      "dependencies": {
+        "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+        "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/configs/cloudflare": {
@@ -158,8 +158,9 @@
     },
     "packages/ai/leonsilicon/configs/silicon-dot/hermes-thread": {
       "name": "@-/ai.leonsilicon.configs.silicon-dot.hermes-thread",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "bin": {
+        "_hermes-thread": "./_hermes-thread.ts",
         "_hermes-thread-mcp": "./_hermes-thread-mcp.ts",
         "_install-hermes-thread": "./_install-hermes-thread.ts",
       },
@@ -179,8 +180,8 @@
       "name": "@-/ai.leonsilicon.services.autolinear",
       "version": "1.0.0",
       "dependencies": {
-        "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/beeper-inbox": {
@@ -204,7 +205,7 @@
       "name": "@-/ai.leonsilicon.services.dailylinear",
       "version": "1.0.0",
       "dependencies": {
-        "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/gmail-feed": {
@@ -224,14 +225,6 @@
       "version": "1.4.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/linear-slack-sync": {
-      "name": "@-/ai.leonsilicon.services.linear-slack-sync",
-      "version": "1.0.0",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
-        "@-/com.npmjs.yaml": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/orca-bridge": {
@@ -254,6 +247,14 @@
     "packages/ai/leonsilicon/services/slack-as-leon": {
       "name": "@-/ai.leonsilicon.services.slack-as-leon",
       "version": "2.0.0",
+    },
+    "packages/ai/leonsilicon/services/slack22linear": {
+      "name": "@-/ai.leonsilicon.services.slack22linear",
+      "version": "1.0.0",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/com.npmjs.yaml": "workspace:*",
+      },
     },
     "packages/com/leonsilicon/hermes/plugins/autolinear": {
       "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
@@ -427,13 +428,13 @@
 
     "@-/ai.leonsilicon.services.grok-relay": ["@-/ai.leonsilicon.services.grok-relay@workspace:packages/ai/leonsilicon/services/grok-relay"],
 
-    "@-/ai.leonsilicon.services.linear-slack-sync": ["@-/ai.leonsilicon.services.linear-slack-sync@workspace:packages/ai/leonsilicon/services/linear-slack-sync"],
-
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
 
     "@-/ai.leonsilicon.services.orca-device": ["@-/ai.leonsilicon.services.orca-device@workspace:packages/ai/leonsilicon/services/orca-device"],
 
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
+
+    "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
 
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
 
@@ -495,13 +496,13 @@
 
     "@-apps/grok-bot-roster": ["@-apps/grok-bot-roster@workspace:apps/grok-bot-roster"],
 
-    "@-apps/linear-slack-sync": ["@-apps/linear-slack-sync@workspace:apps/linear-slack-sync"],
-
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
 
     "@-apps/orca-device": ["@-apps/orca-device@workspace:apps/orca-device"],
 
     "@-apps/slack-as-leon": ["@-apps/slack-as-leon@workspace:apps/slack-as-leon"],
+
+    "@-apps/slack22linear": ["@-apps/slack22linear@workspace:apps/slack22linear"],
 
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.136", "", { "dependencies": { "@ai-sdk/provider": "4.0.36", "@ai-sdk/provider-utils": "5.0.75", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-P851NL80P85Ee6MhblRuuCzNlQdOYU5rKmdt/Wuo5dMtkzvIHhyVZY9wtfKG3wBJUUoxHxWKsI2aR6O75o8diA=="],
 
