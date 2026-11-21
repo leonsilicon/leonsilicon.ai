@@ -31,6 +31,7 @@ const ME = "@leon:beeper.com";
 const ROOM = "!chat:beeper.local";
 /** Silicon Dot's chat: a ChatGPT Dots room. */
 const DOT_ROOM = "!dot:beeper.local";
+const GROK_ROOM = "!grok:beeper.local";
 const ENC = encodeURIComponent(ROOM);
 
 /** A homeserver that dedupes sends by transaction ID, as the spec requires, and can lose responses. */
@@ -44,6 +45,7 @@ class FakeHomeserver {
   byTxn = new Map<string, string>();
   sendPuts: string[] = [];
   loseNextSendResponses = 0;
+  includeGrokRoom = false;
   media = new Map<string, Uint8Array>();
 
   constructor() {
@@ -119,6 +121,23 @@ class FakeHomeserver {
                 ],
               },
             },
+            ...(this.includeGrokRoom
+              ? {
+                  [GROK_ROOM]: {
+                    state: {
+                      events: [
+                        { type: "m.room.name", state_key: "", content: { name: "Grok Bot" } },
+                        { type: "m.room.encryption", state_key: "", content: {} },
+                        {
+                          type: "m.bridge",
+                          state_key: "grok",
+                          content: { protocol: { id: "grokbot" } },
+                        },
+                      ],
+                    },
+                  },
+                }
+              : {}),
           },
         },
       });
@@ -851,4 +870,51 @@ test("the Codex handoff names the session after the thread and tells it how to r
   assert.match(block, /hermes_thread_send \(channel C0TASKS001, thread_ts 1795280000\.123456/);
   assert.equal(taskName(thread), "Task slack:C0TASKS001/1795280000.123456");
   assert.throws(() => slackThread("general", "1795280000.123456"), /channel ID/);
+});
+
+test("direct Grok sends are refused even on a directory miss; the in-process relay can send", async () => {
+  const { env, paths, server, pickle } = setup();
+  const daemon = await startDaemon({
+    env,
+    pickle,
+    baseFetch: server.fetch,
+    embedded: true,
+    bridgeStatusWaitMs: 20,
+    extensions: [
+      {
+        name: "grok-relay",
+        server: { name: "test-relay", version: "1", instructions: "", tools: [] },
+        start: (context) => ({ callTool: (_name, args) => context.tool("send_message", args) }),
+      },
+    ],
+  });
+  assert.ok(daemon);
+  try {
+    await daemon.ready;
+    await daemon.inbox.refreshDirectory();
+    server.includeGrokRoom = true;
+    const args = { room_id: GROK_ROOM, text: "run the lookup" };
+    await assert.rejects(tool(paths.socket, "send_message", args), /must use grok_bot_send/);
+    await assert.rejects(
+      tool(paths.socket, "send_message", { ...args, fromGrokRelay: true }),
+      /unknown argument.*fromGrokRelay/,
+    );
+    const file = join(paths.downloads, "task.txt");
+    writeFileSync(file, "run the lookup");
+    await assert.rejects(
+      tool(paths.socket, "send_file", { room_id: GROK_ROOM, path: file, caption: args.text }),
+      /must use grok_bot_send/,
+    );
+    assert.equal(server.sendPuts.length, 0);
+
+    const sent = (await callIpc(paths.socket, "extension", {
+      extension: "grok-relay",
+      name: "test_send",
+      arguments: args,
+    })) as Record<string, unknown>;
+    assert.equal(sent.status, "sent");
+    assert.equal(server.sendPuts.length, 1);
+  } finally {
+    await daemon.shutdown();
+  }
 });

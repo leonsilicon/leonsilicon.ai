@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.grok-relay
 
-The Grok Bot relay for Hermes (v1.4.0). It gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`, that message Leon's Grok Bot bots in their own chats, as Leon and with no label. Leon's Grok bots answer only Leon and ignore Hermes in Slack, so this is how Hermes reaches them; Leon sees the whole exchange in Beeper.
+The Grok Bot relay for Hermes (v1.4.1) gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`. The relay delivers each handoff in the bot's Beeper chat as Leon. The task bot works with Hermes in the Slack thread named in the handoff.
 
 It runs on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and reaches the bots over Matrix through that inbox, with none of Leon's computers involved. Hermes's `grok` MCP server has pointed at it since 2026-11-21. From 2026-11-06 until then the relay ran on the Mac mini and went through Beeper Desktop ([`configs/grok-relay-hermes`](../../configs/grok-relay-hermes/README.md), v1.2.0); that copy is stopped.
 
@@ -22,6 +22,7 @@ Leon's design: every task Hermes hands a Grok bot carries the Slack thread Herme
 - **One task bot per thread.** A task for a thread that already has a task bot (a bot named `Task slack:…/<thread_ts>`, whatever the channel was written as) goes to that bot, whichever bot Hermes named, with a short follow-up note instead of the block; the result says `redirected_from`. Deleted bots drop out of the list, so a thread whose task bot is gone gets a new one. The block also tells the parent to look for an existing bot by the thread's ts.
 - **Queued tasks** keep their thread; when several go out merged, each thread's block follows once, naming its items when there are several threads.
 - **Checks.** Both fields are required. The channel is an ID (`C…`, `G…`) or `#name`, never a DM, since Grok bots can post only in channel threads; the ts is a Slack ts.
+- **Required for all delegations.** Start or resume Grok work through `grok_bot_send`. The inbox refuses direct messages and file uploads to Grok chats. Use the task's Slack thread for subsequent communication. The relay retains queued requests from before thread support for readback until they can be submitted with a thread.
 - **The other pieces:** slack-puppet's Grok token and tools ([`slack-as-leon`](../slack-as-leon/README.md#grok-bots)), Hermes's [`slack-as-leon-guard`](../../../../com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md) (lets the task bot's posts through, labelled not-Leon) and [`slack-always-react`](../../../../com/leonsilicon/hermes/plugins/slack-always-react/README.md) (no 👀/✅ on them, so slack22linear doesn't close or hand over the issue), and [grokbot-admin](../grok-bot-roster/README.md) for the deletion.
 
 ## Policy

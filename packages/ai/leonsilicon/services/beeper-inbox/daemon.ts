@@ -128,7 +128,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
           log: fileLogger(paths.logFile, extension.name),
           tool: async (name, args) => {
             await waitReady();
-            return runTool(inbox, name, args);
+            // Only the in-process relay has permission to deliver the handoff to Grok.
+            return runTool(inbox, name, args, extension.name === "grok-relay");
           },
           rooms: async (roomIds) => {
             await waitReady();

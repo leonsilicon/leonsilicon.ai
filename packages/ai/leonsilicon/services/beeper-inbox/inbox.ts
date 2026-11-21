@@ -70,7 +70,7 @@ import {
   type PickleClient,
 } from "#types";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 export interface RoomInfo {
   roomId: string;
@@ -1352,15 +1352,40 @@ export class Inbox {
     };
   }
 
-  async sendMessage(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const { client, directory } = this.#ready();
+  async #sendNetwork(roomId: string): Promise<string> {
+    const { directory } = this.#ready();
+    await this.#requireJoined(roomId);
+    if (!directory.get(roomId)) await this.refreshDirectory();
+    const room = directory.get(roomId);
+    if (!room)
+      throw new InboxError(
+        "unavailable",
+        `Couldn't identify the network for ${roomId}; try again after the conversation appears in list_conversations.`,
+      );
+    return room.network;
+  }
+
+  #requireGrokRelay(network: string, fromGrokRelay = false): void {
+    if (network === "grok" && !fromGrokRelay)
+      throw new InboxError(
+        "refused",
+        "Grok Bot requests must use grok_bot_send with slack_channel and slack_thread_ts. Use the task's Slack thread, or the ts of Leon's message when there is no thread. For a task bot already talking to you in Slack, answer it in that thread.",
+      );
+  }
+
+  async sendMessage(
+    args: Record<string, unknown>,
+    fromGrokRelay = false,
+  ): Promise<Record<string, unknown>> {
+    const { client } = this.#ready();
     const roomId = roomIdOf(args.room_id);
     const given = typeof args.text === "string" ? args.text : "";
     if (!given.trim()) throw new InboxError("bad_argument", "text is required");
     // A message to Silicon Dot is a task: it carries the Slack thread Hermes works in, and Dot's
     // Codex session for it talks to Hermes there (slack-handoff.ts).
-    const network = directory.get(roomId)?.network ?? null;
-    const dot = network !== null && DOT_NETWORKS.has(network);
+    const network = await this.#sendNetwork(roomId);
+    this.#requireGrokRelay(network, fromGrokRelay);
+    const dot = DOT_NETWORKS.has(network);
     const hasThread = args.slack_channel !== undefined || args.slack_thread_ts !== undefined;
     if (!dot && hasThread)
       throw new InboxError(
@@ -1391,7 +1416,6 @@ export class Inbox {
       args.reply_to === undefined || args.reply_to === null || args.reply_to === ""
         ? undefined
         : eventIdOf(args.reply_to, "reply_to");
-    await this.#requireJoined(roomId);
     if (replyTo) {
       const target = await this.#matrix(
         `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/event/${encodeURIComponent(replyTo)}`,
@@ -1455,7 +1479,7 @@ export class Inbox {
     const caption =
       typeof args.caption === "string" && args.caption.trim() ? args.caption : undefined;
     const sendAs = args.send_as === "file" ? "file" : "auto";
-    await this.#requireJoined(roomId);
+    this.#requireGrokRelay(await this.#sendNetwork(roomId));
     const encrypted = await this.#roomEncrypted(roomId);
     const bytes = new Uint8Array(readFileSync(realPath));
     const digest = sha256(bytes);

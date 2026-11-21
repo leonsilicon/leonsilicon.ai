@@ -221,10 +221,11 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   function queued(
     chatID: string,
     now: number = Date.now(),
-  ): Array<{ preview: string; ageSeconds: number }> {
+  ): Array<{ preview: string; ageSeconds: number; needsSlackThread?: true }> {
     return (outbox[chatID]?.items ?? []).map((item) => ({
       preview: item.text.slice(0, 160),
       ageSeconds: Math.round((now - Date.parse(item.at)) / 1000),
+      ...(!item.thread ? { needsSlackThread: true } : {}),
     }));
   }
 
@@ -286,7 +287,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
 
     const { list: before, windowed } = await recent(target.chatID);
     const baseline = before.at(-1)?.sortKey ?? null;
-    const pending = outbox[target.chatID]?.items.length ?? 0;
+    const pending = outbox[target.chatID]?.items.filter((item) => item.thread).length ?? 0;
     const state = busy(before, Date.now(), { windowed });
     if (!isUrgent && (state.busy || pending)) {
       const box = (outbox[target.chatID] ??= { bot: target.name, items: [] });
@@ -415,7 +416,9 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
       ...(waiting.length
         ? {
             queued: waiting,
-            queuedNote: "Not sent yet: these go out merged as one message when the bot finishes.",
+            queuedNote: waiting.some((item) => item.needsSlackThread)
+              ? "Items marked needsSlackThread were queued before Slack handoffs. They require a new grok_bot_send call with the correct Slack thread. Other items go out when the bot finishes."
+              : "Not sent yet: these go out merged as one message when the bot finishes.",
           }
         : {}),
     };
@@ -429,17 +432,20 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     flushing = true;
     try {
       for (const [chatID, box] of Object.entries(outbox)) {
-        const first = box.items[0];
-        if (!first) {
+        if (!box.items.length) {
           delete outbox[chatID];
           saveOutbox();
           continue;
         }
+        // Preserve legacy requests for readback, but only deliver requests with a Slack handoff.
+        const threaded = box.items.filter((item) => item.thread);
+        const first = threaded[0];
+        if (!first) continue;
         try {
           const { list, windowed } = await recent(chatID, now());
           const state = busy(list, now(), { windowed });
           if (state.busy && now() - Date.parse(first.at) < MAX_QUEUE_AGE_MS) continue;
-          const batch = takeBatch(box.items, MAX_TEXT);
+          const batch = takeBatch(threaded, MAX_TEXT);
           const text = compose(batch);
           // The same batch always has the same key, so a flush retried after a lost answer can't
           // post it twice.
@@ -448,7 +454,8 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
             .digest("hex")
             .slice(0, 40)}`;
           await post(chatID, text, key);
-          box.items = box.items.slice(batch.length); // items added meanwhile stay queued
+          const sent = new Set(batch);
+          box.items = box.items.filter((item) => !sent.has(item));
           if (!box.items.length) delete outbox[chatID];
           saveOutbox();
           log({

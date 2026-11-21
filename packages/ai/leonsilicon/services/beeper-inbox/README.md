@@ -22,7 +22,9 @@ Room IDs are opaque and used exactly as the homeserver gives them (`:beeper.loca
 
 Not implemented: starting conversations with new contacts, edits and deletions, Beeper's merged chats (each bridged room is its own conversation), network-specific actions, and thread replies in bridged rooms (Beeper answers `/relations` with 403 there).
 
-## Silicon Dot's tasks (2026-11-21)
+## Agent tasks (2026-11-21)
+
+Use [`grok_bot_send`](../grok-relay/README.md#slack-handoff-v140-2026-11-21) with a Slack channel and thread to delegate or resume work in Grok Bot. The inbox refuses direct text and file sends to Grok rooms and lets the in-process relay deliver the handoff. The task bot communicates with Hermes in the Slack thread through Slack Puppet.
 
 Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task, so `send_message` there requires `slack_channel` and `slack_thread_ts`, the Slack thread Hermes works in, and refuses the send without them (`slack-handoff.ts`). It appends Leon's standing rule in his voice: start a Codex session titled `Task slack:<channel>/<thread_ts>`, one per Slack thread (a session whose title ends in that ts gets the message instead), reply with its link, and have it work with Hermes in that thread with slack-puppet's agent tools. The result carries `slack_identifier` and `codex_session_title`. Elsewhere the two fields are refused. The thread check is shared with the [Grok relay](../grok-relay/README.md#slack-handoff-v140-2026-11-21). Codex gets the tools from [`configs/silicon-dot/hermes-thread`](../../configs/silicon-dot/hermes-thread/README.md) on Leon's MacBook.
 

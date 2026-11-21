@@ -136,7 +136,7 @@ export const TOOLS = [
   {
     name: "send_message",
     description:
-      "Send a text message as Leon in an existing conversation, optionally as a reply to one of its messages (reply_to = that message's event_id). It goes to the real contact on their network. Returns the new event_id, a readback, and the bridge's delivery status when it reports one. If delivery is uncertain it says so; calling again with the same arguments is safe. In Silicon Dot's chats (network chatgpt) every message is a task and needs slack_channel and slack_thread_ts, the Slack thread you're working in: the inbox adds Leon's standing rule, and Dot starts a Codex session titled \"Task slack:<channel>/<thread_ts>\" (returned as codex_session_title) that works with you in that thread through slack-puppet. Its posts there show as Leon's, start with 🤖 and its title, and reach you marked \"[Not Leon: a Codex session …]\". Answer it there; don't write the handoff yourself.",
+      "Send a text message as Leon in an existing conversation, optionally as a reply to one of its messages (reply_to = that message's event_id). For any Grok Bot request, including follow-ups to an existing job, use grok_bot_send with the task's Slack channel and thread instead. Returns the new event_id, a readback, and the bridge's delivery status when it reports one. If delivery is uncertain it says so; calling again with the same arguments is safe. In Silicon Dot's chats (network chatgpt) every message is a task and needs slack_channel and slack_thread_ts, the Slack thread you're working in: the inbox adds Leon's standing rule, and Dot starts a Codex session titled \"Task slack:<channel>/<thread_ts>\" (returned as codex_session_title) that works with you in that thread through slack-puppet. Its posts there show as Leon's, start with 🤖 and its title, and reach you marked \"[Not Leon: a Codex session …]\". Answer it there; don't write the handoff yourself.",
     inputSchema: {
       type: "object",
       properties: {
@@ -241,7 +241,10 @@ export interface InboxTools {
   listMessages(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   getMessage(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   downloadAttachment(args: Record<string, unknown>): Promise<Record<string, unknown>>;
-  sendMessage(args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  sendMessage(
+    args: Record<string, unknown>,
+    fromGrokRelay?: boolean,
+  ): Promise<Record<string, unknown>>;
   sendFile(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   sendReaction(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   status(): Promise<Record<string, unknown>>;
@@ -256,6 +259,7 @@ export async function runTool(
   inbox: InboxTools,
   name: string,
   args: unknown,
+  fromGrokRelay = false,
 ): Promise<Record<string, unknown>> {
   const allowed = ALLOWED.get(name);
   if (!allowed) throw new InboxError("unknown_tool", `unknown tool ${name}`);
@@ -275,7 +279,7 @@ export async function runTool(
     case "download_attachment":
       return inbox.downloadAttachment(input);
     case "send_message":
-      return inbox.sendMessage(input);
+      return inbox.sendMessage(input, fromGrokRelay);
     case "send_file":
       return inbox.sendFile(input);
     case "send_reaction":

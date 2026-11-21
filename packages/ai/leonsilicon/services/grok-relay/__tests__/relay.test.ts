@@ -90,6 +90,44 @@ test("idle bot: sends directly and counts against the budget", async () => {
   assert.match(String(posted[0]?.key), /^send-[0-9a-f-]{36}$/);
 });
 
+test("queued requests without a thread stay available for readback and never go out", async () => {
+  const { stateDir, open, posted } = setup();
+  const at = new Date(Date.now() - 3_600_000).toISOString();
+  const legacy = { text: "old request", at };
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(
+    join(stateDir, "outbox.json"),
+    JSON.stringify({
+      "c-task": {
+        bot: "Task Bot",
+        items: [
+          legacy,
+          {
+            text: "threaded request",
+            at,
+            thread: { channel: THREAD.slack_channel, threadTs: THREAD.slack_thread_ts },
+          },
+        ],
+      },
+    }),
+  );
+  const relay = open();
+  await relay.flushOnce();
+  assert.equal(posted.length, 1);
+  assert.match(posted[0]!.text, /threaded request[\s\S]*Slack thread for this task/);
+  assert.doesNotMatch(posted[0]!.text, /old request/);
+  const queued = (await relay.read({ bot: "Task Bot" })).queued as {
+    preview: string;
+    needsSlackThread?: boolean;
+  }[];
+  assert.deepEqual(
+    queued.map(({ preview, needsSlackThread }) => ({ preview, needsSlackThread })),
+    [{ preview: legacy.text, needsSlackThread: true }],
+  );
+  await relay.flushOnce();
+  assert.equal(posted.length, 1);
+});
+
 test("busy bot: queued, merged into one message on flush once idle", async () => {
   const { relay, posted, add, stateDir } = setup();
   add("c-task", true, "first ask", 30_000); // no reply yet: busy
