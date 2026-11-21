@@ -55,10 +55,13 @@ if (keychainToken() && !process.argv.includes("--replace-token")) {
   console.log(`token: stored in the login Keychain (${KEYCHAIN_SERVICE})`);
 }
 
-// 2. The command Codex runs.
+// 2. The commands: the MCP server Codex runs, and `hermes-thread` for sessions without MCP servers.
 const command = join(home, ".local/bin/hermes-thread-mcp");
 replaceWithSymlink(join(here, "_hermes-thread-mcp.ts"), command);
 console.log(`command: ${command}`);
+const cli = join(home, ".local/bin/hermes-thread");
+replaceWithSymlink(join(here, "_hermes-thread.ts"), cli);
+console.log(`command: ${cli}`);
 
 // 3. The MCP server in Codex's config, backing up the original once.
 const configPath = join(home, ".codex/config.toml");

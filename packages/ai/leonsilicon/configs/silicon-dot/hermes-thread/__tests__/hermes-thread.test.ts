@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { forward, withServerSection } from "#hermes-thread";
+import { callTool, forward, withServerSection } from "#hermes-thread";
 
 const answer = (body: string, status = 200, type = "application/json") =>
   (async () => new Response(body, { status, headers: { "content-type": type } })) as typeof fetch;
@@ -88,4 +88,25 @@ test("the Codex config gets one slack-puppet section, replacing an old one and k
     withServerSection(out, "/usr/local/bin/node", "/Users/me/.local/bin/hermes-thread-mcp"),
     out,
   );
+});
+
+test("callTool calls one agent tool and returns its JSON, flagging refusals", async () => {
+  let body = "";
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body);
+    return Response.json({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        isError: true,
+        content: [{ type: "text", text: '{"ok":false,"refused":"no DMs"}' }],
+      },
+    });
+  }) as typeof fetch;
+  const out = await callTool("hermes_thread_send", { channel: "C1", text: "hi" }, "t", fetchImpl);
+  assert.deepEqual(out, { isError: true, result: { ok: false, refused: "no DMs" } });
+  assert.deepEqual(JSON.parse(body).params, {
+    name: "hermes_thread_send",
+    arguments: { channel: "C1", text: "hi" },
+  });
 });

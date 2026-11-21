@@ -317,7 +317,11 @@ export class SlackAsLeon {
     const ts = String(args.ts ?? "").trim();
     const record = await this.#lookup(channel, ts);
     // An agent reads only the threads of its own kind's posts.
-    if (!record || (poster !== "hermes" && agentOf(record.clientMsgId) !== poster))
+    if (poster !== "hermes" && (!record || agentOf(record.clientMsgId) !== poster))
+      throw new Refused(
+        `${channel}:${ts} isn't one of your posts. Reading starts from your own post: post first with hermes_thread_send (in a shell, hermes-thread send), which returns the ts to read from, then read with that ts.`,
+      );
+    if (!record)
       throw new Refused(
         `${channel}:${ts} was not sent through slack_send_as_leon; this tool only reads the answers to those messages (use your own Slack tools for anything else)`,
       );

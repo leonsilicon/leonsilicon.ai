@@ -78,6 +78,42 @@ export async function forward(
   return body.trim() ? [body.trim()] : [];
 }
 
+/**
+ * Calls one of slack-puppet's agent tools (`hermes_thread_send`, `hermes_thread_read`) and returns
+ * its result: the JSON the tool answered with, and whether it was an error. The `hermes-thread`
+ * command uses it, for sessions that can run a command but don't get Codex's MCP servers.
+ */
+export async function callTool(
+  name: string,
+  args: Record<string, unknown>,
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ isError: boolean; result: unknown }> {
+  const [line] = await forward(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+    token,
+    fetchImpl,
+  );
+  const message = JSON.parse(line ?? "{}") as {
+    result?: { isError?: boolean; content?: { text?: string }[] };
+    error?: { message?: string };
+  };
+  if (message.error) return { isError: true, result: { ok: false, error: message.error.message } };
+  const text = message.result?.content?.[0]?.text ?? "{}";
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    result = text;
+  }
+  return { isError: message.result?.isError === true, result };
+}
+
 /** `~/.codex/config.toml` with this server's section added or replaced, and everything else kept. */
 export function withServerSection(toml: string, nodePath: string, scriptPath: string): string {
   const lines = toml.split("\n");

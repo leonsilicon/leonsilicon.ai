@@ -651,3 +651,11 @@ test("Codex sessions get their own token, marker group, label and allowance", as
   ).json()) as { result: { instructions: string } };
   assert.match(init.result.instructions, /Codex session that Silicon Dot/);
 });
+
+test("an agent that reads before posting is told to post first", async () => {
+  const { service } = grokSetup();
+  await assert.rejects(
+    service.read({ channel: TODO, ts: ROOT }, "codex"),
+    /isn't one of your posts\. Reading starts from your own post: post first/,
+  );
+});

@@ -1,4 +1,5 @@
 export {
+  callTool,
   forward,
   KEYCHAIN_SERVICE,
   keychainToken,
