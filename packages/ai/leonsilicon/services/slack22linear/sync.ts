@@ -142,12 +142,6 @@ interface ChannelInfo {
 
 const PROJECT_VISIBILITY_CHANNEL = "zami-project-visibility";
 const PROJECT_VISIBILITY_PREFIX = "zami-projects:v1";
-const ISSUE_METADATA_CHANNEL = "zami-issue-metadata";
-const ISSUE_METADATA_PREFIX = "zami-issues:v2";
-const ISSUE_METADATA_INTERVAL = 30_000;
-// Keep room for the Matrix event envelope and Beeper's encryption overhead.
-const ISSUE_METADATA_MAX_CHARS = 24_000;
-const SLACK_SECTION_TEXT_MAX = 2_900;
 
 /** A UUID derived from a string, so retries of the same Slack message reuse one Linear comment ID. */
 export async function stableUuid(seed: string): Promise<string> {
@@ -303,14 +297,11 @@ export class Sync {
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "tick") {
       await this.tick();
-      this.#queueIssueMetadata();
       await this.#publishProjectVisibility();
     } else if (kind === "backfill") {
       await this.backfill();
-      this.#queueIssueMetadata();
       await this.#publishProjectVisibility();
     } else if (kind === "project-visibility") await this.#publishProjectVisibility();
-    else if (kind === "issue-metadata") await this.#publishIssueMetadata();
     else this.#log("unknown_job", { kind });
   }
 
@@ -324,15 +315,12 @@ export class Sync {
         await this.#unplace(rec.channelId);
         await this.#archive(rec.channelId);
         this.#store.putIssue({ ...rec, archived: true, section: null });
-        this.#queueIssueMetadata();
       }
       return;
     }
     const issue = await this.#linear.issue(hook.data.id);
-    if (issue && issue.teamKey === this.#c.teamKey) {
+    if (issue && issue.teamKey === this.#c.teamKey)
       await this.syncIssue(await this.#syncDue(issue, hook.updatedFrom), "live");
-      this.#queueIssueMetadata();
-    }
   }
 
   async onLinearComment(hook: LinearWebhook): Promise<void> {
@@ -431,7 +419,6 @@ export class Sync {
         section: null,
       };
       this.#store.putIssue(closed);
-      if (!prev.archived) this.#queueIssueMetadata();
       return closed;
     }
 
@@ -501,9 +488,6 @@ export class Sync {
     rec.title = issue.title;
     rec.identifier = issue.identifier;
     this.#store.putIssue(rec);
-    // Compare the raw title as long titles can serialize to the same Slack topic.
-    if (!prev || prev.archived || prev.topic !== topic || prev.title !== issue.title)
-      this.#queueIssueMetadata();
     return rec;
   }
 
@@ -673,118 +657,6 @@ export class Sync {
     const latest = (history.messages as SlackMessage[] | undefined)?.[0];
     if (latest?.text === text && latest.user === botUser) return;
     await this.#bot("chat.postMessage", { channel, text, mrkdwn: false });
-  }
-
-  #queueIssueMetadata(): void {
-    if (!this.#session) return;
-    const now = this.#now();
-    const next = (Math.floor(now / ISSUE_METADATA_INTERVAL) + 1) * ISSUE_METADATA_INTERVAL;
-    this.#store.enqueue(`issue-metadata:${next}`, "issue-metadata", {}, now, next);
-  }
-
-  /** The most recent complete snapshot fits in one bridged event, including on a cold start. */
-  async #publishIssueMetadata(): Promise<void> {
-    const session = this.#session;
-    if (!session) return;
-    const mapped = new Map(
-      this.#store
-        .allIssues()
-        .filter((rec) => !rec.archived)
-        .map((rec) => [rec.issueId, rec.channelId]),
-    );
-    const issues = await this.#linear.openIssues(this.#c.teamKey, this.#c.closedStateTypes);
-    const records = issues
-      .flatMap((issue) => {
-        const channel = mapped.get(issue.id);
-        if (!channel) return [];
-        const { name, meta } = parseTitle(issue.title);
-        return [
-          {
-            channel,
-            identifier: issue.identifier,
-            title: name || "Untitled issue",
-            priority: issue.priority,
-            statusName: issue.state.name,
-            statusType: issue.state.type,
-            statusColor: issue.state.color ?? null,
-            url: issue.url,
-            dueDate: issue.dueDate,
-            meta,
-          },
-        ];
-      })
-      .sort((a, b) => a.channel.localeCompare(b.channel));
-    const bytes = new TextEncoder().encode(JSON.stringify(records));
-    const maxBytes =
-      Math.floor((ISSUE_METADATA_MAX_CHARS - ISSUE_METADATA_PREFIX.length - 1) / 4) * 3;
-    let encoded: string;
-    if (bytes.length > maxBytes) {
-      this.#log("issue_metadata_too_large", { records: records.length });
-      encoded = btoa("[]");
-    } else encoded = btoa(String.fromCharCode(...bytes));
-    const text = `${ISSUE_METADATA_PREFIX} ${encoded}`;
-
-    this.#channels = null;
-    const existing = (await this.#listChannels()).find(
-      ({ name }) => name === ISSUE_METADATA_CHANNEL,
-    );
-    if (!existing && records.length === 0) return;
-    const channel =
-      existing?.id ??
-      (
-        (
-          await session("conversations.create", {
-            name: ISSUE_METADATA_CHANNEL,
-            is_private: true,
-          })
-        ).channel as { id: string }
-      ).id;
-    const { channel: info } = await session("conversations.info", { channel });
-    const room = info as { is_private?: boolean; is_shared?: boolean; is_ext_shared?: boolean };
-    const bot = await this.#botUser();
-    const roster = await session("conversations.members", { channel, limit: 10 });
-    const members = roster.members as string[];
-    const allowed = [this.#c.leonUserId, this.#c.hermesUserId, bot];
-    if (
-      !room.is_private ||
-      room.is_shared ||
-      room.is_ext_shared ||
-      !members.includes(this.#c.leonUserId) ||
-      members.some((id) => !allowed.includes(id)) ||
-      (roster.response_metadata as { next_cursor?: string } | undefined)?.next_cursor
-    ) {
-      throw new Error(`Unexpected access to private #${ISSUE_METADATA_CHANNEL}`);
-    }
-    if (existing?.archived)
-      await tolerate(session("conversations.unarchive", { channel }), ["not_archived"]);
-    if (!members.includes(bot))
-      await tolerate(session("conversations.invite", { channel, users: bot }), [
-        "already_in_channel",
-      ]);
-    const history = await this.#bot("conversations.history", { channel, limit: 1 });
-    const latest = (history.messages as SlackMessage[] | undefined)?.[0];
-    if (
-      latest?.text === text &&
-      latest.user === bot &&
-      Number(latest.ts) * 1000 > this.#now() - 24 * 3600_000
-    )
-      return;
-    // Slack splits long plain messages. Sections keep the snapshot in one timeline event.
-    const blocks = [];
-    for (let offset = 0; offset < text.length; offset += SLACK_SECTION_TEXT_MAX) {
-      blocks.push({
-        type: "section",
-        text: { type: "plain_text", text: text.slice(offset, offset + SLACK_SECTION_TEXT_MAX) },
-      });
-    }
-    await this.#bot("chat.postMessage", {
-      channel,
-      text,
-      blocks: JSON.stringify(blocks),
-      parse: "none",
-      unfurl_links: false,
-      unfurl_media: false,
-    });
   }
 
   /** Takes a closed or deleted project's channel out of the sidebar and archives it. */

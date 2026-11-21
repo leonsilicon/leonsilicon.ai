@@ -47,7 +47,6 @@ With `T=$(vpx varlock load --filter LINEAR_SYNC_ADMIN_TOKEN --format json | jq -
 - `curl -s -H "authorization: Bearer $T" https://linear-slack.leonsilicon.ai/admin/status` shows the queue with each job's attempts and last error, plus dead jobs.
 - `curl -s -X POST -H "authorization: Bearer $T" …/admin/backfill` adopts or creates channels for every open issue and archives channels of closed ones, quietly (no posts), then gives every open project its channel. Safe to rerun.
 - `curl -s -X POST -H "authorization: Bearer $T" …/admin/tick` runs the daily safety net now. `/admin/status` lists queued jobs, timers included (`timer:<issue id>@<ms>`).
-- `curl -s -X POST -H "authorization: Bearer $T" …/admin/issue-metadata` refreshes the private Zami issue snapshot from current Linear issues and the existing Slack channel mappings.
 
 Other tasks:
 

@@ -42,10 +42,6 @@ Awaiting Date · linear:v1 unstarted #5e6ad2 p2 · https://linear.app/leonsilico
 
 The workflow field carries the Linear state type and hex color (`-` when unavailable), followed by `p0` through `p4` for no priority, urgent, high, medium, and low. The title comes last and may contain middle dots. Its metadata ends the topic as a backticked YAML flow mapping, just as in Linear. Long titles are shortened to make room for the complete mapping within [Slack's 250-character limit](https://docs.slack.dev/reference/methods/conversations.setTopic/). A mapping that cannot fit stays in Linear. The daily tick rewrites old topics for open issues and picks up workflow color and priority changes without posting a status message.
 
-## Zami issue metadata
-
-Zami reads the full issue title, status type and color, priority, URL, due date, and title metadata from a versioned snapshot in the private `#zami-issue-metadata` channel. It matches records to joined rooms by their Slack channel ID. The sync batches issue updates every 30 seconds and refreshes the snapshot on the daily tick. The topic provides a fallback when a snapshot is missing, stale, or too large for one bridged message. Dates remain available to the plugin as data.
-
 ## Title metadata
 
 Leon's rule (2026-11-18) is that status data ends the title as a YAML 1.2 flow mapping in backticks:

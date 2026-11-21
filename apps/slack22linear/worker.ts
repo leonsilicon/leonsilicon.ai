@@ -187,8 +187,7 @@ export default {
     if (request.method === "POST" && url.pathname.startsWith("/admin/")) {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       const kind = url.pathname.slice("/admin/".length);
-      if (kind !== "backfill" && kind !== "tick" && kind !== "issue-metadata")
-        return json({ error: "unknown action" }, 404);
+      if (kind !== "backfill" && kind !== "tick") return json({ error: "unknown action" }, 404);
       await enqueue(env, `${kind}:${now}`, kind, {});
       return json({ queued: kind });
     }
