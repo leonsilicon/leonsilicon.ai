@@ -130,6 +130,17 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
             await waitReady();
             return runTool(inbox, name, args);
           },
+          // The journal is replaced when the inbox reloads, so it is looked up on every call.
+          journal: {
+            head: async () => inbox.journal.head(),
+            coveredSince: async () => inbox.journal.coveredSince(),
+            latest: async (roomId, count) => inbox.journal.latest(roomId, count),
+            since: async (roomId, sinceTs) => inbox.journal.since(roomId, sinceTs),
+            changes: async ({ waitMs, ...options }) =>
+              waitMs
+                ? inbox.journal.changesWhenAny({ ...options, waitMs })
+                : inbox.journal.changes(options),
+          },
         }),
       );
     } catch (error) {
@@ -171,6 +182,25 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
               : {}) as Record<string, unknown>,
           );
         }
+        case "journal": {
+          // For operators: what sync delivered lately. Text only when asked for.
+          const after = Number(input.after ?? Math.max(0, inbox.journal.head() - 20)) || 0;
+          const page = inbox.journal.changes({
+            after,
+            ...(typeof input.room_id === "string" ? { roomId: input.room_id } : {}),
+            limit: Number(input.limit ?? 50) || 50,
+          });
+          return {
+            ...inbox.journal.stats(),
+            cursor: page.cursor,
+            entries: page.entries.map(({ text, html, ...rest }) => ({
+              ...rest,
+              chars: text.length,
+              html: html !== null,
+              ...(input.text === true ? { text } : {}),
+            })),
+          };
+        }
         case "reload":
           await inbox.reload();
           return inbox.status();
@@ -197,6 +227,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
         await inbox.reload();
         return;
       }
+      await inbox
+        .journalTick()
+        .catch((error: unknown) => log("warn", "journal upkeep failed", { error: String(error) }));
       if (inbox.state === "ready") {
         if (!(await inbox.alive())) {
           log("error", "Matrix core stopped answering; exiting so a fresh owner starts");

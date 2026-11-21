@@ -40,6 +40,7 @@ import {
   type SendRecord,
 } from "#ledger";
 import { MatrixFetch, type SendGuard } from "#fetch";
+import { MessageJournal } from "#journal";
 import type { InboxPaths } from "#paths";
 import type { PickleRuntime } from "#pickle";
 import {
@@ -182,6 +183,7 @@ export class Inbox {
   #store: TracedStore | null = null;
   #directory: RoomDirectory | null = null;
   #ledger: SendLedger | null = null;
+  #journal: MessageJournal | null = null;
   #client: PickleClient | null = null;
   #subscription: MatrixSubscription | null = null;
   #account: InboxAccount | null = null;
@@ -338,6 +340,7 @@ export class Inbox {
     this.#pickleDb = null;
     this.#directory = null;
     this.#ledger = null;
+    this.#journal = null;
     this.#state = "stopped";
   }
 
@@ -360,6 +363,8 @@ export class Inbox {
     this.#db = open(this.#paths.inboxDb);
     this.#pickleDb = open(this.#paths.pickleDb);
     this.#directory = new RoomDirectory(this.#db);
+    this.#journal = new MessageJournal(this.#db, this.#now());
+    this.#journal.prune(this.#now());
     this.#ledger = new SendLedger(this.#db);
     this.#ledger.prune(30 * 24 * 60 * 60_000, this.#now());
   }
@@ -438,7 +443,16 @@ export class Inbox {
       return;
     }
     if (kind === "decryptionError") {
-      const target = event.event as { eventId?: string } | undefined;
+      const target = event.event as
+        | { eventId?: string; roomId?: string; senderId?: string }
+        | undefined;
+      if (target?.eventId && target.roomId) {
+        try {
+          this.#journal?.pending(target.roomId, target.eventId, target.senderId ?? "", this.#now());
+        } catch (error) {
+          this.#log("debug", "journal update failed", { error: String(error) });
+        }
+      }
       if (target?.eventId) {
         this.#decryptErrors.set(target.eventId, text(event.error));
         if (this.#decryptErrors.size > 5000) {
@@ -470,6 +484,17 @@ export class Inbox {
       return;
     }
     try {
+      if (kind === "message") this.#journalMessage(event as unknown as MatrixMessageEvent);
+      else if (kind === "redaction") {
+        const redacts =
+          content.redacts ?? (event.raw as { redacts?: unknown } | undefined)?.redacts;
+        if (typeof redacts === "string") this.#journal?.redact(redacts);
+      }
+    } catch (error) {
+      // The journal must never get in sync's way.
+      this.#log("warn", "journal update failed", { error: String(error) });
+    }
+    try {
       if (type === "m.room.name" && typeof content.name === "string" && content.name.trim())
         this.#directory?.rename(roomId, content.name.trim());
       const ts = typeof event.timestamp === "number" ? event.timestamp : null;
@@ -479,6 +504,76 @@ export class Inbox {
       }
     } catch (error) {
       this.#log("debug", "directory update failed", { error: String(error) });
+    }
+  }
+
+  /** Writes one message from sync (or from a late decryption) into the journal. */
+  #journalMessage(message: MatrixMessageEvent): void {
+    const journal = this.#journal;
+    if (!journal || !message.eventId || !message.roomId) return;
+    // An edit carries the new text in m.new_content; its own body is a "* …" fallback.
+    const fresh = message.replaces
+      ? (message.content?.["m.new_content"] as
+          | { body?: unknown; formatted_body?: unknown; msgtype?: unknown }
+          | undefined)
+      : undefined;
+    journal.record(
+      {
+        roomId: message.roomId,
+        eventId: message.eventId,
+        sender: message.sender.userId,
+        isMe: message.sender.isMe,
+        type: typeof fresh?.msgtype === "string" ? fresh.msgtype : message.messageType,
+        text:
+          typeof fresh?.body === "string"
+            ? fresh.body
+            : message.replaces
+              ? (message.text ?? "").replace(/^\* /, "")
+              : (message.text ?? ""),
+        html: fresh
+          ? typeof fresh.formatted_body === "string"
+            ? fresh.formatted_body
+            : undefined
+          : message.html,
+        ts: typeof message.timestamp === "number" ? message.timestamp : this.#now(),
+        replaces: message.replaces,
+        replyTo: message.replyTo,
+        attachments: message.attachments?.length ?? 0,
+      },
+      this.#now(),
+    );
+  }
+
+  /** The journal of messages as sync delivered them (see journal.ts). */
+  get journal(): MessageJournal {
+    if (!this.#journal)
+      throw new InboxError("not_ready", "beeper-inbox's stores aren't open (it is stopping)");
+    return this.#journal;
+  }
+
+  /**
+   * Once a minute: keeps the journal's coverage current, drops what is past its retention, and tries
+   * again to read events that arrived before their keys did.
+   */
+  async journalTick(): Promise<void> {
+    const journal = this.#journal;
+    const client = this.#client;
+    if (!journal) return;
+    journal.alive(this.#now());
+    journal.prune(this.#now());
+    if (!client || this.#state !== "ready") return;
+    for (const due of journal.pendingDue(this.#now())) {
+      try {
+        const { message } = await this.#read.run(() =>
+          client.messages.get({ roomId: due.roomId, eventId: due.eventId }),
+        );
+        if (message) this.#journalMessage(message);
+      } catch (error) {
+        this.#log("debug", "late decryption failed", {
+          eventId: due.eventId,
+          error: String(error),
+        });
+      }
     }
   }
 
@@ -1374,6 +1469,17 @@ export class Inbox {
         last_error: stats.lastSyncError,
         syncs: stats.syncs,
       },
+      journal: this.#journal
+        ? (() => {
+            const journal = this.#journal.stats();
+            return {
+              head: journal.head,
+              covered_since: new Date(journal.coveredSince).toISOString(),
+              entries: journal.entries,
+              waiting_for_keys: journal.pending,
+            };
+          })()
+        : null,
       directory: this.#directory
         ? {
             rooms: this.#directory.count(),

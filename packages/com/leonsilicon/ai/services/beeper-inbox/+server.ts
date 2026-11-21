@@ -4,6 +4,7 @@ export type { RunningDaemon } from "#daemon";
 export type {
   DaemonExtension,
   ExtensionContext,
+  ExtensionJournal,
   ExtensionTool,
   RunningExtension,
 } from "#extension";
@@ -15,6 +16,8 @@ export { OwnerLock } from "#lock";
 export { SendLedger, idempotencyKey, txnIdFor } from "#ledger";
 export { RoomDirectory, roomsFromSync, normalizeNetwork } from "#directory";
 export { MatrixFetch } from "#fetch";
+export { MessageJournal } from "#journal";
+export type { JournalEntry, JournalMessage } from "#journal";
 export { accountPage } from "#format";
 export { SECRET_KEYS } from "#secrets";
 export type { InboxAccount, PickleClient } from "#types";

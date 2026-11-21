@@ -1,3 +1,4 @@
+import type { JournalEntry } from "#journal";
 import type { Logger } from "#types";
 
 /** A tool as MCP lists it. */
@@ -12,10 +13,36 @@ export interface ExtensionTool {
 export interface ExtensionContext {
   /** Runs one of the inbox's own tools (`list_conversations`, `list_messages`, `send_message`…). */
   tool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /**
+   * New messages as sync delivers them (see journal.ts): the way to follow a chat. Reading history
+   * with `list_messages` costs about half a second per message, so nothing should do that in a loop.
+   */
+  journal: ExtensionJournal;
   /** The extension's own directory under the inbox home (0700), for its state. */
   home: string;
   /** The daemon's log, tagged with the extension's name. IDs and counts only, never message text. */
   log: Logger;
+}
+
+export interface ExtensionJournal {
+  /** The latest position: "after this" means from now on. */
+  head(): Promise<number>;
+  /** The time from which the journal has every message sync delivered. */
+  coveredSince(): Promise<number>;
+  /** The newest `count` messages of a room that the journal holds, oldest first. */
+  latest(roomId: string, count: number): Promise<JournalEntry[]>;
+  /** A room's messages sent at or after a time, oldest first. */
+  since(roomId: string, sinceTs: number): Promise<JournalEntry[]>;
+  /**
+   * Messages that arrived or changed after a position, in one room or in all. With `waitMs`, it waits
+   * that long for the first one when there is nothing yet.
+   */
+  changes(options: {
+    after: number;
+    roomId?: string;
+    limit?: number;
+    waitMs?: number;
+  }): Promise<{ entries: JournalEntry[]; cursor: number }>;
 }
 
 export interface RunningExtension {

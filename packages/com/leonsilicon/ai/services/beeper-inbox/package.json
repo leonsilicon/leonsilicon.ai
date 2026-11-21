@@ -14,6 +14,7 @@
     "#format": "./format.ts",
     "#inbox": "./inbox.ts",
     "#ipc": "./ipc.ts",
+    "#journal": "./journal.ts",
     "#ledger": "./ledger.ts",
     "#lock": "./lock.ts",
     "#mcp": "./mcp.ts",

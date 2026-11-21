@@ -16,6 +16,7 @@ import { test } from "node:test";
 import { callIpc } from "#ipc";
 import { startDaemon } from "#daemon";
 import { inboxPaths } from "#paths";
+import type { ExtensionJournal } from "#extension";
 import type { PickleRuntime } from "#pickle";
 import type {
   MatrixClientEvent,
@@ -31,6 +32,10 @@ const ENC = encodeURIComponent(ROOM);
 
 /** A homeserver that dedupes sends by transaction ID, as the spec requires, and can lose responses. */
 class FakeHomeserver {
+  /** Delivers one event as sync would, once the client has subscribed. */
+  emit: (event: MatrixClientEvent) => void = () => {
+    throw new Error("nothing has subscribed yet");
+  };
   events = new Map<string, Record<string, unknown>>();
   timeline: string[] = [];
   byTxn = new Map<string, string>();
@@ -246,6 +251,7 @@ function fakePickle(
         },
         subscribe: async (_filter, h) => {
           handler = h as (event: MatrixClientEvent) => void;
+          server.emit = handler;
           return {
             catchUp: async () => undefined,
             done: new Promise(() => undefined),
@@ -625,4 +631,120 @@ test("extensions: served by the same daemon, reach Beeper through the inbox's to
   );
   await daemon.shutdown();
   assert.deepEqual(stopped, ["echo"]);
+});
+
+test("journal: sync messages are written down once; edits, late keys and deletions update them", async (t) => {
+  const { env, paths, server, pickle } = setup();
+  let tapped: ExtensionJournal | null = null;
+  const daemon = await startDaemon({
+    env,
+    pickle,
+    baseFetch: server.fetch,
+    embedded: true,
+    bridgeStatusWaitMs: 20,
+    extensions: [
+      {
+        name: "tap",
+        server: { name: "tap", version: "0", instructions: "", tools: [] },
+        start: (context) => {
+          tapped = context.journal;
+          return { callTool: async () => ({}) };
+        },
+      },
+    ],
+  });
+  assert.ok(daemon);
+  await daemon.ready;
+  const journal = tapped as ExtensionJournal | null;
+  assert.ok(journal);
+  t.after(() => daemon.shutdown());
+  const message = (eventId: string, text: string, extra: Record<string, unknown> = {}) =>
+    ({
+      kind: "message",
+      eventId,
+      roomId: ROOM,
+      sender: { isMe: false, userId: "@sam:beeper.local" },
+      text,
+      messageType: "m.text",
+      timestamp: Date.now(),
+      type: "m.room.message",
+      attachments: [],
+      content: {},
+      edited: false,
+      encrypted: true,
+      ...extra,
+    }) as MatrixClientEvent;
+
+  const head = await journal.head();
+  assert.ok(Date.now() - (await journal.coveredSince()) < 60_000, "a new journal vouches from now");
+  const waiting = journal.changes({ after: head, roomId: ROOM, waitMs: 5000 });
+  setTimeout(() => server.emit(message("$m1", "hi")), 20);
+  const first = await waiting;
+  assert.deepEqual(
+    first.entries.map((entry) => [entry.eventId, entry.text, entry.isMe, entry.edited]),
+    [["$m1", "hi", false, false]],
+  );
+  server.emit(message("$m1", "hi"));
+  assert.equal((await journal.changes({ after: first.cursor })).entries.length, 0, "seen before");
+
+  // An edit changes the message it replaces; its own body is only a fallback.
+  server.emit(
+    message("$m2", "* hello", {
+      replaces: "$m1",
+      edited: true,
+      content: { "m.new_content": { body: "hello", msgtype: "m.text" } },
+    }),
+  );
+  const edited = await journal.changes({ after: first.cursor, roomId: ROOM });
+  assert.deepEqual(
+    edited.entries.map((entry) => [entry.eventId, entry.text, entry.edited, entry.seq]),
+    [["$m1", "hello", true, first.entries[0]?.seq]],
+  );
+  assert.ok((edited.entries[0]?.rev ?? 0) > (first.entries[0]?.rev ?? 0));
+
+  // An event without its keys yet is held back until it can be read.
+  server.emit({
+    kind: "decryptionError",
+    error: "no session",
+    event: { eventId: "$m3", roomId: ROOM, senderId: "@sam:beeper.local" },
+  });
+  assert.equal((await journal.changes({ after: edited.cursor })).entries.length, 0);
+  const status = (await callIpc(paths.socket, "status")) as { journal: Record<string, unknown> };
+  assert.equal(status.journal.waiting_for_keys, 1);
+  server.emit(message("$m3", "now readable"));
+  const late = await journal.changes({ after: edited.cursor });
+  assert.deepEqual(
+    late.entries.map((entry) => [entry.eventId, entry.text]),
+    [["$m3", "now readable"]],
+  );
+
+  server.emit({
+    kind: "redaction",
+    eventId: "$r1",
+    roomId: ROOM,
+    type: "m.room.redaction",
+    content: { redacts: "$m3" },
+  });
+  const gone = await journal.changes({ after: late.cursor });
+  assert.deepEqual(
+    gone.entries.map((entry) => [entry.eventId, entry.text, entry.redacted]),
+    [["$m3", "", true]],
+  );
+  assert.deepEqual(
+    (await journal.latest(ROOM, 5)).map((entry) => entry.eventId),
+    ["$m1", "$m3"],
+  );
+
+  // What an operator sees: no text unless it is asked for.
+  const listed = (await callIpc(paths.socket, "journal", { after: head })) as {
+    entries: Array<Record<string, unknown>>;
+    entries_total?: number;
+  };
+  assert.deepEqual(
+    listed.entries.map((entry) => [entry.eventId, entry.chars, "text" in entry]),
+    [
+      ["$m1", 5, false],
+      ["$m3", 0, false],
+    ],
+  );
 });

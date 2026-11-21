@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { RoomDirectory, normalizeNetwork, roomsFromSync } from "#directory";
 import { accountPage, refusedUploadReason, safeFilename } from "#format";
 import { keysQueryKey, MatrixFetch, requestKind, slimSyncFilter } from "#fetch";
+import { GAP_MS, MessageJournal, RETENTION_MS } from "#journal";
 import { SendLedger, idempotencyKey, payloadHash, txnIdFor } from "#ledger";
 import { OwnerLock } from "#lock";
 import {
@@ -443,4 +444,93 @@ test("matrix fetch: a /keys/query answer is reused for a while, but never while 
     ),
     "GET /rooms/:id/relations/:id/m.replace/m.room.message",
   );
+});
+
+test("journal: positions only grow, edits keep their place, waits wake on the right room", async () => {
+  const T0 = 1795000000000;
+  const journal = new MessageJournal(new DatabaseSync(":memory:"), T0);
+  const say = (eventId: string, text: string, extra: Record<string, unknown> = {}) =>
+    journal.record(
+      {
+        roomId: "!a:x",
+        eventId,
+        sender: "@bot:x",
+        isMe: false,
+        type: "m.text",
+        text,
+        ts: T0,
+        ...extra,
+      },
+      T0,
+    );
+  assert.equal(journal.head(), 0);
+  assert.equal(journal.coveredSince(), T0);
+  assert.deepEqual([say("$1", "one")?.seq, say("$2", "two", { ts: T0 + 5 })?.seq], [1, 2]);
+  assert.equal(say("$1", "one again"), null, "a repeat is ignored");
+  const edit = say("$e", "* uno", { replaces: "$1" });
+  assert.deepEqual(
+    [edit?.eventId, edit?.text, edit?.seq, edit?.rev, edit?.edited],
+    ["$1", "* uno", 1, 3, true],
+  );
+  assert.deepEqual(
+    journal.changes({ after: 2 }).entries.map((entry) => entry.eventId),
+    ["$1"],
+    "only what changed after the position",
+  );
+  assert.deepEqual(
+    journal.since("!a:x", T0).map((entry) => entry.eventId),
+    ["$1", "$2"],
+    "by time sent, not by change",
+  );
+  // A message from before the journal began can be delivered late; it isn't one of "the latest".
+  say("$ancient", "from last week", { ts: T0 - 7 * 24 * 3600_000 });
+  assert.deepEqual(
+    journal.latest("!a:x", 10).map((entry) => entry.eventId),
+    ["$1", "$2"],
+  );
+  // An edit of a message from before the journal still shows up, under the message's ID.
+  assert.equal(say("$e2", "rewritten", { replaces: "$old" })?.eventId, "$old");
+
+  // Waiting: another room's message doesn't wake it; this room's does; a timeout returns nothing.
+  const head = journal.head();
+  const waiting = journal.changesWhenAny({ after: head, roomId: "!a:x", waitMs: 2000 });
+  journal.record(
+    {
+      roomId: "!b:x",
+      eventId: "$other",
+      sender: "@c:x",
+      isMe: false,
+      type: "m.text",
+      text: "x",
+      ts: T0,
+    },
+    T0,
+  );
+  setTimeout(() => say("$3", "three"), 15);
+  assert.deepEqual(
+    (await waiting).entries.map((entry) => entry.eventId),
+    ["$3"],
+  );
+  const quiet = await journal.changesWhenAny({ after: journal.head(), roomId: "!a:x", waitMs: 20 });
+  assert.deepEqual([quiet.entries.length, quiet.cursor], [0, journal.head()]);
+
+  // Late keys: held back, retried with a growing delay, five times at most.
+  journal.pending("!a:x", "$late", "@bot:x", T0);
+  assert.equal(journal.stats().pending, 1);
+  assert.equal(journal.pendingDue(T0 + 10_000).length, 0, "not yet");
+  assert.deepEqual(journal.pendingDue(T0 + 31_000), [{ roomId: "!a:x", eventId: "$late" }]);
+  assert.equal(journal.pendingDue(T0 + 31_000).length, 0, "the next try is later");
+  for (let i = 0; i < 6; i++) journal.pendingDue(T0 + 3_600_000);
+  assert.equal(journal.pendingDue(T0 + 7_200_000).length, 0, "it gives up");
+  assert.equal(say("$late", "arrived")?.text, "arrived");
+  assert.equal(journal.stats().pending, 0);
+
+  // Coverage restarts after an absence; old messages are dropped.
+  journal.alive(T0 + GAP_MS - 1);
+  assert.equal(journal.coveredSince(), T0);
+  journal.alive(T0 + 3 * GAP_MS);
+  assert.equal(journal.coveredSince(), T0 + 3 * GAP_MS);
+  journal.prune(T0 + RETENTION_MS + 1);
+  assert.equal(journal.stats().entries, 0);
+  assert.ok(journal.head() >= 8, "positions are never reused");
 });

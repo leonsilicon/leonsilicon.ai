@@ -51,7 +51,21 @@ Measured on Hermes Cloud, 2026-11-21, in a Grok bot's chat: a page of 10 message
 
 - A page slower than 3 s is logged as `slow read`, with its requests by kind and its store writes by key (`store-trace.ts`).
 - Reads run one at a time. Pages of 30 and 100 events asked for at once kept the Matrix core busy for over 20 s, and the daemon's health check restarted it (twice on 2026-11-21, back in 5 s on the same device).
-- So anything that needs new messages often, such as the Grok relay waiting for a reply or a feed of every chat, must take them from sync as they arrive, not by reading history again and again. That isn't built yet.
+- So anything that needs new messages often, such as the Grok relay waiting for a reply or a feed of every chat, takes them from the journal below, not by reading history again and again.
+
+## The journal
+
+Sync already hands the daemon every new message, decrypted. Since 2026-11-21 it writes each one down once, in `inbox.db` (`journal.ts`), so that following a chat costs one indexed query instead of a page of history.
+
+- **Positions.** A message gets a position when it first arrives (`seq`) and a new one whenever it changes (`rev`): an edit, a deletion, a decryption that succeeded late. Positions only grow, so "what is new or changed after N?" never misses or repeats anything, and a caller can wait on it.
+- **Edits** update the message they replace, with the text from `m.new_content`. **Deletions** keep the message's place and drop its text.
+- **Late keys.** An event that arrives before its keys is held back, and shown once it decrypts: when sync delivers it again, or on one of five retries (after 30 s, then a minute apart).
+- **Coverage.** The journal vouches for everything since `covered_since`. That moves to now when the daemon was away for 30 minutes or more, because sync may then have skipped events.
+- **Old messages** can land in it too: reading history, or a bridge filling in the past, makes sync deliver them. They keep their own time, so "the latest messages" only counts what was sent since `covered_since`.
+- **It holds message text**, unlike the rest of `inbox.db`, for 7 days at most (100,000 messages at most), in the owner-only state directory beside the keys that decrypt everything anyway.
+- **Who reads it.** Extensions, through `ExtensionContext.journal`. It isn't one of Hermes's tools: what is put in front of Hermes stays the feed's decision. `beeper-inbox.mjs journal` shows an operator the latest entries without their text.
+
+Measured on Hermes Cloud, 2026-11-21: a message was in the journal 0.2 to 0.9 s after it was sent, and the Grok relay's read of a chat took 0.15 s from the journal against 1.1 s for four messages of history.
 
 ## State and secrets
 
@@ -74,6 +88,6 @@ The key that encrypts Pickle's store (`pickleKey`) is not in `.env`. It is gener
 node --test packages/com/leonsilicon/ai/services/beeper-inbox/__tests__/*.test.ts
 ```
 
-Offline, with a fake homeserver and a fake Pickle that retries sends with fresh transaction IDs as the real one does. Covers the lock across processes (including SIGKILL), the ledger, overlapping and ambiguous sends, decryption accounting, the plaintext guard, the sync filter, the directory, the upload guard, and a daemon restart that keeps the device. Live checks are in the app README.
+Offline, with a fake homeserver and a fake Pickle that retries sends with fresh transaction IDs as the real one does, and that delivers sync events on demand. Covers the journal (positions, edits, late keys, deletions, waiting, coverage), the lock across processes (including SIGKILL), the ledger, overlapping and ambiguous sends, decryption accounting, the plaintext guard, the sync filter, the directory, the upload guard, and a daemon restart that keeps the device. Live checks are in the app README.
 
 Public API (`+server.ts`): `runCli`, `startDaemon`, `runMcpServer`, `Inbox`, `TOOLS`, `runTool`, `OwnerLock`, `SendLedger`, `RoomDirectory`, `MatrixFetch`, the `DaemonExtension` types and helpers.

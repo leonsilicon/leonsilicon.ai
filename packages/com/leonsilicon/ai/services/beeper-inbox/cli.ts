@@ -20,6 +20,7 @@ export const USAGE = `beeper-inbox <command>
   install-account FILE   install a device's account.json (homeserver, userId, deviceId; no secrets)
   tool NAME [JSON]       call one tool through the daemon, as Hermes would
   extension EXT NAME [JSON]   call one of an extension's tools through the daemon
+  journal [JSON]         what sync delivered lately: {"after":N,"room_id":"!…","limit":50,"text":true}
 `;
 
 export interface CliOptions {
@@ -114,6 +115,11 @@ export async function runCli(
       const args = rest[1] ? (JSON.parse(rest[1]) as unknown) : {};
       await ensureDaemon(paths, launcher);
       print(await callIpc(paths.socket, "tool", { name, arguments: args }, 175_000));
+      return 0;
+    }
+    case "journal": {
+      const options = rest[0] ? (JSON.parse(rest[0]) as unknown) : {};
+      print(await callIpc(paths.socket, "journal", options, 30_000));
       return 0;
     }
     case "extension": {
