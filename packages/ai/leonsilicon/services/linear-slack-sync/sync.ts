@@ -14,6 +14,7 @@ import {
   metaInstant,
   parseTitle,
   projectChannelName,
+  projectChannelTopic,
   projectDay,
   slackToLinear,
   withDay,
@@ -370,10 +371,16 @@ export class Sync {
   ): Promise<IssueRecord | null> {
     this.#planTimer(issue);
     const prev = this.#store.issue(issue.id);
-    const { name, meta } = parseTitle(issue.title);
+    const title = parseTitle(issue.title);
+    const topic = channelTopic(title, issue.state, issue.url, issue.priority);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
       if (!prev.archived) {
+        if (prev.topic !== topic)
+          await tolerate(this.#bot("conversations.setTopic", { channel: prev.channelId, topic }), [
+            ...ARCHIVED,
+            "channel_not_found",
+          ]);
         if (mode === "live" && prev.stateName !== issue.state.name)
           await this.#postStatus(prev.channelId, prev.stateName, issue, post);
         await this.#unplace(prev.channelId);
@@ -383,6 +390,7 @@ export class Sync {
         ...prev,
         title: issue.title,
         stateName: issue.state.name,
+        topic: prev.archived ? prev.topic : topic,
         archived: true,
         section: null,
       };
@@ -430,13 +438,17 @@ export class Sync {
       if (created && mode === "live") await this.#postIntro(rec.channelId, issue);
     }
 
-    if (prev && !prev.archived && parseTitle(prev.title).name !== name) {
-      const wanted = channelName(this.#c.channelPrefix, issue.number, name, this.#c.channelNameMax);
+    if (prev && !prev.archived && parseTitle(prev.title).name !== title.name) {
+      const wanted = channelName(
+        this.#c.channelPrefix,
+        issue.number,
+        title.name,
+        this.#c.channelNameMax,
+      );
       if (wanted !== rec.channelName && (await this.#rename(rec.channelId, wanted)))
         rec.channelName = wanted;
     }
 
-    const topic = channelTopic(issue.state.name, meta, issue.url);
     if (rec.topic !== topic) {
       await this.#bot("conversations.setTopic", { channel: rec.channelId, topic });
       rec.topic = topic;
@@ -471,7 +483,7 @@ export class Sync {
    * Gives an open project a channel through Linear's own Slack integration, so Linear posts its
    * updates there and syncs their threads, then files it in the projects section with Leon and
    * Hermes in it. A closed project's channel is archived; reopening unarchives it. Linear names,
-   * renames, topics and populates the channel itself.
+   * renames, sets the channel summary and populates the channel itself.
    *
    * A day's project (named after a date, see `projectDay`) belongs to dailylinear, which makes it,
    * asks for its `project-YYYY-MM-DD` channel and keeps the day's channel in Starred. Here it only
@@ -525,7 +537,35 @@ export class Sync {
       rec.section = section;
     this.#store.putProject(rec);
     if (!same) this.#log("project_channel", { project: project.name, channel: channelId });
+    await this.#syncProjectTopic(project, channelId);
     return rec;
+  }
+
+  async #syncProjectTopic(project: LinearProject, channelId: string): Promise<void> {
+    if (!project.color && !project.icon) return;
+    const slack = this.#session ?? this.#bot;
+    try {
+      const info = await slack("conversations.info", { channel: channelId });
+      const channel = info.channel as
+        | {
+            topic?: { value?: string };
+            purpose?: { value?: string };
+          }
+        | undefined;
+      if (!channel) throw new Error(`Slack did not return project channel ${channelId}`);
+      const current = channel.topic?.value ?? "";
+      const topic = projectChannelTopic(current, project, channel.purpose?.value);
+      if (topic !== current) await slack("conversations.setTopic", { channel: channelId, topic });
+    } catch (error) {
+      if (
+        !(error instanceof SlackError) ||
+        ![...ARCHIVED, "channel_not_found", "not_in_channel", "user_is_restricted"].includes(
+          error.code,
+        )
+      )
+        throw error;
+      this.#log("project_topic_unavailable", { channel: channelId, error: error.code });
+    }
   }
 
   async #channelSettings(): Promise<ProjectChannelSettings | null> {
@@ -1127,7 +1167,13 @@ export class Sync {
     for (const listed of issues) {
       const issue = await this.#syncDue(listed);
       const rec = this.#store.issue(issue.id);
-      if (!rec || rec.archived || rec.stateName !== issue.state.name || rec.title !== issue.title)
+      if (
+        !rec ||
+        rec.archived ||
+        rec.stateName !== issue.state.name ||
+        rec.title !== issue.title ||
+        rec.topic !== channelTopic(parseTitle(issue.title), issue.state, issue.url, issue.priority)
+      )
         await this.syncIssue(issue, "live");
       else this.#planTimer(issue);
     }
@@ -1156,6 +1202,7 @@ export class Sync {
         (projectDay(project.name) === null && rec.section !== this.#c.projectSection)
       )
         await this.syncProject(project);
+      else if (rec.channelId) await this.#syncProjectTopic(project, rec.channelId);
     }
     const open = new Set(projects.map((p) => p.id));
     for (const rec of this.#store.allProjects()) {

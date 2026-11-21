@@ -5,6 +5,7 @@ import {
   channelName,
   channelNumber,
   channelTopic,
+  projectChannelTopic,
   formatTitle,
   hasTime,
   intakeTitle,
@@ -117,16 +118,57 @@ test("channel names use the prefix and number, cut at a word", () => {
   assert.equal(channelNumber("leon", "general"), null);
 });
 
-test("the topic carries status, metadata and link, within Slack's limit", () => {
+test("the topic carries status styling, priority, title, metadata and link within Slack's limit", () => {
+  const state = {
+    id: "state-listener",
+    name: "Awaiting Listener",
+    type: "started",
+    color: "#E8B510",
+  };
+  const url = "https://linear.app/x/issue/LEON-205";
   assert.equal(
     channelTopic(
-      "Awaiting Listener",
-      { event: "deal", stop: "2026-12-01" },
-      "https://linear.app/x/issue/LEON-205",
+      { name: "Café · Confirm the deal", meta: { event: "Café · deal", stop: "2026-12-01" } },
+      state,
+      url,
+      2,
     ),
-    "Awaiting Listener · event: deal · stop: 2026-12-01 · https://linear.app/x/issue/LEON-205",
+    'Awaiting Listener · linear:v1 started #e8b510 p2 {"event":"Café \\u00b7 deal","stop":"2026-12-01"} · https://linear.app/x/issue/LEON-205 · Café · Confirm the deal',
   );
-  assert.ok(channelTopic("S", { event: "x".repeat(400) }, "https://l/1").length <= 250);
+  const long = channelTopic({ name: "🍁".repeat(250), meta: {} }, state, url, 1);
+  assert.ok(long.length <= 250);
+  assert.ok(long.isWellFormed());
+  assert.ok(long.includes(url));
+  assert.ok(long.includes("#e8b510 p1"));
+  assert.ok(long.endsWith("…"));
+  assert.ok(
+    channelTopic(
+      { name: "Confirm the deal", meta: { event: "x".repeat(400) } },
+      state,
+      url,
+      0,
+    ).endsWith(`${url} · Confirm the deal`),
+  );
+});
+
+test("project topics keep the existing summary and bound the icon metadata", () => {
+  const project = { color: "#E99B51", icon: "IconBook" };
+  const initial = projectChannelTopic("Course planning", project);
+  assert.equal(initial, "Course planning · [linear-project:v1 #e99b51 IconBook]");
+  assert.equal(
+    projectChannelTopic(initial, { ...project, icon: null }),
+    "Course planning · [linear-project:v1 #e99b51]",
+  );
+  assert.equal(
+    projectChannelTopic("", { color: "#5e6ad2", icon: "🏃" }, "Training"),
+    "Training · [linear-project:v1 #5e6ad2 🏃]",
+  );
+  const full = "x".repeat(250);
+  assert.equal(projectChannelTopic(full, project), full);
+  assert.equal(
+    projectChannelTopic("x".repeat(215), { ...project, icon: "a".repeat(40) }),
+    `${"x".repeat(215)} · [linear-project:v1 #e99b51]`,
+  );
 });
 
 test("linearToSlack converts Markdown to mrkdwn", () => {

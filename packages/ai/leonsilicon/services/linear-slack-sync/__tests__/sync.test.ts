@@ -8,7 +8,6 @@ import type {
   LinearComment,
   LinearIssue,
   LinearProject,
-  LinearState,
   NewIssue,
   ProjectChannelSettings,
 } from "#linear";
@@ -29,7 +28,7 @@ const BOT = "U0SYNCBOT1";
 /** Linear's own Slack app, which creates and owns project channels. */
 const LINEAR_BOT = "U0LINEARBOT";
 
-const STATES: LinearState[] = [
+const STATES: LinearIssue["state"][] = [
   "Awaiting Init:unstarted",
   "Awaiting Clarification:backlog",
   "Awaiting Date:unstarted",
@@ -43,7 +42,7 @@ const STATES: LinearState[] = [
   "Canceled:canceled",
 ].map((s) => {
   const [name, type] = s.split(":") as [string, string];
-  return { id: `state-${name}`, name, type };
+  return { id: `state-${name}`, name, type, color: type === "started" ? "#f2c94c" : "#5e6ad2" };
 });
 const state = (name: string) => STATES.find((s) => s.name === name)!;
 
@@ -97,6 +96,7 @@ function fakeLinear(makeChannel: MakeChannel, now: () => number = Date.now) {
         title: input.title,
         url: `https://linear.app/leonsilicon/issue/LEON-${number}`,
         description: input.description,
+        priority: 0,
         state: STATES.find((s) => s.id === input.stateId)!,
         teamKey: "LEON",
         dueDate: null,
@@ -174,6 +174,7 @@ function fakeLinear(makeChannel: MakeChannel, now: () => number = Date.now) {
       title,
       url: `https://linear.app/leonsilicon/issue/LEON-${number}`,
       description,
+      priority: 0,
       state: state(status),
       teamKey: "LEON",
       dueDate: null,
@@ -367,7 +368,7 @@ function fakeSlack() {
             ok: true,
             channel: c.im
               ? { id: c.id, is_im: true, user: c.im }
-              : { id: c.id, name: c.name, is_private: c.private },
+              : { id: c.id, name: c.name, is_private: c.private, topic: { value: c.topic } },
           };
         }
         case "conversations.history": {
@@ -584,7 +585,10 @@ test("a new issue gets a private channel, an intro, a topic and its status secti
   assert.equal(channel.name, "leon-380-stop-san-francisco-optometry-email-reminders");
   assert.equal(channel.private, true);
   assert.deepEqual([...channel.members].sort(), [BOT, HERMES, LEON].sort());
-  assert.equal(channel.topic, "Awaiting Start · https://linear.app/leonsilicon/issue/LEON-380");
+  assert.equal(
+    channel.topic,
+    "Awaiting Start · linear:v1 unstarted #5e6ad2 p0 · https://linear.app/leonsilicon/issue/LEON-380 · Stop San Francisco Optometry email reminders",
+  );
   assert.equal(slack.sectionOf(channel.id), "Awaiting Start");
   const intro = slack.posts[0]!;
   assert.match(
@@ -621,7 +625,7 @@ test("status moves post a message, mention the right party and move the section"
   assert.equal(slack.posts.at(-1)!.text, "*Awaiting Leon* → *Awaiting Listener*");
   assert.equal(
     channel.topic,
-    "Awaiting Listener · event: Rogers unlimited BYOD deal · stop: 2026-12-01 · https://linear.app/leonsilicon/issue/LEON-205",
+    'Awaiting Listener · linear:v1 started #f2c94c p0 {"event":"Rogers unlimited BYOD deal","stop":"2026-12-01"} · https://linear.app/leonsilicon/issue/LEON-205 · switch to rogers',
   );
   assert.equal(
     channel.name,
@@ -632,6 +636,7 @@ test("status moves post a message, mention the right party and move the section"
   issue.state = state("Done");
   await sync.run("linear", issueHook(issue.id));
   assert.equal(slack.posts.at(-1)!.text, "*Awaiting Listener* → *Done*");
+  assert.match(channel.topic, /^Done · linear:v1 completed /);
   assert.equal(channel.archived, true);
   assert.equal(slack.sectionOf(channel.id), null);
   assert.deepEqual(slack.order(), [], "closing empties and removes its section");
@@ -966,7 +971,10 @@ test("backfill adopts existing issue channels quietly and archives closed ones",
   assert.equal(store.issue("issue-315")!.channelId, open.id);
   assert.ok(open.members.has(BOT));
   assert.equal(slack.sectionOf(open.id), "Awaiting Leon");
-  assert.equal(open.topic, "Awaiting Leon · https://linear.app/leonsilicon/issue/LEON-315");
+  assert.equal(
+    open.topic,
+    "Awaiting Leon · linear:v1 started #f2c94c p0 · https://linear.app/leonsilicon/issue/LEON-315 · Migrate Instagram payout setup from US to Canada",
+  );
   assert.equal(closed.archived, true);
   assert.equal(other.archived, false);
   const created = slack.channels.find((c) => c.name.startsWith("leon-379-"))!;
@@ -1159,6 +1167,42 @@ test("the daily tick sets lost timers, repairs drift and creates #feed-linear", 
   assert.equal(slack.sectionOf(store.issue(dated.id)!.channelId), "Awaiting Start");
 });
 
+test("the daily tick upgrades old topics and refreshes status colors and priorities without posting", async () => {
+  const { linear, slack, sync, store } = setup();
+  const issue = linear.addIssue(381, "Cancel club Fongo Works phone service", "Awaiting Leon");
+  await sync.run("backfill", {});
+  const rec = store.issue(issue.id)!;
+  const channel = slack.channels.find(({ id }) => id === rec.channelId)!;
+  channel.topic = `Awaiting Leon · linear:v1 started #f2c94c · ${issue.url} · Cancel club Fongo Works phone service`;
+  store.putIssue({ ...rec, topic: channel.topic });
+
+  issue.priority = 2;
+  await sync.run("tick", {});
+  assert.equal(
+    channel.topic,
+    `Awaiting Leon · linear:v1 started #f2c94c p2 · ${issue.url} · Cancel club Fongo Works phone service`,
+  );
+
+  issue.state = { ...issue.state, color: "#123456" };
+  await sync.run("tick", {});
+  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p2 · /);
+  issue.priority = 4;
+  await sync.run("linear", issueHook(issue.id));
+  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p4 · /);
+  issue.priority = 0;
+  await sync.run("tick", {});
+  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p0 · /);
+  assert.equal(slack.posts.length, 0);
+  const topicWrites = slack.calls.filter(
+    ({ method }) => method === "conversations.setTopic",
+  ).length;
+  await sync.run("tick", {});
+  assert.equal(
+    slack.calls.filter(({ method }) => method === "conversations.setTopic").length,
+    topicWrites,
+  );
+});
+
 test("an open project gets a channel from Linear's Slack app, filed under Projects", async () => {
   const { linear, slack, sync, store } = setup();
   const project = linear.addProject("UofT Creators Club");
@@ -1195,6 +1239,32 @@ test("a project that already has a Linear channel is adopted, and Leon joins it"
   assert.equal(linear.channelRequests.length, 0);
   assert.deepEqual([...channel.members].sort(), [LINEAR_BOT, LEON, HERMES].sort());
   assert.equal(slack.sectionOf(channel.id), "Projects");
+});
+
+test("project webhooks and the daily tick refresh the bridged icon without replacing the summary", async () => {
+  const { linear, slack, sync } = setup();
+  const channel = slack.addLinearChannel("project-university");
+  channel.topic = "Course planning";
+  const project = linear.addProject("University");
+  project.slackChannelId = channel.id;
+  project.color = "#e99b51";
+  project.icon = null;
+
+  await sync.run("linear", projectHook(project.id));
+  assert.equal(channel.topic, "Course planning · [linear-project:v1 #e99b51]");
+  const topicWrites = () => slack.calls.filter(({ method }) => method === "conversations.setTopic");
+  assert.equal(topicWrites()[0]?.who, "leon");
+  await sync.run("tick", {});
+  assert.equal(topicWrites().length, 1);
+
+  // Linear's Slack app can update the summary independently of our webhook.
+  channel.topic = "Fall semester planning";
+  project.icon = "IconBook";
+  project.color = "#5e6ad2";
+  await sync.run("tick", {});
+  assert.equal(channel.topic, "Fall semester planning · [linear-project:v1 #5e6ad2 IconBook]");
+  assert.equal(topicWrites().length, 2);
+  assert.equal(slack.posts.length, 0);
 });
 
 test("project channels sit below the status sections", async () => {
@@ -1325,10 +1395,12 @@ test("a day's project is left to dailylinear: no channel request, no section, no
   // Once dailylinear's channel exists, the sync only makes sure Leon and Hermes are in it.
   const channel = slack.addLinearChannel("project-2026-11-19", []);
   day.slackChannelId = channel.id;
+  day.color = "#f2c94c";
   slack.stars.add(channel.id);
   await sync.run("linear", projectHook(day.id));
   assert.deepEqual([...channel.members].sort(), [LINEAR_BOT, LEON, HERMES].sort());
   assert.equal(store.project(day.id)!.channelId, channel.id);
+  assert.equal(channel.topic, "[linear-project:v1 #f2c94c]");
   assert.equal(slack.sectionOf(channel.id), null, "not filed under Projects");
   assert.ok(slack.stars.has(channel.id), "dailylinear's star stays");
   assert.equal(channel.name, "project-2026-11-19");
@@ -1420,7 +1492,10 @@ test("autolinear's issue waits for its channel's hand-over instead of getting a 
     `*<${issue.url}|LEON-401: check rogers>* · Awaiting Init\n\n${adoption.lead}`,
     "says where it came from and pings no one",
   );
-  assert.equal(channel.topic, `Awaiting Init · ${issue.url}`);
+  assert.equal(
+    channel.topic,
+    `Awaiting Init · linear:v1 unstarted #5e6ad2 p0 · ${issue.url} · check rogers`,
+  );
   assert.equal(slack.sectionOf(channel.id), "Awaiting Init");
 
   // The webhook's second look, two minutes on, finds the channel adopted.

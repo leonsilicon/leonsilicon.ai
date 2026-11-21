@@ -96,6 +96,7 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
           url: `https://linear.app/leonsilicon/issue/LEON-${number}`,
           description: input.description,
           state: { id: input.stateId, name: "Awaiting Init", type: "unstarted" },
+          priority: 0,
           teamKey: "LEON",
           dueDate: null,
         };

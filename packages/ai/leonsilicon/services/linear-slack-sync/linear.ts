@@ -11,7 +11,8 @@ export interface LinearIssue {
   title: string;
   url: string;
   description: string | null;
-  state: LinearState;
+  priority: number;
+  state: LinearState & { color?: string };
   teamKey: string;
   /** Linear's own due date, `YYYY-MM-DD`: a day with no time. */
   dueDate: string | null;
@@ -30,6 +31,8 @@ export interface LinearProject {
   id: string;
   name: string;
   url: string;
+  icon?: string | null;
+  color?: string;
   status: { name: string; type: string };
   /** The Slack channel Linear's own Slack app has connected to the project, if any. */
   slackChannelId: string | null;
@@ -126,7 +129,7 @@ export class LinearError extends Error {
   }
 }
 
-const ISSUE_FIELDS = `id identifier number title url description dueDate state { id name type } team { key }`;
+const ISSUE_FIELDS = `id identifier number title url description priority dueDate state { id name type color } team { key }`;
 
 interface IssueNode {
   id: string;
@@ -135,8 +138,9 @@ interface IssueNode {
   title: string;
   url: string;
   description: string | null;
+  priority: number;
   dueDate: string | null;
-  state: LinearState;
+  state: LinearIssue["state"];
   team: { key: string };
 }
 
@@ -147,18 +151,21 @@ const toIssue = (node: IssueNode): LinearIssue => ({
   title: node.title,
   url: node.url,
   description: node.description,
+  priority: node.priority,
   state: node.state,
   teamKey: node.team.key,
   dueDate: node.dueDate ?? null,
 });
 
-const PROJECT_FIELDS = `id name url createdAt archivedAt trashed status { name type } slackChannelId
+const PROJECT_FIELDS = `id name url icon color createdAt archivedAt trashed status { name type } slackChannelId
   teams { nodes { key } }`;
 
 interface ProjectNode {
   id: string;
   name: string;
   url: string;
+  icon: string | null;
+  color: string;
   createdAt: string;
   archivedAt: string | null;
   trashed: boolean | null;
@@ -171,6 +178,8 @@ const toProject = (node: ProjectNode): LinearProject => ({
   id: node.id,
   name: node.name,
   url: node.url,
+  icon: node.icon,
+  color: node.color,
   status: node.status,
   slackChannelId: node.slackChannelId || null,
   teamKeys: node.teams.nodes.map((t) => t.key),

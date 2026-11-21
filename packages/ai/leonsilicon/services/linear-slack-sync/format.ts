@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "@-/com.npmjs.yaml";
+import type { LinearIssue, LinearProject } from "#linear";
 
 export type TitleMeta = Record<string, string>;
 
@@ -244,15 +245,61 @@ export function channelNumber(prefix: string, name: string): number | null {
 }
 
 const TOPIC_MAX = 250;
+const TOPIC_SEPARATOR = " · ";
+const PROJECT_TOPIC_SUFFIX =
+  /(?:^| · )\[linear-project:v1 (#[\da-f]{6}|-)(?: ([^[\]\r\n]{1,80}))?\]$/i;
+const topicColor = (color: string | undefined) =>
+  color && /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : "-";
 
-/** The channel topic: status, metadata and the issue link. */
-export function channelTopic(stateName: string, meta: TitleMeta, url: string): string {
-  const parts = [stateName, ...Object.entries(meta).map(([k, v]) => `${k}: ${v}`)];
-  const tail = ` · ${url}`;
-  let head = parts.join(" · ");
-  if (head.length + tail.length > TOPIC_MAX)
-    head = `${head.slice(0, TOPIC_MAX - tail.length - 1)}…`;
-  return head + tail;
+/** The versioned topic consumed by Zami via the Slack bridge's Matrix room topic. */
+export function channelTopic(
+  { name, meta }: ParsedTitle,
+  state: LinearIssue["state"],
+  url: string,
+  priority: number,
+) {
+  const color = topicColor(state.color);
+  const priorityToken =
+    Number.isInteger(priority) && priority >= 0 && priority <= 4 ? ` p${priority}` : "";
+  const workflow = `linear:v1 ${state.type} ${color}${priorityToken}`;
+  const prefix = [state.name, workflow, url, ""].join(TOPIC_SEPARATOR);
+  const available = TOPIC_MAX - prefix.length;
+  if (available <= 0) return state.name;
+
+  const title = name.replace(/\s+/g, " ") || "Untitled issue";
+  if (title.length > available) {
+    const head = title
+      .slice(0, available - 1)
+      .replace(/[\uD800-\uDBFF]$/u, "")
+      .trimEnd();
+    return `${prefix}${head}…`;
+  }
+
+  // Keep complete metadata whenever it fits alongside the title and issue URL.
+  const metadata = JSON.stringify(meta).replaceAll("·", "\\u00b7");
+  const details =
+    metadata !== "{}" && metadata.length + 1 <= available - title.length
+      ? `${workflow} ${metadata}`
+      : workflow;
+  return [state.name, details, url, title].join(TOPIC_SEPARATOR);
+}
+
+/** Adds the project's icon and color without cutting the existing Slack summary. */
+export function projectChannelTopic(
+  current: string,
+  project: Pick<LinearProject, "icon" | "color">,
+  purpose = "",
+) {
+  const summary = current.replace(PROJECT_TOPIC_SUFFIX, "") || purpose;
+  const prefix = summary ? `${summary}${TOPIC_SEPARATOR}` : "";
+  const color = topicColor(project.color);
+  const icon = project.icon?.trim();
+  const colorTopic = `${prefix}[linear-project:v1 ${color}]`;
+  if (icon && /^[^[\]\r\n]{1,80}$/.test(icon)) {
+    const fullTopic = `${prefix}[linear-project:v1 ${color} ${icon}]`;
+    if (fullTopic.length <= TOPIC_MAX) return fullTopic;
+  }
+  return color !== "-" && colorTopic.length <= TOPIC_MAX ? colorTopic : current;
 }
 
 /** Whether Slack message text mentions the user: `<@U…>`, or `<@U…|name>` from older clients. */
