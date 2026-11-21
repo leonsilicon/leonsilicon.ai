@@ -7,6 +7,6 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*"
+    "@-/ai.leonsilicon.services.beeper-watch": "workspace:*"
   }
 }

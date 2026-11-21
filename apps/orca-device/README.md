@@ -1,6 +1,6 @@
 # @-apps/orca-device
 
-Runs [Hermes Cloud's Orca device](../../packages/com/leonsilicon/ai/services/orca-device/README.md) on Captain Claude, so Hermes reaches Leon's Macs' Orca without the mini in between. Prototype, set up 2026-11-19.
+Runs [Hermes Cloud's Orca device](../../packages/ai/leonsilicon/services/orca-device/README.md) on Captain Claude, so Hermes reaches Leon's Macs' Orca without the mini in between. Prototype, set up 2026-11-19.
 
 ## On Hermes Cloud (`/opt/data/orca-device`)
 

@@ -1,4 +1,4 @@
-import { createListener, loadConfig, VERSION } from "@-/com.leonsilicon.ai.services.orca-bridge";
+import { createListener, loadConfig, VERSION } from "@-/ai.leonsilicon.services.orca-bridge";
 
 const config = loadConfig();
 const listener = createListener(config);

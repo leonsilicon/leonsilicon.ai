@@ -8,7 +8,7 @@ adds what the Mac mini's wrapper did (configs/cronometer-mcp-http) and what a Wo
 - the Cronometer login from the Worker's secrets, which upstream reads from the environment;
 - the session key kept in KV between requests. Upstream caches it in a file, a Worker's files last
   only as long as one instance, and Cronometer throttles repeated logins;
-- the page in www/ for a browser, as @-/com.leonsilicon.www does for the TypeScript Workers.
+- the page in www/ for a browser, as @-/ai.leonsilicon.configs.cloudflare does for the TypeScript Workers.
 """
 
 import hmac

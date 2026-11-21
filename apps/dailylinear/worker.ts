@@ -1,8 +1,8 @@
-import { Daily, loadConfig } from "@-/com.leonsilicon.ai.services.dailylinear";
-import type { DailyResult, DailyState } from "@-/com.leonsilicon.ai.services.dailylinear";
-import { LinearClient, localDay } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
-import { sessionClient } from "@-/com.leonsilicon.ai.services.slack-as-leon";
-import { serveSite, type Assets } from "@-/com.leonsilicon.www";
+import { Daily, loadConfig } from "@-/ai.leonsilicon.services.dailylinear";
+import type { DailyResult, DailyState } from "@-/ai.leonsilicon.services.dailylinear";
+import { LinearClient, localDay } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
+import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
 // Just the Durable Object surface used here. Cloudflare's full type packages redefine globals such
 // as Response, which conflicts with the Node types this workspace compiles everything else against.

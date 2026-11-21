@@ -2,7 +2,7 @@
 
 Cronometer's food diary over MCP for Leon's agents, as a Cloudflare Python Worker at `https://cronometer.leonsilicon.ai` (since 2026-11-21). The Grok bots use it: 41 tools that read the diary and add, change and delete entries, custom foods, recipes, notes, biometrics, exercise, fasts and nutrient targets.
 
-Until 2026-11-21 the same server ran on the Mac mini behind the gateway ([`configs/cronometer-mcp-http`](../../packages/com/leonsilicon/ai/configs/cronometer-mcp-http/README.txt)). The address and the bearer token didn't change, so the Grok bots' connector needed nothing.
+Until 2026-11-21 the same server ran on the Mac mini behind the gateway ([`configs/cronometer-mcp-http`](../../packages/ai/leonsilicon/configs/cronometer-mcp-http/README.txt)). The address and the bearer token didn't change, so the Grok bots' connector needed nothing.
 
 ## What runs
 
@@ -15,7 +15,7 @@ Until 2026-11-21 the same server ran on the Mac mini behind the gateway ([`confi
   - the bearer token on every MCP request (401 otherwise), and a Host check for `cronometer.leonsilicon.ai`;
   - the Cronometer login, from the Worker's secrets into the environment variables upstream reads;
   - the session key, kept in KV (`SESSION`) between requests. Upstream caches it in a file; a Worker's files last only as long as one instance, and Cronometer throttles repeated logins. An instance that finds a newer key in KV takes it instead of signing in;
-  - the page in `www/` for a browser, as `@-/com.leonsilicon.www` does for the TypeScript Workers.
+  - the page in `www/` for a browser, as `@-/ai.leonsilicon.configs.cloudflare` does for the TypeScript Workers.
 - **Stateless.** Each request gets its own MCP session manager and a JSON answer (no event stream).
 
 `POST /` and `POST /mcp` are the MCP endpoint. `GET /healthz` answers without a token and says only that the Worker is up.

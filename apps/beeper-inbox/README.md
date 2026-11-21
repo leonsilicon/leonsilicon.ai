@@ -1,6 +1,6 @@
 # @-apps/beeper-inbox
 
-Runs the [Beeper inbox](../../packages/com/leonsilicon/ai/services/beeper-inbox/README.md) on Hermes Cloud (Captain Claude), as the MCP server `beeper-inbox`. Hermes reads, downloads from and sends in Leon's existing Beeper conversations directly over Matrix, as its own device of his Beeper account, with no Beeper Desktop and no Mac involved. Set up 2026-11-18/19.
+Runs the [Beeper inbox](../../packages/ai/leonsilicon/services/beeper-inbox/README.md) on Hermes Cloud (Captain Claude), as the MCP server `beeper-inbox`. Hermes reads, downloads from and sends in Leon's existing Beeper conversations directly over Matrix, as its own device of his Beeper account, with no Beeper Desktop and no Mac involved. Set up 2026-11-18/19.
 
 `_beeper-inbox.ts` is the one entrypoint (`mcp`, `daemon`, `status`, `restart`…; `--help` lists them). `_build-beeper-inbox.ts` builds the release.
 

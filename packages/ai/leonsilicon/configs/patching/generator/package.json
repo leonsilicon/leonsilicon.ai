@@ -1,0 +1,19 @@
+{
+  "name": "@-/ai.leonsilicon.configs.patching.generator",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "_apply-patches": "./_apply-patches.ts",
+    "_generate-patches": "./_generate-patches.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#patch-runner": "./patch-runner.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.patching.codemods.unsnooze": "workspace:*"
+  }
+}

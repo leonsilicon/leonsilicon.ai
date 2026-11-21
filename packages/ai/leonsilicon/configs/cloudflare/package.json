@@ -1,0 +1,19 @@
+{
+  "name": "@-/ai.leonsilicon.configs.cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serves the built www/ pages from a Cloudflare Worker, one directory per hostname, plus the script and styles those pages share.",
+  "type": "module",
+  "imports": {
+    "#page": "./page.ts",
+    "#page.css": "./page.css",
+    "#sites": "./sites.ts"
+  },
+  "exports": {
+    ".": "./+server.ts",
+    "./client": "./+client.ts"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

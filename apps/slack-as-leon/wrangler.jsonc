@@ -12,7 +12,7 @@
   ],
   "preview_urls": false,
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
-  // @-/com.leonsilicon.www.
+  // @-/ai.leonsilicon.configs.cloudflare.
   "assets": {
     "directory": "../../dist/www",
     "binding": "ASSETS",

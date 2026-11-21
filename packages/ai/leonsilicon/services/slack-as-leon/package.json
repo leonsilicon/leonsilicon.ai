@@ -1,0 +1,18 @@
+{
+  "name": "@-/ai.leonsilicon.services.slack-as-leon",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Lets Hermes post in Slack as Leon, with no bot marker, through his own web session held by a Cloudflare Worker.",
+  "type": "module",
+  "imports": {
+    "#config": "./config.ts",
+    "#directory": "./directory.ts",
+    "#marker": "./marker.ts",
+    "#mcp": "./mcp.ts",
+    "#service": "./service.ts",
+    "#slack": "./slack.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  }
+}

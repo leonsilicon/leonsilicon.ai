@@ -3,9 +3,9 @@ import {
   loadConfig,
   sessionClient,
   SlackAsLeon,
-} from "@-/com.leonsilicon.ai.services.slack-as-leon";
-import type { RateStore } from "@-/com.leonsilicon.ai.services.slack-as-leon";
-import { serveSite, type Assets } from "@-/com.leonsilicon.www";
+} from "@-/ai.leonsilicon.services.slack-as-leon";
+import type { RateStore } from "@-/ai.leonsilicon.services.slack-as-leon";
+import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
 // Just the KV surface used here. Cloudflare's full type packages redefine globals such as Response,
 // which conflicts with the Node types this workspace compiles everything else against.

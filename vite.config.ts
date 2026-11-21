@@ -4,11 +4,12 @@ import { defineConfig } from "vite-plus";
 import flatcap from "eslint-plugin-flatcap";
 
 const www = fileURLToPath(new URL("www", import.meta.url));
-const ai = "packages/com/leonsilicon/ai";
+const ai = "packages/ai/leonsilicon";
 
-// Every page is an entrypoint: www/<host, labels reversed>/index.html is https://<host>/, served by the
-// host's Worker through @-/com.leonsilicon.www.
-const pages = globSync("**/index.html", { cwd: www }).map((page) => `${www}/${page}`);
+// Build each site's HTML entrypoint at its reverse-hostname path in dist/www.
+const pages = globSync("**/index.html", { cwd: www, exclude: ["**/node_modules/**"] }).map(
+  (page) => `${www}/${page}`,
+);
 
 export default defineConfig({
   root: www,
@@ -53,7 +54,7 @@ export default defineConfig({
         cache: false,
         command: [
           "node --test",
-          "packages/com/leonsilicon/www/__tests__/*.test.ts",
+          `${ai}/configs/cloudflare/__tests__/*.test.ts`,
           `${ai}/configs/deploy-targets/__tests__/*.test.ts`,
           `${ai}/configs/env-file/__tests__/*.test.ts`,
           `${ai}/configs/patching/codemods/unsnooze/__tests__/*.test.ts`,

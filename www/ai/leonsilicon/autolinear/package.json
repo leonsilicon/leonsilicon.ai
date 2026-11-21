@@ -1,0 +1,9 @@
+{
+  "name": "@-apps/ai.leonsilicon.autolinear",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*"
+  }
+}

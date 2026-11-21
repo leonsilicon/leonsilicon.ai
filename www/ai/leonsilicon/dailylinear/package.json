@@ -1,0 +1,9 @@
+{
+  "name": "@-apps/ai.leonsilicon.dailylinear",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*"
+  }
+}

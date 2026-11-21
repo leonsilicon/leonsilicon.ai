@@ -55,7 +55,7 @@ jobs:
           BASE: ${{ steps.base.outputs.sha }}
           ONLY: ${{ inputs.workers }}
         run: |
-          targets=packages/com/leonsilicon/ai/configs/deploy-targets/_deploy-targets.ts
+          targets=packages/ai/leonsilicon/configs/deploy-targets/_deploy-targets.ts
           if [ -n "$ONLY" ]; then
             node "$targets" --only "$ONLY" --github-output
           elif [ -n "$BASE" ]; then
@@ -103,7 +103,7 @@ jobs:
       - run: vpr -w "deploy:$WORKER"
 
   # The repo is the Todoist Automations' source of truth. Every run publishes each manifest in
-  # packages/com/leonsilicon/ai/configs/todoist-automations/@assets that Todoist doesn't match, which
+  # packages/ai/leonsilicon/configs/todoist-automations/@assets that Todoist doesn't match, which
   # overwrites an edit made in Todoist since (pull it into the repo first to keep it). Automations
   # that aren't in the repo are left alone, with a warning. Nothing it logs holds the private values.
   todoist-automations:
@@ -121,4 +121,4 @@ jobs:
         with:
           node-version: "24"
           cache: true
-      - run: node packages/com/leonsilicon/ai/configs/todoist-automations/_todoist-automations.ts push --yes
+      - run: node packages/ai/leonsilicon/configs/todoist-automations/_todoist-automations.ts push --yes

@@ -1,4 +1,4 @@
-import { Intake, loadConfig, messageFromEvent } from "@-/com.leonsilicon.ai.services.autolinear";
+import { Intake, loadConfig, messageFromEvent } from "@-/ai.leonsilicon.services.autolinear";
 import type {
   AutolinearConfig,
   EventLookups,
@@ -7,11 +7,11 @@ import type {
   IntakeResult,
   Progress,
   SlackMessageEvent,
-} from "@-/com.leonsilicon.ai.services.autolinear";
-import { LinearClient, verifySlack } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
-import type { Adoption } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
-import { sessionClient } from "@-/com.leonsilicon.ai.services.slack-as-leon";
-import { serveSite, type Assets } from "@-/com.leonsilicon.www";
+} from "@-/ai.leonsilicon.services.autolinear";
+import { LinearClient, verifySlack } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import type { Adoption } from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
+import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
 // Just the Durable Object surface used here. Cloudflare's full type packages redefine globals such
 // as Response, which conflicts with the Node types this workspace compiles everything else against.

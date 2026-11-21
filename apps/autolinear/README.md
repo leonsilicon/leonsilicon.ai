@@ -1,6 +1,6 @@
 # @-apps/autolinear
 
-Runs [autolinear](../../packages/com/leonsilicon/ai/services/autolinear/README.md) as a Cloudflare Worker (since 2026-11-21): each of Leon's Slack messages that Hermes answers outside an issue channel gets a Linear issue in Awaiting Init and its own channel the moment it arrives, his message is edited to link the channel, and Hermes answers him there. Slack's own events, through the autolinear Slack app, start it as soon as Leon sends a message; Hermes's [autolinear plugin](../../packages/com/leonsilicon/hermes/plugins/autolinear/README.md) calls it too, and gets the same issue. [Linear Sync](../linear-slack-sync/README.md) takes the channel over.
+Runs [autolinear](../../packages/ai/leonsilicon/services/autolinear/README.md) as a Cloudflare Worker (since 2026-11-21): each of Leon's Slack messages that Hermes answers outside an issue channel gets a Linear issue in Awaiting Init and its own channel the moment it arrives, his message is edited to link the channel, and Hermes answers him there. Slack's own events, through the autolinear Slack app, start it as soon as Leon sends a message; Hermes's [autolinear plugin](../../packages/com/leonsilicon/hermes/plugins/autolinear/README.md) calls it too, and gets the same issue. [Linear Sync](../linear-slack-sync/README.md) takes the channel over.
 
 ```text
 Slack Events (autolinear app, Leon's messages) ── POST /slack/events ─┐

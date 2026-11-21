@@ -12,7 +12,7 @@ ssh "$HOST" "mkdir -p ~/$APP ~/.local/share/orca-bridge/logs ~/.config/orca-brid
 rsync -a --delete --exclude node_modules --exclude .git --exclude .cache --exclude .vite --exclude dist --exclude .wrangler --exclude '*.db*' --exclude .env --exclude .env.local --exclude __pycache__ ./ "$HOST:$APP/"
 ssh "$HOST" "cd ~/$APP && PATH=/opt/homebrew/bin:\$HOME/.bun/bin:\$HOME/.vite-plus/bin:\$PATH bun install --production --frozen-lockfile --ignore-scripts"
 # bun can exit 0 on a stale frozen lockfile without installing, so check the result.
-ssh "$HOST" "test -e ~/$APP/apps/orca-bridge/node_modules/@-/com.leonsilicon.ai.services.orca-bridge" || { echo "Install failed on $HOST (stale bun.lock? run vp install and commit it)" >&2; exit 1; }
+ssh "$HOST" "test -e ~/$APP/apps/orca-bridge/node_modules/@-/ai.leonsilicon.services.orca-bridge" || { echo "Install failed on $HOST (stale bun.lock? run vp install and commit it)" >&2; exit 1; }
 echo "Copied to $HOST:~/$APP"
 
 if [[ "${1:-}" == "--start" ]]; then

@@ -6,7 +6,8 @@
   "workspaces": {
     "packages": [
       "apps/*",
-      "packages/**"
+      "packages/**",
+      "www/**"
     ],
     "catalog": {
       "@beeper/desktop-api": "6.0.0",
@@ -30,10 +31,9 @@
   "type": "module",
   "scripts": {},
   "devDependencies": {
-    "@-/com.leonsilicon.ai.configs.env-file": "workspace:*",
-    "@-/com.leonsilicon.ai.configs.patching.generator": "workspace:*",
-    "@-/com.leonsilicon.ai.configs.todoist-automations": "workspace:*",
-    "@-/com.leonsilicon.www": "workspace:*",
+    "@-/ai.leonsilicon.configs.env-file": "workspace:*",
+    "@-/ai.leonsilicon.configs.patching.generator": "workspace:*",
+    "@-/ai.leonsilicon.configs.todoist-automations": "workspace:*",
     "@types/node": "catalog:",
     "@varlock/cloudflare-integration": "catalog:",
     "@varlock/infisical-plugin": "catalog:",

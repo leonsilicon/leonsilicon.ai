@@ -1,6 +1,6 @@
 # @-apps/beeper-watch
 
-Runs [Beeper Watch](../../packages/com/leonsilicon/ai/services/beeper-watch/README.md). When someone answers in Beeper, Hermes Cloud (Captain Claude) is woken in the Slack thread of the task that was waiting for the answer. It also copies every Beeper message to Slack, one #feed- channel per Beeper connection, screened first so that unsafe messages and spam are held in the private #feed-flagged and #feed-spam.
+Runs [Beeper Watch](../../packages/ai/leonsilicon/services/beeper-watch/README.md). When someone answers in Beeper, Hermes Cloud (Captain Claude) is woken in the Slack thread of the task that was waiting for the answer. It also copies every Beeper message to Slack, one #feed- channel per Beeper connection, screened first so that unsafe messages and spam are held in the private #feed-flagged and #feed-spam.
 
 **Since 2026-11-21 it runs on Hermes Cloud**, as an extension of the [Beeper inbox](../beeper-inbox/README.md) daemon, and reads Beeper through that inbox. From 2026-11-06 until then it ran on the Mac mini and polled Beeper Desktop.
 
@@ -56,7 +56,7 @@ Hermes ──beeper_watch_add──▶ mini: beeper-watch (127.0.0.1:18789) ─�
 | Slack app     | "Beeper Watch", with its own bot user. Scopes: `chat:write`, `chat:write.public`, `channels:read`, `groups:read`, and since 2026-11-18 `channels:manage` to create the #feed- channels ([manifest](@assets/slack-app-manifest.json)). Private channels need `/invite @Beeper Watch`   |
 | Public route  | `https://watch.leonsilicon.ai` through the ai-gateway, removed 2026-11-21 (since 2026-11-18; `watch.ai.leonsilicon.com` from 2026-11-13; `ai.leonsilicon.com/watch` from 2026-11-12; the Tailscale Funnel route `/watch` was removed). Health: `https://watch.leonsilicon.ai/healthz` |
 | Hermes Cloud  | `mcp_servers.beeper-watch` in `/opt/data/config.yaml` with `Authorization: Bearer ${BEEPER_WATCH_MCP_TOKEN}` (value in `/opt/data/.env`). The Beeper Watch bot user is in `SLACK_ALLOWED_USERS`, so its @mentions get through `allow_bots: mentions`                                  |
-| Screener      | OpenAI Decisions API (`gpt-6-luna`), with `FEED_SCREEN=openai` and `OPENAI_API_KEY` from Infisical. Details in the [service README](../../packages/com/leonsilicon/ai/services/beeper-watch/README.md#screening-feed-flagged-and-feed-spam)                                           |
+| Screener      | OpenAI Decisions API (`gpt-6-luna`), with `FEED_SCREEN=openai` and `OPENAI_API_KEY` from Infisical. Details in the [service README](../../packages/ai/leonsilicon/services/beeper-watch/README.md#screening-feed-flagged-and-feed-spam)                                               |
 | Standing rule | Last entry of Captain Claude's `/opt/data/memories/MEMORY.md`: register a watch after asking anyone for something through Beeper. Sessions load it when they start, so a thread that was already running needs `/new` or an explicit "watch for their reply"                          |
 
 Hermes 0.23 picked up the new MCP server and the `.env` change on its next turn without a gateway restart (`MCP servers reconciled with config … added=['beeper-watch']`).

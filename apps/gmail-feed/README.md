@@ -1,6 +1,6 @@
 # @-apps/gmail-feed
 
-Runs the [Gmail feed](../../packages/com/leonsilicon/ai/services/gmail-feed/README.md) as the Cloudflare Worker `gmail-feed` (set up 2026-11-19). Every email that reaches Leon's Gmail is copied into Slack: safe ones in `#feed-gmail`, unsafe ones in `#feed-flagged`, spam in `#feed-spam`.
+Runs the [Gmail feed](../../packages/ai/leonsilicon/services/gmail-feed/README.md) as the Cloudflare Worker `gmail-feed` (set up 2026-11-19). Every email that reaches Leon's Gmail is copied into Slack: safe ones in `#feed-gmail`, unsafe ones in `#feed-flagged`, spam in `#feed-spam`.
 
 ```text
 cron (every minute) ─▶ FeedObject (Durable Object, SQLite)

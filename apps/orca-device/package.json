@@ -8,6 +8,6 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.orca-device": "workspace:*"
+    "@-/ai.leonsilicon.services.orca-device": "workspace:*"
   }
 }

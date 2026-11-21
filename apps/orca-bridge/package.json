@@ -7,6 +7,6 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.orca-bridge": "workspace:*"
+    "@-/ai.leonsilicon.services.orca-bridge": "workspace:*"
   }
 }

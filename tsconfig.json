@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "vite.config.ts"]
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "www/**/*.ts", "vite.config.ts"]
 }

@@ -1,0 +1,9 @@
+{
+  "name": "@-apps/ai.leonsilicon.gmail-feed",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*"
+  }
+}

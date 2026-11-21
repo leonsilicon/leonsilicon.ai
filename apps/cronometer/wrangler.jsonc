@@ -10,7 +10,7 @@
   // ai-edge Worker (since removed), which forwarded it to the Mac mini.
   "routes": [{ "pattern": "cronometer.leonsilicon.ai", "custom_domain": true }],
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers, as
-  // @-/com.leonsilicon.www does for the TypeScript Workers.
+  // @-/ai.leonsilicon.configs.cloudflare does for the TypeScript Workers.
   "assets": {
     "directory": "../../dist/www",
     "binding": "ASSETS",

@@ -4,8 +4,8 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
-    "@-/com.leonsilicon.www": "workspace:*"
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*"
   },
   "varlock": {
     "loadPath": "../../",

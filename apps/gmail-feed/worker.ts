@@ -1,7 +1,4 @@
-import {
-  decisionsScreener,
-  type Screener,
-} from "@-/com.leonsilicon.ai.services.beeper-watch/screen";
+import { decisionsScreener, type Screener } from "@-/ai.leonsilicon.services.beeper-watch/screen";
 import {
   EMAIL_PROMPT,
   GmailClient,
@@ -9,9 +6,9 @@ import {
   loadConfig,
   slackBot,
   Store,
-} from "@-/com.leonsilicon.ai.services.gmail-feed";
-import type { Logger, Sql, SqlValue } from "@-/com.leonsilicon.ai.services.gmail-feed";
-import { serveSite, type Assets } from "@-/com.leonsilicon.www";
+} from "@-/ai.leonsilicon.services.gmail-feed";
+import type { Logger, Sql, SqlValue } from "@-/ai.leonsilicon.services.gmail-feed";
+import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
 // Just the Durable Object surface used here. Cloudflare's full type packages redefine globals such
 // as Response, which conflicts with the Node types this workspace compiles everything else against.

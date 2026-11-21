@@ -1,0 +1,9 @@
+{
+  "name": "@-apps/ai.leonsilicon.cronometer",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*"
+  }
+}

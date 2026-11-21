@@ -4,10 +4,10 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.autolinear": "workspace:*",
-    "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
-    "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
-    "@-/com.leonsilicon.www": "workspace:*"
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+    "@-/ai.leonsilicon.services.autolinear": "workspace:*",
+    "@-/ai.leonsilicon.services.linear-slack-sync": "workspace:*",
+    "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*"
   },
   "varlock": {
     "loadPath": "../../",

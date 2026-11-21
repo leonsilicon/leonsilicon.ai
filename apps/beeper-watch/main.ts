@@ -1,4 +1,4 @@
-import { startBeeperWatch } from "@-/com.leonsilicon.ai.services.beeper-watch";
+import { startBeeperWatch } from "@-/ai.leonsilicon.services.beeper-watch";
 
 const service = await startBeeperWatch();
 for (const signal of ["SIGTERM", "SIGINT"] as const)

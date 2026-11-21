@@ -1,6 +1,6 @@
 # @-apps/slack-as-leon
 
-Runs [slack-as-leon](../../packages/com/leonsilicon/ai/services/slack-as-leon/README.md), served as `slack-puppet.leonsilicon.ai`, as a Cloudflare Worker (since 2026-11-13; it ran on the Mac mini for an hour before that). Hermes Cloud (Captain Claude) uses it to post in Slack as Leon with no bot marker, so the Grok Bot bots answer. It depends on no machine of Leon's.
+Runs [slack-as-leon](../../packages/ai/leonsilicon/services/slack-as-leon/README.md), served as `slack-puppet.leonsilicon.ai`, as a Cloudflare Worker (since 2026-11-13; it ran on the Mac mini for an hour before that). Hermes Cloud (Captain Claude) uses it to post in Slack as Leon with no bot marker, so the Grok Bot bots answer. It depends on no machine of Leon's.
 
 ```text
 Hermes Cloud ──▶ slack-puppet.leonsilicon.ai ──▶ Worker "slack-as-leon" ──▶ Slack Web API as Leon (xoxc + d cookie)

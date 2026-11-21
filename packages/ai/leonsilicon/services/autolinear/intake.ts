@@ -1,0 +1,399 @@
+import {
+  autolinearIssueId,
+  channelName,
+  escapeSlack,
+  intakeTitle,
+  parseTitle,
+  SlackError,
+  slackToLinear,
+} from "@-/ai.leonsilicon.services.linear-slack-sync";
+import type {
+  Adoption,
+  LinearIssue,
+  LinearTeam,
+  NewIssue,
+  SlackCall,
+  SlackParams,
+} from "@-/ai.leonsilicon.services.linear-slack-sync";
+import { newClientMsgId } from "@-/ai.leonsilicon.services.slack-as-leon";
+import type { AutolinearConfig } from "#config";
+
+export interface SlackFileRef {
+  name?: string;
+  title?: string;
+  permalink?: string;
+}
+
+/** One of Leon's Slack messages, as Hermes received it. */
+export interface IntakeMessage {
+  channel: string;
+  ts: string;
+  /** The thread it's in, when it's a reply. */
+  threadTs?: string | null;
+  user: string;
+  /** Slack mrkdwn, as Slack sent it. */
+  text: string;
+  blocks?: unknown[];
+  files?: SlackFileRef[];
+  /** Where Leon wrote it, in words: `a DM with Hermes`, `#general`, `a thread in #feed-gmail`. */
+  where: string;
+}
+
+export type IntakeResult =
+  | {
+      ok: true;
+      issue: { id: string; identifier: string; url: string };
+      channel: { id: string; name: string };
+      /** The copy of Leon's message in the channel, which Hermes answers in his place. */
+      ts: string;
+      /** Where Leon wrote it, in words. */
+      source: string;
+      /** Milliseconds from the start until each step was done. */
+      ms: Record<string, number>;
+    }
+  | { ok: false; skipped: "not_leon" | "issue_channel" };
+
+/** How far an intake got. Kept, so a retry carries on instead of starting over. */
+export interface Progress {
+  issue?: {
+    id: string;
+    identifier: string;
+    number: number;
+    title: string;
+    url: string;
+    state: string;
+  };
+  channel?: { id: string; name: string };
+  linked?: boolean;
+  copyTs?: string;
+  adopted?: boolean;
+}
+
+/** Lookups that stay true for a long time: kept for the life of the Worker's isolate. */
+export interface IntakeCache {
+  ids?: { teamId: string; stateId: string };
+  workspaceUrl?: string | null;
+}
+
+export interface IntakeDeps {
+  config: AutolinearConfig;
+  linear: {
+    issue(id: string): Promise<LinearIssue | null>;
+    createIssue(input: NewIssue): Promise<LinearIssue>;
+    team(key: string): Promise<LinearTeam | null>;
+  };
+  /** Leon's Slack web session: autolinear acts as him. */
+  session: SlackCall;
+  /** Hands the channel over to Linear Sync (its Durable Object's `/adopt`). */
+  adopt: (adoption: Adoption) => Promise<void>;
+  progress: { get(): Promise<Progress>; put(progress: Progress): Promise<void> };
+  cache?: IntakeCache;
+  now?: () => number;
+  log?: (event: string, fields?: Record<string, unknown>) => void;
+}
+
+/**
+ * Makes one of Leon's Slack messages a Linear issue with its own channel (Leon's rule, 2026-11-21:
+ * every message gets one at once, and Hermes answers it there). Only what Leon sees is on the way:
+ *
+ * 1. Creates the issue in Awaiting Init, one request: the team and status IDs come from config or
+ *    a cache, and the title and description from the message itself.
+ * 2. Creates its private channel `leon-<n>-<first words>` as Leon, so he is in it already.
+ * 3. At once, in parallel: edits his message to end with `→ #leon-<n>-…`, posts the message again
+ *    in the channel as him (marked like slack-as-leon's posts, so Hermes doesn't answer that copy on
+ *    its own; its plugin hands Hermes the original, moved there), and hands the channel to Linear
+ *    Sync, which invites its bot and Hermes and does the rest (topic, section, intro, project).
+ *
+ * Each step is recorded, so a retry carries on where the last try stopped.
+ */
+export class Intake {
+  readonly #d: IntakeDeps;
+  readonly #now: () => number;
+  readonly #cache: IntakeCache;
+
+  constructor(deps: IntakeDeps) {
+    this.#d = deps;
+    this.#now = deps.now ?? Date.now;
+    this.#cache = deps.cache ?? {};
+  }
+
+  async run(msg: IntakeMessage): Promise<IntakeResult> {
+    const c = this.#d.config;
+    const start = this.#now();
+    const ms: Record<string, number> = {};
+    const mark = (step: string) => {
+      ms[step] = this.#now() - start;
+    };
+    if (msg.user !== c.leonUserId) return { ok: false, skipped: "not_leon" };
+    if (new RegExp(`^(?:a thread in )?#${c.channelPrefix}-\\d+(?:-|$)`).test(msg.where))
+      return { ok: false, skipped: "issue_channel" };
+
+    const p = await this.#d.progress.get();
+    const save = () => this.#d.progress.put(p);
+    // Both come from config or the isolate's cache, normally; on a cold start, asked in parallel.
+    const [ids, workspaceUrl] = await Promise.all([
+      p.issue ? null : this.#ids(),
+      this.#workspaceUrl(),
+    ]);
+    const permalink = workspaceUrl ? permalinkOf(workspaceUrl, msg) : null;
+
+    if (!p.issue) {
+      const { teamId, stateId } = ids!;
+      const [fields, id] = await Promise.all([
+        this.#fields(msg, permalink),
+        autolinearIssueId(`${msg.channel}:${msg.ts}`),
+      ]);
+      let issue: LinearIssue | null;
+      try {
+        issue = await this.#d.linear.createIssue({ id, teamId, stateId, ...fields });
+      } catch (error) {
+        // An earlier try got through.
+        if (!/already exists|duplicate|unique/i.test(String(error))) throw error;
+        issue = await this.#d.linear.issue(id);
+        if (!issue) throw error;
+      }
+      p.issue = {
+        id: issue.id,
+        identifier: issue.identifier,
+        number: issue.number,
+        title: issue.title,
+        url: issue.url,
+        state: issue.state.name,
+      };
+      await save();
+      mark("issue");
+    }
+    const issue = p.issue;
+
+    if (!p.channel) {
+      p.channel = await this.#createChannel(issue.number, issue.title);
+      await save();
+      mark("channel");
+    }
+    const channel = p.channel;
+
+    const reply = Boolean(msg.threadTs && msg.threadTs !== msg.ts);
+    const where = escapeSlack(msg.where);
+    const lead = `From Leon's ${reply ? "reply" : "message"} in ${permalink ? `<${permalink}|${where}>` : where}.`;
+    const steps = await Promise.allSettled([
+      p.linked
+        ? null
+        : this.#link(msg, channel.id).then((done) => {
+            p.linked = done;
+            mark("linked");
+          }),
+      p.copyTs
+        ? null
+        : this.#copy(msg, channel.id).then((ts) => {
+            p.copyTs = ts;
+            mark("copy");
+          }),
+      p.adopted
+        ? null
+        : this.#d
+            .adopt({
+              issueId: issue.id,
+              identifier: issue.identifier,
+              title: issue.title,
+              stateName: issue.state,
+              channelId: channel.id,
+              channelName: channel.name,
+              sourceChannel: msg.channel,
+              sourceTs: msg.ts,
+              sourceThreadTs: reply ? msg.threadTs : null,
+              lead,
+            })
+            .then(() => {
+              p.adopted = true;
+              mark("adopted");
+            }),
+    ]);
+    await save();
+    const failed = steps.find((s): s is PromiseRejectedResult => s.status === "rejected");
+    if (failed) throw failed.reason;
+
+    const result: IntakeResult = {
+      ok: true,
+      issue: { id: issue.id, identifier: issue.identifier, url: issue.url },
+      channel,
+      ts: p.copyTs!,
+      source: msg.where,
+      ms,
+    };
+    this.#d.log?.("intake", { issue: issue.identifier, channel: channel.name, ms });
+    return result;
+  }
+
+  /** The team's and the intake status's IDs: from config, else looked up once per isolate. */
+  async #ids(): Promise<{ teamId: string; stateId: string }> {
+    const c = this.#d.config;
+    if (c.teamId && c.intakeStateId) return { teamId: c.teamId, stateId: c.intakeStateId };
+    if (this.#cache.ids) return this.#cache.ids;
+    const team = await this.#d.linear.team(c.teamKey);
+    if (!team) throw new Error(`no Linear team ${c.teamKey}`);
+    const state = team.states.find((s) => s.name === c.intakeState);
+    if (!state) throw new Error(`no Linear status ${c.intakeState} in ${c.teamKey}`);
+    this.#cache.ids = { teamId: c.teamId ?? team.id, stateId: c.intakeStateId ?? state.id };
+    return this.#cache.ids;
+  }
+
+  /** `https://<workspace>.slack.com`: from config, else asked of Slack once per isolate. */
+  async #workspaceUrl(): Promise<string | null> {
+    if (this.#d.config.workspaceUrl) return this.#d.config.workspaceUrl;
+    if (this.#cache.workspaceUrl !== undefined) return this.#cache.workspaceUrl;
+    try {
+      const url = (await this.#d.session("auth.test")).url;
+      this.#cache.workspaceUrl = typeof url === "string" ? url.replace(/\/+$/, "") : null;
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+      this.#cache.workspaceUrl = null;
+    }
+    return this.#cache.workspaceUrl;
+  }
+
+  /** Title and description, from the message alone. Only other people's mentions need a lookup. */
+  async #fields(msg: IntakeMessage, permalink: string | null) {
+    const c = this.#d.config;
+    const known = new Map([
+      [c.leonUserId, "Leon"],
+      [c.hermesUserId, "Hermes"],
+    ]);
+    const ids = [...new Set([...msg.text.matchAll(/<@([UW][A-Z0-9]+)/g)].map((m) => m[1]!))];
+    await Promise.all(
+      ids.filter((id) => !known.has(id)).map(async (id) => known.set(id, await this.#nameOf(id))),
+    );
+    const toMarkdown = (text: string) => slackToLinear(text, (id) => known.get(id) ?? id).trim();
+    // "@Hermes can you…" is titled "can you…": the mention is how he talks to Hermes, not the task.
+    const untagged = msg.text.replace(
+      new RegExp(`<@${c.hermesUserId}(?:\\|[^>]*)?>[,:]?\\s*`, "g"),
+      "",
+    );
+    const first = msg.files?.[0];
+    const title = intakeTitle(
+      toMarkdown(untagged),
+      first ? `File: ${first.title || first.name || "untitled"}` : "Slack message",
+    );
+    const files = (msg.files ?? [])
+      .filter((f) => f.permalink)
+      .map((f) => `📎 [${f.title || f.name || "file"}](${f.permalink})`);
+    const label = permalink ? `[${msg.where}](${permalink})` : msg.where;
+    const description = [`**Leon in Slack** (${label}):`, toMarkdown(msg.text), ...files]
+      .filter(Boolean)
+      .join("\n\n");
+    return { title, description };
+  }
+
+  async #nameOf(userId: string): Promise<string> {
+    try {
+      const info = await this.#d.session("users.info", { user: userId });
+      const user = info.user as {
+        name?: string;
+        real_name?: string;
+        profile?: { display_name?: string; real_name?: string };
+      };
+      return (
+        user.profile?.display_name ||
+        user.real_name ||
+        user.profile?.real_name ||
+        user.name ||
+        userId
+      );
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+      return userId;
+    }
+  }
+
+  /** The issue's private channel, made by Leon so he's in it at once. A taken name gets `-2`… */
+  async #createChannel(number: number, title: string): Promise<{ id: string; name: string }> {
+    const c = this.#d.config;
+    const base = channelName(c.channelPrefix, number, parseTitle(title).name, c.channelNameMax);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const name = attempt === 0 ? base : `${base.slice(0, c.channelNameMax - 3)}-${attempt + 1}`;
+      try {
+        const created = await this.#d.session("conversations.create", { name, is_private: true });
+        return { id: (created.channel as { id: string }).id, name };
+      } catch (error) {
+        if (error instanceof SlackError && error.code === "name_taken") continue;
+        throw error;
+      }
+    }
+    throw new Error(`no free channel name for ${base}`);
+  }
+
+  /**
+   * Ends Leon's message with a link to the channel. A message with blocks gets one more rich-text
+   * block, since Slack shows the blocks, not the text. True once done; a refusal (an old message,
+   * say) is logged, not fatal.
+   */
+  async #link(msg: IntakeMessage, channelId: string): Promise<boolean> {
+    const params: SlackParams = {
+      channel: msg.channel,
+      ts: msg.ts,
+      text: msg.text ? `${msg.text}\n→ <#${channelId}>` : `→ <#${channelId}>`,
+    };
+    if (msg.blocks?.length)
+      params.blocks = JSON.stringify([
+        ...msg.blocks,
+        richText([
+          { type: "text", text: "→ " },
+          { type: "channel", channel_id: channelId },
+        ]),
+      ]);
+    try {
+      await this.#d.session("chat.update", params);
+      return true;
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+      this.#d.log?.("link_failed", { channel: msg.channel, ts: msg.ts, error: error.code });
+      return false;
+    }
+  }
+
+  /** Posts Leon's message again in the channel as him, formatting and file links included. */
+  async #copy(msg: IntakeMessage, channelId: string): Promise<string> {
+    const files = (msg.files ?? []).filter((f) => f.permalink);
+    const fileLines = files.map(
+      (f) => `📎 <${f.permalink}|${escapeSlack(f.title || f.name || "file")}>`,
+    );
+    const text = [msg.text, ...fileLines].filter(Boolean).join("\n") || "(no text)";
+    const post = (blocks?: unknown[]) =>
+      this.#d.session("chat.postMessage", {
+        channel: channelId,
+        text,
+        client_msg_id: newClientMsgId(),
+        ...(blocks ? { blocks: JSON.stringify(blocks) } : {}),
+      });
+    let posted;
+    if (msg.blocks?.length) {
+      const links = files.flatMap((f, i) => [
+        ...(i ? [{ type: "text", text: "\n" }] : []),
+        { type: "text", text: "📎 " },
+        { type: "link", url: f.permalink!, text: f.title || f.name || "file" },
+      ]);
+      try {
+        posted = await post([...msg.blocks, ...(links.length ? [richText(links)] : [])]);
+      } catch (error) {
+        if (!(error instanceof SlackError) || error.code !== "invalid_blocks") throw error;
+        posted = await post();
+      }
+    } else posted = await post();
+    return posted.ts as string;
+  }
+}
+
+const richText = (elements: unknown[]) => ({
+  type: "rich_text",
+  elements: [{ type: "rich_text_section", elements }],
+});
+
+/** A Slack permalink, built without asking Slack. */
+export function permalinkOf(
+  workspaceUrl: string,
+  msg: Pick<IntakeMessage, "channel" | "ts" | "threadTs">,
+) {
+  const link = `${workspaceUrl}/archives/${msg.channel}/p${msg.ts.replace(".", "")}`;
+  return msg.threadTs && msg.threadTs !== msg.ts
+    ? `${link}?thread_ts=${msg.threadTs}&cid=${msg.channel}`
+    : link;
+}
