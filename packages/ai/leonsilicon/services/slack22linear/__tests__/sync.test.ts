@@ -382,6 +382,11 @@ function fakeSlack() {
               : { id: c.id, name: c.name, is_private: c.private, topic: { value: c.topic } },
           };
         }
+        case "conversations.members": {
+          const c = find(params.channel);
+          member(c);
+          return { ok: true, members: [...c.members] };
+        }
         case "conversations.history": {
           const c = find(params.channel);
           member(c);
@@ -581,6 +586,44 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
 const commentHook = (id: string, action = "create") => ({ action, type: "Comment", data: { id } });
 const projectHook = (id: string, action = "update") => ({ action, type: "Project", data: { id } });
+
+test("publishes full issue and icon metadata to a private feed on the next batch", async () => {
+  const { linear, slack, store, sync, clock, drain } = setup();
+  const title = "Describe the issue <with> & examples ".repeat(14).trim();
+  const issue = linear.addIssue(701, `${title} \`{start: 2026-12-01}\``, "Awaiting Date");
+  issue.priority = 2;
+  await sync.run("linear", issueHook(issue.id));
+  assert.ok(!slack.channels.some(({ name }) => name === "zami-issue-metadata"));
+  clock.now += 30_000;
+  await drain();
+  const feed = slack.channels.find(({ name }) => name === "zami-issue-metadata")!;
+  assert.equal(feed.private, true);
+  assert.deepEqual(feed.members, new Set([LEON, BOT]));
+  const snapshot = () => slack.posts.filter(({ channel }) => channel === feed.id).at(-1)!;
+  const prefix = "zami-issues:v1 ";
+  assert.ok(snapshot().text.startsWith(prefix));
+  assert.deepEqual(JSON.parse(snapshot().text.slice(prefix.length)), [
+    {
+      channel: store.issue(issue.id)!.channelId,
+      identifier: issue.identifier,
+      title,
+      priority: 2,
+      statusName: "Awaiting Date",
+      statusType: issue.state.type,
+      statusColor: issue.state.color,
+      url: issue.url,
+      dueDate: null,
+      meta: { start: "2026-12-01" },
+    },
+  ]);
+  issue.state = state("Done");
+  await sync.run("linear", issueHook(issue.id));
+  clock.now += 30_000;
+  await drain();
+  assert.equal(snapshot().text, `${prefix}[]`);
+  feed.members.add("USOMEONE");
+  await assert.rejects(sync.run("issue-metadata", {}), /Unexpected access/);
+});
 
 test("a new issue gets a private channel, an intro, a topic and its status section", async () => {
   const { linear, slack, sync } = setup();
@@ -1542,15 +1585,19 @@ test("autolinear's issue waits for its channel's hand-over instead of getting a 
 
   // The webhook's second look, two minutes on, finds the channel adopted.
   t.clock.now += ADOPT_WAIT_MS;
-  const posts = slack.posts.length;
+  const issuePosts = () => slack.posts.filter((p) => p.channel === channel.id).length;
+  const posts = issuePosts();
   await drain();
-  assert.equal(slack.channels.length, 1);
-  assert.equal(slack.posts.length, posts);
+  assert.deepEqual(
+    slack.channels.filter((c) => c.name.startsWith("leon-")),
+    [channel],
+  );
+  assert.equal(issuePosts(), posts);
 
   // Handing it over again changes nothing.
   await sync.adopt(adoption);
   await drain();
-  assert.equal(slack.posts.length, posts);
+  assert.equal(issuePosts(), posts);
 });
 
 test("if the hand-over never comes, the issue gets a channel two minutes on, adopting autolinear's", async () => {
@@ -1564,7 +1611,10 @@ test("if the hand-over never comes, the issue gets a channel two minutes on, ado
   t.clock.now += ADOPT_WAIT_MS;
   await drain();
   assert.equal(store.issue(issue.id)?.channelId, channel.id, "adopted by its number");
-  assert.equal(slack.channels.length, 1);
+  assert.deepEqual(
+    slack.channels.filter((c) => c.name.startsWith("leon-")),
+    [channel],
+  );
 });
 
 test("an adopted reply brings its thread's first message; a project channel's message joins the project", async () => {
@@ -1665,7 +1715,7 @@ test("an answer that pings Leon leaves the issue with him; one that doesn't (to 
   assert.equal(
     t.slack.posts
       .slice(posts)
-      .filter((p) => p.user !== HERMES)
+      .filter((p) => p.channel === channel.id && p.user !== HERMES)
       .map((p) => p.text)
       .join("\n"),
     [
@@ -1738,7 +1788,9 @@ test("an unpinged answer puts back the status Hermes's 👀 took the issue from,
     assert.equal(issue.state.name, status);
     assert.equal(issue.title, title);
     assert.equal(t.slack.sectionOf(channel.id), status);
-    const moves = t.slack.posts.slice(posts).filter((p) => p.user !== HERMES);
+    const moves = t.slack.posts
+      .slice(posts)
+      .filter((p) => p.channel === channel.id && p.user !== HERMES);
     assert.deepEqual(
       moves.map((p) => p.text),
       [
