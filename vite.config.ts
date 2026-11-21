@@ -39,6 +39,10 @@ export default defineConfig({
     ignorePatterns: [
       "patches.gen/**",
       "**/@fixtures/**",
+      // What pywrangler puts beside a Python Worker: its packages, its environment and its lock.
+      "**/python_modules/**",
+      "**/.venv-workers/**",
+      "**/pylock.toml",
       // Byte-identical copy of what runs on the mini; reformatting would hide drift.
       `${ai}/configs/grok-relay-hermes/*.mjs`,
     ],

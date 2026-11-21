@@ -11,7 +11,9 @@ test("every gateway route has a subdomain, and nothing else does", () => {
 test("gatewayPath maps the subdomain to the gateway's path", () => {
   assert.equal(gatewayPath("orca.leonsilicon.ai", "/"), "/orca");
   assert.equal(gatewayPath("ORCA.leonsilicon.ai", "/mcp/"), "/orca");
-  assert.equal(gatewayPath("cronometer.leonsilicon.ai", "", "?x=1"), "/cronometer?x=1");
+  assert.equal(gatewayPath("beeper.leonsilicon.ai", "", "?x=1"), "/beeper?x=1");
+  // Its own Worker since 2026-11-21, no longer a service on the mini.
+  assert.equal(gatewayPath("cronometer.leonsilicon.ai", "/"), null);
   assert.equal(gatewayPath("muse.leonsilicon.ai", "/"), null);
   assert.equal(gatewayPath("grok.leonsilicon.ai", "/healthz"), "/grok/healthz");
   assert.equal(gatewayPath("watch.leonsilicon.ai:443", "/"), "/watch");

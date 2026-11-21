@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers to deploy: all, or a comma-separated list (ai-edge, autolinear, gmail-feed, linear-slack-sync, slack-as-leon)"
+        description: "Workers to deploy: all, or a comma-separated list (ai-edge, autolinear, cronometer, gmail-feed, linear-slack-sync, slack-as-leon)"
         required: true
         default: all
 
@@ -96,6 +96,9 @@ jobs:
         with:
           node-version: "24"
           cache: true
+      # The cronometer Worker is Python: pywrangler gathers its packages with uv (0.13.4 or newer).
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        if: matrix.worker == 'cronometer'
       # Typechecks, builds www/ and deploys; the varlock ones also upload the Worker's vars and secrets.
       - run: vpr -w "deploy:$WORKER"
 

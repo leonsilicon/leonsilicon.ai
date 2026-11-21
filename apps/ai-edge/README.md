@@ -8,12 +8,12 @@ The Worker reaches the mini through a Workers VPC binding (in beta and free as o
 
 ## Pieces
 
-| Piece          | Where                                                                                                            |
-| -------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Worker         | `ai-edge`, config in [`wrangler.jsonc`](wrangler.jsonc); no workers.dev address                                  |
-| Custom Domains | `orca`, `grok`, `beeper`, `watch` and `cronometer` `.leonsilicon.ai`, each with its own certificate              |
-| Pages          | `www/ai/leonsilicon/<name>/index.html`, built into `dist/www` and uploaded as the Worker's assets (`ASSETS`)     |
-| VPC binding    | `MINI` → VPC service `ai-mini-gateway` (`01a1d6ff-59ac-77a0-9529-94bdf672bb81`): `127.0.0.1:18800` via `ai-mini` |
+| Piece          | Where                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker         | `ai-edge`, config in [`wrangler.jsonc`](wrangler.jsonc); no workers.dev address                                                                                       |
+| Custom Domains | `orca`, `grok`, `beeper` and `watch` `.leonsilicon.ai`, each with its own certificate (`cronometer` moved to [its own Worker](../cronometer/README.md) on 2026-11-21) |
+| Pages          | `www/ai/leonsilicon/<name>/index.html`, built into `dist/www` and uploaded as the Worker's assets (`ASSETS`)                                                          |
+| VPC binding    | `MINI` → VPC service `ai-mini-gateway` (`01a1d6ff-59ac-77a0-9529-94bdf672bb81`): `127.0.0.1:18800` via `ai-mini`                                                      |
 
 ## Deploy
 

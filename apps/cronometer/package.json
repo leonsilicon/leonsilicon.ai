@@ -1,0 +1,13 @@
+{
+  "name": "@-apps/cronometer",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.www": "workspace:*"
+  },
+  "varlock": {
+    "loadPath": "../../",
+    "filter": "#cronometer"
+  }
+}

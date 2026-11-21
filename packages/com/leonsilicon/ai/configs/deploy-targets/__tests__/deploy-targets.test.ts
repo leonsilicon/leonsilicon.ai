@@ -12,6 +12,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
   assert.deepEqual(apps, [
     "ai-edge",
     "autolinear",
+    "cronometer",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -25,6 +26,10 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
   assert.deepEqual(affected("apps/ai-edge/worker.ts"), ["ai-edge"]);
+  // A Python Worker: its entry, the upstream source it carries and its Python lockfile.
+  assert.deepEqual(affected("apps/cronometer/src/entry.py"), ["cronometer"]);
+  assert.deepEqual(affected("apps/cronometer/src/cronometer_mcp/client.py"), ["cronometer"]);
+  assert.deepEqual(affected("apps/cronometer/uv.lock"), ["cronometer"]);
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/autolinear/intake.ts"), [
     "autolinear",
   ]);
@@ -43,6 +48,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("www/ai/leonsilicon/orca/index.html"), [
     "ai-edge",
     "autolinear",
+    "cronometer",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -50,6 +56,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("bun.lock"), [
     "ai-edge",
     "autolinear",
+    "cronometer",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -57,6 +64,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("packages/com/leonsilicon/www/page.ts"), [
     "ai-edge",
     "autolinear",
+    "cronometer",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",

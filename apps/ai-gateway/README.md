@@ -12,7 +12,7 @@ The tunnel has no public hostname: the only way in is the Worker's VPC binding.
 
 ## Endpoints
 
-As of 2026-11-21 the `orca`, `grok`, `watch` and `beeper` services are stopped: Hermes Cloud runs replacements for the first three itself and reads Beeper through its own inbox, and Beeper Desktop on the mini was quit. Those four URLs answer 502, and their routes go when the gateway does. Only `cronometer` is still served here.
+As of 2026-11-21 nothing is served through here any more. The `orca`, `grok`, `watch` and `beeper` services are stopped: Hermes Cloud runs replacements for the first three itself and reads Beeper through its own inbox, and Beeper Desktop on the mini was quit. Those four URLs answer 502. `cronometer` moved to [its own Worker](../cronometer/README.md) and is no longer routed here. What is left to do is remove the gateway, the tunnel and the edge Worker.
 
 | URL                                 | Service                                                                                                | Local target             | Token on the mini                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------- |

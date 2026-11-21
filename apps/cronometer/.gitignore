@@ -1,0 +1,6 @@
+python_modules/
+.venv-workers/
+.venv/
+pylock.toml
+.dev.vars
+wrangler.test.jsonc

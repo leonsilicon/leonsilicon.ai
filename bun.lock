@@ -65,6 +65,12 @@
         "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
       },
     },
+    "apps/cronometer": {
+      "name": "@-apps/cronometer",
+      "dependencies": {
+        "@-/com.leonsilicon.www": "workspace:*",
+      },
+    },
     "apps/gmail-feed": {
       "name": "@-apps/gmail-feed",
       "dependencies": {
@@ -414,6 +420,8 @@
     "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
 
     "@-apps/beeper-watch": ["@-apps/beeper-watch@workspace:apps/beeper-watch"],
+
+    "@-apps/cronometer": ["@-apps/cronometer@workspace:apps/cronometer"],
 
     "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
 

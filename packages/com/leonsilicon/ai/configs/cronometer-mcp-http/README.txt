@@ -1,5 +1,13 @@
 cronometer-mcp-http: Cronometer food diary MCP for Leon's agents, hosted on the Mac mini (set up 2026-11-06)
 
+RETIRED 2026-11-21. Cronometer's MCP now runs as a Cloudflare Python Worker (apps/cronometer), at the same
+address and with the same bearer token, so the Grok bots' connector needed no change. The LaunchAgent
+com.leonsilicon.cronometer-mcp-http on the mini was stopped and disabled; the login and the token moved from
+the mini's files into Infisical (/cronometer). The rest of this file describes the mini's setup as it ran.
+To bring it back: `launchctl enable gui/$(id -u)/com.leonsilicon.cronometer-mcp-http`, then
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.cronometer-mcp-http.plist` there,
+and put the cronometer route and Custom Domain back in the gateway and the ai-edge Worker.
+
 Upstream is rollecode/cronometer-mcp (MIT), which talks to mobile.cronometer.com, the API Cronometer's
 Android app uses. It needs no Gold subscription. Its client began as a copy of rwestergren/cronometer-api-mcp,
 which is the more popular repo but has fewer write tools (no weight logging, entry edits or target changes).

@@ -5,7 +5,7 @@ export const SUFFIX = ".leonsilicon.ai";
  * Services on the Mac mini, reached through its ai-gateway. These are the gateway's route names,
  * and each one is a Custom Domain of the edge Worker (`apps/ai-edge/wrangler.jsonc`).
  */
-export const MINI_SERVICES = ["orca", "grok", "beeper", "watch", "cronometer"] as const;
+export const MINI_SERVICES = ["orca", "grok", "beeper", "watch"] as const;
 
 export type MiniService = (typeof MINI_SERVICES)[number];
 

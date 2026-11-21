@@ -11,7 +11,6 @@
     { "pattern": "grok.leonsilicon.ai", "custom_domain": true },
     { "pattern": "beeper.leonsilicon.ai", "custom_domain": true },
     { "pattern": "watch.leonsilicon.ai", "custom_domain": true },
-    { "pattern": "cronometer.leonsilicon.ai", "custom_domain": true },
   ],
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/com.leonsilicon.www.

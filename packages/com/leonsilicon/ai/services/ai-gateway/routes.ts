@@ -42,12 +42,6 @@ export const ROUTES: readonly Route[] = [
     mcp: "http://127.0.0.1:18789/mcp",
     health: "http://127.0.0.1:18789/healthz",
   },
-  {
-    name: "cronometer",
-    description: "Cronometer",
-    mcp: "http://127.0.0.1:18791/mcp",
-    health: "http://127.0.0.1:18791/healthz",
-  },
 ];
 
 export interface Match {
