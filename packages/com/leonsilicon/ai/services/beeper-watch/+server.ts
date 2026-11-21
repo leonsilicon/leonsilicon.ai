@@ -1,4 +1,5 @@
 export { beeperWatchExtension, parseEnv } from "#extension";
+export type { InboxAccess, InboxContext, InboxExtension, JournalEntry, RoomInfo } from "#inbox";
 export { accountOf, journalSource, typeOf } from "#journal-source";
 export {
   createBeeperWatch,

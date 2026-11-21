@@ -9,6 +9,7 @@
     "#extension": "./extension.ts",
     "#feed": "./feed.ts",
     "#format": "./format.ts",
+    "#inbox": "./inbox.ts",
     "#journal-source": "./journal-source.ts",
     "#mcp": "./mcp.ts",
     "#platform": "./platform.ts",
@@ -24,7 +25,6 @@
     "./screen": "./+screen.ts"
   },
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
     "@-/com.npmjs.beeper__desktop-api": "workspace:*",
     "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
     "@-/com.npmjs.openai": "workspace:*",

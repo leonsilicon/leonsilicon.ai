@@ -188,7 +188,6 @@
       "name": "@-/com.leonsilicon.ai.services.beeper-watch",
       "version": "1.0.0",
       "dependencies": {
-        "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
         "@-/com.npmjs.beeper__desktop-api": "workspace:*",
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",

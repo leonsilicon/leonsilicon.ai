@@ -1,8 +1,4 @@
-import type {
-  ExtensionContext,
-  JournalEntry,
-  RoomInfo,
-} from "@-/com.leonsilicon.ai.services.beeper-inbox";
+import type { InboxAccess, JournalEntry, RoomInfo } from "#inbox";
 import type {
   BeeperFeedSource,
   BeeperSource,
@@ -21,12 +17,6 @@ import type {
  * A chat ID is the Matrix room ID, as it already was in every #feed- post. A message ID is the Matrix
  * event ID; Beeper Desktop's were its own numbers, so state saved from that source can't be reused.
  */
-
-/** What the source needs of the inbox. */
-export type InboxAccess = Pick<
-  ExtensionContext,
-  "journal" | "rooms" | "connections" | "senderNames" | "tool"
->;
 
 /** The feed's page limit, as a number of messages. */
 const RECENT_LIMIT = 2000;

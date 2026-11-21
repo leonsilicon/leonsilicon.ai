@@ -3,10 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import type { JournalEntry, RoomInfo } from "@-/com.leonsilicon.ai.services.beeper-inbox";
 import { parseEnv } from "#extension";
 import { Feed } from "#feed";
-import { accountOf, journalSource, typeOf, type InboxAccess } from "#journal-source";
+import type { InboxAccess, JournalEntry, RoomInfo } from "#inbox";
+import { accountOf, journalSource, typeOf } from "#journal-source";
 import { loadCoreConfig } from "#service";
 import type { Logger, SlackPoster } from "#types";
 
@@ -79,14 +79,10 @@ function inbox(options: { coveredSince?: number } = {}) {
   };
   const access: InboxAccess = {
     journal: {
-      head: async () => seq,
       coveredSince: async () => state.coveredSince,
-      latest: async (roomId, count) =>
-        entries.filter((entry) => entry.roomId === roomId).slice(-count),
       since: async (roomId, sinceTs) =>
         entries.filter((entry) => entry.roomId === roomId && entry.ts >= sinceTs),
       recent: async (sinceTs) => entries.filter((entry) => entry.ts >= sinceTs),
-      changes: async () => ({ entries: [], cursor: seq }),
     },
     rooms: async (roomIds) => roomIds.flatMap((id) => (directory[id] ? [directory[id]] : [])),
     connections: async () =>

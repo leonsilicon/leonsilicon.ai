@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type {
-  DaemonExtension,
-  RunningExtension,
-} from "@-/com.leonsilicon.ai.services.beeper-inbox";
+import type { InboxExtension, RunningInboxExtension } from "#inbox";
 import { journalSource } from "#journal-source";
 import { callTool, INSTRUCTIONS, TOOLS, VERSION } from "#mcp";
 import { createBeeperWatch, loadCoreConfig, type BeeperWatchCore } from "#service";
@@ -31,11 +28,11 @@ export function parseEnv(text: string): Record<string, string> {
  * Its settings are the same as the stand-alone service's (see the README), in `env` in its own
  * directory. Without that file it stays off and says so.
  */
-export function beeperWatchExtension(): DaemonExtension {
+export function beeperWatchExtension(): InboxExtension {
   return {
     name: "beeper-watch",
     server: { name: "beeper-watch", version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS },
-    start(context): RunningExtension {
+    start(context): RunningInboxExtension {
       const envFile = join(context.home, "env");
       let core: BeeperWatchCore | null = null;
       let problem: string | null = "starting";
