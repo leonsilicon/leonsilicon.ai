@@ -1,0 +1,21 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.grok-relay",
+  "version": "1.3.0",
+  "private": true,
+  "description": "The Grok Bot relay for Hermes: three MCP tools that message Leon's Grok bots as Leon, with a busy-bot queue and an hourly budget, running inside Hermes Cloud's Beeper inbox daemon.",
+  "type": "module",
+  "imports": {
+    "#backend": "./inbox-backend.ts",
+    "#extension": "./extension.ts",
+    "#policy": "./policy.ts",
+    "#relay": "./relay.ts",
+    "#tools": "./tools.ts",
+    "#types": "./types.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*"
+  }
+}

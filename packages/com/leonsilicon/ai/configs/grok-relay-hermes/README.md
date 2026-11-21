@@ -2,6 +2,8 @@
 
 The Grok Bot relay for Hermes Cloud (v1.2.0, since 2026-11-06). It gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`, that message Leon's Grok Bot bots through Beeper Desktop on the Mac mini, as Leon and with no label. Public URL: `https://grok.leonsilicon.ai`, through the [ai-gateway](../../../../../../apps/ai-gateway/README.md).
 
+Its successor, which needs neither the mini nor Beeper Desktop, is the [grok-relay service](../../services/grok-relay/README.md): installed on Hermes Cloud on 2026-11-21 but not in use yet, so this copy is still the one Hermes talks to.
+
 The files here are a byte-identical copy of what runs on the mini (imported 2026-11-12), kept as plain `.mjs` and outside the formatter so a diff shows any drift. They are not a workspace package.
 
 | Here                                                     | On the mini                                                        |

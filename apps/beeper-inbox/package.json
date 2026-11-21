@@ -8,6 +8,7 @@
   "type": "module",
   "imports": {},
   "dependencies": {
-    "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*"
+    "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
+    "@-/com.leonsilicon.ai.services.grok-relay": "workspace:*"
   }
 }

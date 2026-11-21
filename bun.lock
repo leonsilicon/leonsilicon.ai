@@ -52,6 +52,7 @@
       },
       "dependencies": {
         "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
+        "@-/com.leonsilicon.ai.services.grok-relay": "workspace:*",
       },
     },
     "apps/beeper-watch": {
@@ -198,6 +199,13 @@
       "dependencies": {
         "@-/com.leonsilicon.ai.services.beeper-watch": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
+      },
+    },
+    "packages/com/leonsilicon/ai/services/grok-relay": {
+      "name": "@-/com.leonsilicon.ai.services.grok-relay",
+      "version": "1.3.0",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.beeper-inbox": "workspace:*",
       },
     },
     "packages/com/leonsilicon/ai/services/linear-slack-sync": {
@@ -353,6 +361,8 @@
     "@-/com.leonsilicon.ai.services.beeper-watch": ["@-/com.leonsilicon.ai.services.beeper-watch@workspace:packages/com/leonsilicon/ai/services/beeper-watch"],
 
     "@-/com.leonsilicon.ai.services.gmail-feed": ["@-/com.leonsilicon.ai.services.gmail-feed@workspace:packages/com/leonsilicon/ai/services/gmail-feed"],
+
+    "@-/com.leonsilicon.ai.services.grok-relay": ["@-/com.leonsilicon.ai.services.grok-relay@workspace:packages/com/leonsilicon/ai/services/grok-relay"],
 
     "@-/com.leonsilicon.ai.services.linear-slack-sync": ["@-/com.leonsilicon.ai.services.linear-slack-sync@workspace:packages/com/leonsilicon/ai/services/linear-slack-sync"],
 

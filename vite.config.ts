@@ -63,6 +63,7 @@ export default defineConfig({
             "beeper-inbox",
             "beeper-watch",
             "gmail-feed",
+            "grok-relay",
             "linear-slack-sync",
             "orca-bridge",
             "orca-device",
