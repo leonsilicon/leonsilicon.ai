@@ -1,4 +1,5 @@
-import type { GrokBackend, GrokBot, GrokMessage } from "#types";
+import type { ExtensionJournal, JournalEntry } from "@-/com.leonsilicon.ai.services.beeper-inbox";
+import type { GrokBackend, GrokBot, GrokLive, GrokMessage } from "#types";
 
 /** Runs one of the Beeper inbox's tools; inside the inbox daemon this is a direct call. */
 export type InboxTool = (
@@ -8,8 +9,11 @@ export type InboxTool = (
 
 /** The inbox's short name for Beeper's "Grok Bot" network (bridge protocol `grokbot`). */
 export const GROK_NETWORK = "grok";
-/** Each page is up to 100 raw events; a bot that edits its replies as it writes uses many per message. */
-const MAX_PAGES = 3;
+/**
+ * The most events one history read asks for. A page costs about half a second per event, and the
+ * inbox reads one page at a time, so a large one holds everything else up.
+ */
+export const HISTORY_MAX = 20;
 
 /**
  * Orders a chat's messages by time, with the event ID breaking ties, and compares as a plain string:
@@ -27,9 +31,40 @@ function records(value: unknown): Array<Record<string, unknown>> {
     : [];
 }
 
-/** The relay's reads and sends through Hermes's Beeper inbox: Matrix, with no Beeper Desktop. */
-export function inboxBackend(tool: InboxTool): GrokBackend {
+function fromJournal(entry: JournalEntry): GrokMessage {
   return {
+    id: entry.eventId,
+    chatID: entry.roomId,
+    sortKey: sortKeyOf(entry.ts, entry.eventId),
+    isSender: entry.isMe,
+    text: entry.text,
+    timestamp: new Date(entry.ts).toISOString(),
+    ...(entry.type && entry.type !== "m.text" ? { type: entry.type } : {}),
+    ...(entry.redacted ? { isDeleted: true } : {}),
+  };
+}
+
+function liveFrom(journal: ExtensionJournal): GrokLive {
+  return {
+    coveredSince: () => journal.coveredSince(),
+    latest: async (chatID, count) => (await journal.latest(chatID, count)).map(fromJournal),
+    since: async (chatID, sinceMs) => (await journal.since(chatID, sinceMs)).map(fromJournal),
+    cursor: () => journal.head(),
+    changes: async (chatID, cursor, waitMs) => {
+      const page = await journal.changes({ after: cursor, roomId: chatID, waitMs });
+      return { messages: page.entries.map(fromJournal), cursor: page.cursor };
+    },
+  };
+}
+
+/**
+ * The relay's reads and sends through Hermes's Beeper inbox: Matrix, with no Beeper Desktop. With the
+ * inbox's journal it follows chats live.
+ */
+export function inboxBackend(tool: InboxTool, journal?: ExtensionJournal): GrokBackend {
+  return {
+    ...(journal ? { live: liveFrom(journal) } : {}),
+
     async bots({ refresh = false } = {}) {
       const bots: GrokBot[] = [];
       let offset = 0;
@@ -55,14 +90,12 @@ export function inboxBackend(tool: InboxTool): GrokBackend {
       return bots;
     },
 
-    async messages(chatID, wanted = 30) {
+    async messages(chatID, wanted = HISTORY_MAX) {
       const found = new Map<string, GrokMessage>();
-      let cursor: string | null = null;
-      for (let page = 0; page < MAX_PAGES; page++) {
+      {
         const result = await tool("list_messages", {
           room_id: chatID,
-          limit: 100,
-          ...(cursor ? { cursor } : {}),
+          limit: Math.min(Math.max(Math.trunc(wanted), 1), HISTORY_MAX),
         });
         for (const message of records(result.messages)) {
           const { event_id: id, ts, timestamp, type } = message;
@@ -78,8 +111,6 @@ export function inboxBackend(tool: InboxTool): GrokBackend {
             ...(typeof type === "string" && type !== "m.text" ? { type } : {}),
           });
         }
-        cursor = typeof result.next_cursor === "string" ? result.next_cursor : null;
-        if (found.size >= wanted || !cursor) break;
       }
       return [...found.values()];
     },

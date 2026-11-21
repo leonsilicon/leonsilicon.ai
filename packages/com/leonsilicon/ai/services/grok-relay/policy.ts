@@ -22,6 +22,11 @@ export const QUIET_MS = 60 * 1000;
 export const ACK_QUIET_MS = 5 * 60 * 1000;
 /** …but only while our last message is this fresh. */
 export const ACK_WINDOW_MS = 20 * 60 * 1000;
+/**
+ * How much of a chat `busy` needs: every rule above looks at most this far back (the 20-minute
+ * acknowledgement window, with room to spare).
+ */
+export const BUSY_WINDOW_MS = 25 * 60 * 1000;
 /** Flush a queue this old even if the bot still looks busy. */
 export const MAX_QUEUE_AGE_MS = 20 * 60 * 1000;
 export const MIN_JUSTIFICATION = 20;
@@ -87,13 +92,30 @@ const at = (message: ChatLine): number => Date.parse(message.timestamp);
 export function busy(
   messages: readonly ChatLine[],
   now: number = Date.now(),
+  { windowed = false }: { windowed?: boolean } = {},
 ): { busy: boolean; reason: string } {
   const list = messages
     .filter((message) => !message.isDeleted)
     .sort((a, b) => compareKeys(a.sortKey, b.sortKey));
   const lastOut = list.findLastIndex((message) => message.isSender);
   const last = list[lastOut];
-  if (!last) return { busy: false, reason: "no message from Leon in this chat yet" };
+  if (!last) {
+    // `windowed`: these are only the last BUSY_WINDOW_MS of the chat, so Leon's message may be
+    // older than that. Every rule that needs it has expired by then; a bot still posting hasn't.
+    const newest = windowed ? list.at(-1) : undefined;
+    if (newest && now - at(newest) < QUIET_MS) {
+      return {
+        busy: true,
+        reason: `the bot posted ${Math.round((now - at(newest)) / 1000)}s ago and may still be sending`,
+      };
+    }
+    return {
+      busy: false,
+      reason: windowed
+        ? "nothing from Leon in this chat lately, and the bot is quiet"
+        : "no message from Leon in this chat yet",
+    };
+  }
   const outAge = now - at(last);
   const replies = list.slice(lastOut + 1).filter((message) => !message.isSender);
   const secs = (ms: number): string => `${Math.round(ms / 1000)}s`;

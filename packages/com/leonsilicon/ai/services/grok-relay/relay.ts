@@ -5,6 +5,7 @@ import {
   budgetExceededMessage,
   budgetStatus,
   busy,
+  BUSY_WINDOW_MS,
   compareKeys,
   compose,
   extendBudget,
@@ -38,9 +39,13 @@ export const MAX_WAIT_SECONDS = 150;
 /** After a reply, wait this long for follow-up messages. */
 const QUIET_SECONDS = 20;
 const FLUSH_EVERY_MS = 10_000;
+/** How far the homeserver's clock may run behind this machine's when telling a reply from the past. */
+const CLOCK_SLACK_MS = 60_000;
 const POLL_MS = 3000;
-/** How much of a chat `busy` and `read` look at. */
-const HISTORY = 30;
+/** How much history `read` asks for when it isn't told. */
+const HISTORY = 10;
+/** How much history `busy` reads while the journal is too young to answer. */
+const BUSY_HISTORY = 10;
 const QUEUED_NOTE =
   "Queued: it will go out merged with any other queued messages as one message when the bot finishes its current reply. Read replies later with grok_bot_read. Do not resend.";
 
@@ -55,8 +60,10 @@ export interface GrokRelayOptions {
   flush?: boolean;
   /** Only these bot names are reachable, when given. */
   allowedBots?: readonly string[];
-  /** Milliseconds between checks while waiting for a reply. */
+  /** Milliseconds between checks while waiting for a reply, for a backend with no journal. */
   pollMs?: number;
+  /** How long after a reply to keep waiting for more of it (default 20 s). */
+  quietMs?: number;
 }
 
 export interface ShapedMessage {
@@ -95,7 +102,9 @@ const given = (value: unknown): boolean => value !== undefined && value !== null
 
 export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   const { backend, log } = options;
+  const { live } = backend;
   const pollMs = options.pollMs ?? POLL_MS;
+  const quietMs = options.quietMs ?? QUIET_SECONDS * 1000;
   const sentFile = join(options.stateDir, "hermes-sent.json");
   const outboxFile = join(options.stateDir, "outbox.json");
   const budgetFile = join(options.stateDir, "budget.json");
@@ -157,11 +166,26 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     return found;
   }
 
+  const ordered = (list: readonly GrokMessage[]): GrokMessage[] =>
+    list.filter((message) => !message.isDeleted).sort((a, b) => compareKeys(a.sortKey, b.sortKey));
+
+  /** One page of history: the slow way, for when the journal doesn't reach back far enough. */
   async function messages(chatID: string, wanted = HISTORY): Promise<GrokMessage[]> {
-    const list = await backend.messages(chatID, wanted);
-    return list
-      .filter((message) => !message.isDeleted)
-      .sort((a, b) => compareKeys(a.sortKey, b.sortKey));
+    return ordered(await backend.messages(chatID, wanted));
+  }
+
+  /**
+   * What `busy` needs of a chat: its last BUSY_WINDOW_MS from the journal once the journal covers
+   * that, and a page of history until then.
+   */
+  async function recent(
+    chatID: string,
+    now: number = Date.now(),
+  ): Promise<{ list: GrokMessage[]; windowed: boolean }> {
+    const from = now - BUSY_WINDOW_MS;
+    if (live && (await live.coveredSince()) <= from)
+      return { list: ordered(await live.since(chatID, from)), windowed: true };
+    return { list: await messages(chatID, BUSY_HISTORY), windowed: false };
   }
 
   function shape(message: GrokMessage, botName: string): ShapedMessage {
@@ -239,10 +263,10 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
       throw new Error(budgetExceededMessage(status, target.name, text));
     }
 
-    const before = await messages(target.chatID);
+    const { list: before, windowed } = await recent(target.chatID);
     const baseline = before.at(-1)?.sortKey ?? null;
     const pending = outbox[target.chatID]?.items.length ?? 0;
-    const state = busy(before);
+    const state = busy(before, Date.now(), { windowed });
     if (!isUrgent && (state.busy || pending)) {
       const box = (outbox[target.chatID] ??= { bot: target.name, items: [] });
       box.items.push({ text: text.trim(), at: new Date().toISOString() });
@@ -268,6 +292,9 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
       };
     }
 
+    // Taken before the send, so nothing that arrives while it is on its way is missed.
+    const position = live ? await live.cursor() : 0;
+    const sentAt = Date.now();
     const messageID = await post(target.chatID, text.trim(), `send-${randomUUID()}`, {
       urgent: isUrgent,
     });
@@ -280,34 +307,48 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
 
     // A reply can arrive as one message that the bot keeps editing, so a changed text counts as
     // activity too, and the texts returned are the ones of the last look.
-    const seen = new Map<string, string>();
-    const newer = (message: GrokMessage): boolean =>
-      !message.isSender && (baseline === null || compareKeys(message.sortKey, baseline) > 0);
-    let latest: GrokMessage[] = [];
+    const seen = new Map<string, GrokMessage>();
     let lastNew: number | null = null;
     const deadline = Date.now() + wait * 1000;
-    while (Date.now() < deadline) {
-      await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
-      latest = await messages(target.chatID, 1);
-      for (const message of latest) {
-        if (!newer(message) || seen.get(message.id) === message.text) continue;
-        seen.set(message.id, message.text);
-        lastNew = Date.now();
+    const left = (): number =>
+      Math.min(deadline, lastNew === null ? deadline : lastNew + quietMs) - Date.now();
+    if (live) {
+      // The journal answers the moment something arrives, so there is nothing to poll.
+      let cursor = position;
+      for (let waitMs = left(); waitMs > 0; waitMs = left()) {
+        const page = await live.changes(target.chatID, cursor, waitMs);
+        cursor = page.cursor;
+        for (const message of page.messages) {
+          // An old message can turn up in the journal too (see its `latest`); it is no reply.
+          if (message.isSender || Date.parse(message.timestamp) < sentAt - CLOCK_SLACK_MS) continue;
+          if (message.isDeleted) seen.delete(message.id);
+          else seen.set(message.id, message);
+          lastNew = Date.now();
+        }
       }
-      if (lastNew !== null && Date.now() - lastNew > QUIET_SECONDS * 1000) break;
+    } else {
+      const newer = (message: GrokMessage): boolean =>
+        !message.isSender && (baseline === null || compareKeys(message.sortKey, baseline) > 0);
+      while (left() > 0) {
+        await sleep(Math.min(pollMs, Math.max(0, left())));
+        const latest = await messages(target.chatID, 5);
+        for (const message of latest) {
+          if (!newer(message) || seen.get(message.id)?.text === message.text) continue;
+          seen.set(message.id, message);
+          lastNew = Date.now();
+        }
+      }
     }
-    const replies = latest
-      .filter((message) => seen.has(message.id))
-      .map((message) => shape(message, target.name));
+    const replies = ordered([...seen.values()]).map((message) => shape(message, target.name));
     if (replies.length) log({ event: "grok_reply", bot: target.name, messages: replies.length });
-    const left = budgetStatus(budget);
+    const remaining = budgetStatus(budget);
     return {
       ok: true,
       bot: target.name,
       sent: { messageID, sentAs: "Leon", label: null },
       replies,
       cursor: replies.at(-1)?.sortKey ?? baseline,
-      budget: { used: left.used, limit: left.limit },
+      budget: { used: remaining.used, limit: remaining.limit },
       note: replies.length
         ? "The bot may still send more. Call grok_bot_read with this cursor to check later."
         : `No reply within ${wait}s. Grok bots often take minutes; call grok_bot_read with this cursor later. Do not resend.`,
@@ -318,10 +359,22 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     const target = await resolve(args.bot);
     const limit = args.limit === undefined ? 10 : Number(args.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 30) throw new Error("limit must be 1-30");
-    let list = await messages(target.chatID);
     // Cursors from before 2026-11-20, when the relay read Beeper Desktop, were plain numbers.
     const stale = given(args.after) && /^\d+$/.test(String(args.after));
     const after = given(args.after) && !stale ? String(args.after) : null;
+    // From the journal when it holds what is asked for: everything since the cursor's time, or as
+    // many of the latest messages as wanted. Otherwise one page of history.
+    let list: GrokMessage[] | null = null;
+    if (live) {
+      const from = after === null ? Number.NaN : Number.parseInt(after, 10);
+      if (Number.isFinite(from) && from >= (await live.coveredSince()))
+        list = ordered(await live.since(target.chatID, from));
+      else if (after === null) {
+        const held = ordered(await live.latest(target.chatID, limit));
+        if (held.length >= limit) list = held;
+      }
+    }
+    list ??= await messages(target.chatID, limit);
     if (after !== null) list = list.filter((message) => compareKeys(message.sortKey, after) > 0);
     const shown = list.slice(-limit).map((message) => shape(message, target.name));
     const waiting = queued(target.chatID);
@@ -360,8 +413,8 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
           continue;
         }
         try {
-          const list = await messages(chatID);
-          const state = busy(list, now());
+          const { list, windowed } = await recent(chatID, now());
+          const state = busy(list, now(), { windowed });
           if (state.busy && now() - Date.parse(first.at) < MAX_QUEUE_AGE_MS) continue;
           const batch = takeBatch(box.items, MAX_TEXT);
           const text = compose(batch);

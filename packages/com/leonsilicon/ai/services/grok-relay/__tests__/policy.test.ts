@@ -150,3 +150,19 @@ test("plain: HTML to text with links kept", () => {
     "See the page (https://x.test/a)\n- one\n- two & 3",
   );
 });
+
+test("busy from a window of the chat: a bot still posting counts even when Leon's message is older", () => {
+  const posting = [msg(false, 0, "Here is the first half of the answer, more is coming.")];
+  assert.equal(
+    busy(posting, T0 + s(30)).busy,
+    false,
+    "all of the chat, no message from Leon: idle",
+  );
+  assert.equal(busy(posting, T0 + s(30), { windowed: true }).busy, true);
+  assert.equal(
+    busy(posting, T0 + s(90), { windowed: true }).busy,
+    false,
+    "quiet for over a minute",
+  );
+  assert.equal(busy([], T0, { windowed: true }).busy, false);
+});

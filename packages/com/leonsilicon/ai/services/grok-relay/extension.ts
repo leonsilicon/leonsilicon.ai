@@ -18,7 +18,7 @@ export function grokRelayExtension(): DaemonExtension {
     start(context) {
       const relay = createGrokRelay({
         stateDir: join(context.home, "state"),
-        backend: inboxBackend((name, args) => context.tool(name, args)),
+        backend: inboxBackend((name, args) => context.tool(name, args), context.journal),
         log: ({ event, ...fields }) =>
           context.log(
             typeof event === "string" && event.endsWith("_error") ? "warn" : "info",

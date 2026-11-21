@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { HOURLY_BUDGET } from "#policy";
 import { createGrokRelay } from "#relay";
 import { callTool } from "#tools";
-import type { GrokBackend, GrokMessage } from "#types";
+import type { GrokBackend, GrokLive, GrokMessage } from "#types";
 
 /** The relay against a fake Beeper: offline, sends nothing real. */
 function setup() {
@@ -239,4 +239,161 @@ test("an unknown bot refreshes the list once, then names the ones there are", as
   assert.equal(calls.refreshes, 1);
   chats["c-new"] = { title: "Brand New Bot", messages: [] };
   assert.equal((await relay.read({ bot: "brand new" })).bot, "Brand New Bot");
+});
+
+/** The relay with a journal: a fake one that hands out positions and wakes waiters like the real one. */
+function setupLive({ coveredMinutes = 60 }: { coveredMinutes?: number } = {}) {
+  const stateDir = join(mkdtempSync(join(tmpdir(), "grok-relay-live-")), "state");
+  const chatID = "!task:beeper.local";
+  const rows: Array<{ rev: number; message: GrokMessage }> = [];
+  let head = 0;
+  let id = 1;
+  const calls = { history: 0, waits: [] as number[] };
+  const posted: string[] = [];
+  /** A message arrives, or an earlier one changes (same id). */
+  const arrive = (isSender: boolean, text: string, ago = 0, existing?: string): GrokMessage => {
+    const ts = Date.now() - ago;
+    const known = existing ? rows.find((row) => row.message.id === existing) : undefined;
+    const eventId = existing ?? `$j${id++}`;
+    const message: GrokMessage = known
+      ? { ...known.message, text }
+      : {
+          id: eventId,
+          chatID,
+          sortKey: `${ts}:${eventId}`,
+          isSender,
+          text,
+          timestamp: new Date(ts).toISOString(),
+        };
+    if (known) rows.splice(rows.indexOf(known), 1);
+    rows.push({ rev: ++head, message });
+    return message;
+  };
+  const live: GrokLive = {
+    coveredSince: async () => Date.now() - coveredMinutes * 60_000,
+    latest: async (_chat, count) => rows.map((row) => row.message).slice(-count),
+    since: async (_chat, sinceMs) =>
+      rows.map((row) => row.message).filter((message) => Date.parse(message.timestamp) >= sinceMs),
+    cursor: async () => head,
+    changes: async (_chat, cursor, waitMs) => {
+      calls.waits.push(waitMs);
+      const deadline = Date.now() + waitMs;
+      for (;;) {
+        const found = rows.filter((row) => row.rev > cursor);
+        if (found.length || Date.now() >= deadline)
+          return { messages: found.map((row) => row.message), cursor: found.at(-1)?.rev ?? cursor };
+        await new Promise((resolve) => setTimeout(resolve, 3));
+      }
+    },
+  };
+  const backend: GrokBackend = {
+    live,
+    bots: async () => [{ name: "Task Bot", chatID, lastActivity: null }],
+    messages: async () => {
+      calls.history++;
+      return [];
+    },
+    send: async (_chat, text) => {
+      posted.push(text);
+      return { id: arrive(true, text).id };
+    },
+  };
+  const relay = createGrokRelay({
+    stateDir,
+    backend,
+    log: () => undefined,
+    flush: false,
+    quietMs: 60,
+  });
+  return { relay, arrive, calls, posted };
+}
+
+test("with the journal: a send reads no history, and returns the reply as it finally reads", async () => {
+  const { relay, arrive, calls, posted } = setupLive();
+  arrive(true, "earlier ask", 50 * 60_000); // older than the busy window: not even looked at
+  setTimeout(() => {
+    arrive(false, "Something the bot said last week, surfacing only now.", 7 * 24 * 3600_000);
+    const reply = arrive(false, "Working");
+    setTimeout(() => arrive(false, "Working… done: submitted.", 0, reply.id), 25);
+    setTimeout(() => arrive(false, "Anything else?"), 40);
+  }, 20);
+  const result = await relay.send({ bot: "Task Bot", text: "submit the form", wait_seconds: 5 });
+  assert.deepEqual(posted, ["submit the form"]);
+  assert.deepEqual(
+    (result.replies as Array<{ from: string; text: string }>).map((reply) => [
+      reply.from,
+      reply.text,
+    ]),
+    [
+      ["Task Bot", "Working… done: submitted."],
+      ["Task Bot", "Anything else?"],
+    ],
+  );
+  assert.equal(calls.history, 0, "no page of history was read");
+  assert.ok(calls.waits.length <= 6, "it waits on the journal instead of polling");
+  assert.ok((calls.waits[0] ?? 0) > 4000, "first for the whole time it was given");
+  assert.ok((calls.waits.at(-1) ?? 99) <= 60, "then only for the quiet after a reply");
+  assert.match(String(result.cursor), /^\d{13}:\$j/);
+});
+
+test("with the journal: busy is judged from the last minutes alone", async () => {
+  // The bot is mid-answer to something Leon asked before the window: still busy.
+  const first = setupLive();
+  first.arrive(false, "Here is part one of the long answer you asked for earlier today.", 30_000);
+  const queued = await first.relay.send({
+    bot: "Task Bot",
+    text: "one more thing",
+    wait_seconds: 0,
+  });
+  assert.equal(queued.queued, true);
+  assert.match(String(queued.reason), /posted 30s ago/);
+  assert.equal(first.calls.history, 0);
+
+  // Quiet for the whole window: idle, whatever happened before it.
+  const second = setupLive();
+  second.arrive(false, "All done.", 20 * 60_000);
+  assert.equal(
+    (await second.relay.send({ bot: "Task Bot", text: "hi", wait_seconds: 0 })).queued,
+    undefined,
+  );
+
+  // Leon asked two minutes ago and nothing came back yet: busy, and the queue flushes from the journal too.
+  const third = setupLive();
+  third.arrive(true, "do the thing", 2 * 60_000);
+  assert.equal(
+    (await third.relay.send({ bot: "Task Bot", text: "and this", wait_seconds: 0 })).queued,
+    true,
+  );
+  third.arrive(false, "Done, here are the full results and the readback you wanted.", 90_000);
+  await third.relay.flushOnce();
+  assert.deepEqual(third.posted, ["and this"]);
+  assert.equal(third.calls.history, 0);
+});
+
+test("with the journal: reads come from it when it holds what is asked, from history when not", async () => {
+  const { relay, arrive, calls } = setupLive({ coveredMinutes: 60 });
+  const a = arrive(false, "first", 10 * 60_000);
+  arrive(false, "second", 5 * 60_000);
+  const later = await relay.read({ bot: "Task Bot", after: a.sortKey });
+  assert.deepEqual(
+    (later.messages as Array<{ text: string }>).map((line) => line.text),
+    ["second"],
+  );
+  assert.equal(calls.history, 0, "a cursor inside the journal's coverage needs no history");
+  assert.equal(((await relay.read({ bot: "Task Bot", limit: 2 })).messages as unknown[]).length, 2);
+  assert.equal(calls.history, 0, "the latest two are in the journal");
+  await relay.read({ bot: "Task Bot", limit: 10 });
+  assert.equal(calls.history, 1, "more than the journal holds: one page of history");
+  await relay.read({ bot: "Task Bot", after: `${Date.now() - 3 * 3600_000}:$old` });
+  assert.equal(calls.history, 2, "a cursor from before the coverage: history too");
+});
+
+test("a journal younger than the busy window isn't trusted yet", async () => {
+  const { relay, calls } = setupLive({ coveredMinutes: 5 });
+  await relay.send({ bot: "Task Bot", text: "hi", wait_seconds: 0 });
+  assert.equal(
+    calls.history,
+    1,
+    "one small page of history decides busy until the journal is old enough",
+  );
 });

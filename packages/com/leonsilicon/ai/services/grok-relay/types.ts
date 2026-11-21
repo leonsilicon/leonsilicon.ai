@@ -24,10 +24,35 @@ export interface GrokBot {
 export interface GrokBackend {
   /** Leon's Grok bots. `refresh` asks for a fresh list, for a bot created or renamed since the last one. */
   bots(options?: { refresh?: boolean }): Promise<GrokBot[]>;
-  /** The latest messages of one chat, in any order: at least `wanted` of them when the chat has that many. */
+  /**
+   * One page of a chat's history, newest messages, in any order: `wanted` of them at most. This is the
+   * slow way to read (about half a second per message through the inbox); `live` is the fast one.
+   */
   messages(chatID: string, wanted?: number): Promise<GrokMessage[]>;
   /** Sends as Leon. `key` names this one send, so retrying it can never post twice. */
   send(chatID: string, text: string, key: string): Promise<{ id: string }>;
+  live?: GrokLive;
+}
+
+/**
+ * New messages as they arrive, from the inbox's journal. With it the relay waits for a reply, judges
+ * whether a bot is busy and answers follow-up reads without reading history.
+ */
+export interface GrokLive {
+  /** The time from which `latest` and `since` are known to hold every message. */
+  coveredSince(): Promise<number>;
+  /** The newest `count` messages of a chat that the journal holds. */
+  latest(chatID: string, count: number): Promise<GrokMessage[]>;
+  /** A chat's messages sent at or after a time. */
+  since(chatID: string, sinceMs: number): Promise<GrokMessage[]>;
+  /** The position for "from now on". */
+  cursor(): Promise<number>;
+  /** Messages of a chat that arrived or changed after a position; waits up to `waitMs` for the first. */
+  changes(
+    chatID: string,
+    cursor: number,
+    waitMs: number,
+  ): Promise<{ messages: GrokMessage[]; cursor: number }>;
 }
 
 export type RelayLog = (entry: Record<string, unknown>) => void;

@@ -2,9 +2,7 @@
 
 The Grok Bot relay for Hermes (v1.3.0). It gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`, that message Leon's Grok Bot bots in their own chats, as Leon and with no label. Leon's Grok bots answer only Leon and ignore Hermes in Slack, so this is how Hermes reaches them; Leon sees the whole exchange in Beeper.
 
-It is built to run on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and to reach the bots over Matrix through that inbox, with none of Leon's computers involved.
-
-**Status (2026-11-21): installed on Hermes Cloud, not in use.** Hermes's `grok` MCP server still points at the copy on the Mac mini ([`configs/grok-relay-hermes`](../../configs/grok-relay-hermes/README.md), v1.2.0, through Beeper Desktop). `grok_bots` answered on Hermes Cloud with the 14 bots; nothing has been sent through this version. The switch waits on what a read costs in the inbox: about half a second per message (see [its README](../beeper-inbox/README.md#what-a-read-costs)), and this relay reads the chat every 3 s while it waits for a reply. It needs the inbox to hand it new messages as they arrive instead.
+It runs on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and reaches the bots over Matrix through that inbox, with none of Leon's computers involved. Hermes's `grok` MCP server has pointed at it since 2026-11-21. From 2026-11-06 until then the relay ran on the Mac mini and went through Beeper Desktop ([`configs/grok-relay-hermes`](../../configs/grok-relay-hermes/README.md), v1.2.0); that copy is stopped.
 
 ## Tools
 
@@ -31,23 +29,27 @@ Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp grok-relay ─unix socket─▶ b
 ```
 
 - **An extension of the inbox daemon** (`extension.ts`). Hermes starts each MCP server in several processes (the gateway, cron runs, dashboard chats), and the queue, the budget and the flusher need exactly one owner. The daemon already is the one owner of the Beeper device, so the relay runs in it, and every MCP server process is a stateless client of its socket.
-- **It reaches Beeper only through the inbox's tools** (`inbox-backend.ts`): `list_conversations` for the bots (network `grok`, one-to-one chats), `list_messages` to read, `send_message` to send. So the inbox's send ledger, its plaintext guard and its decryption accounting apply to the relay too.
+- **It reaches Beeper only through the inbox** (`inbox-backend.ts`): `list_conversations` for the bots (network `grok`, one-to-one chats), `send_message` to send, and the inbox's journal of new messages to follow a chat. So the inbox's send ledger and its plaintext guard apply to the relay too.
+- **It follows chats through the journal, not through history.** A page of history costs the inbox about half a second per message. The journal has every message as sync delivered it, so the relay waits on it for a reply (it answers the moment something arrives), judges whether a bot is busy from the chat's last 25 minutes in it, and serves a follow-up `grok_bot_read` from it. It reads one capped page of history (20 events at most) only when the journal can't answer: in its first 25 minutes after a gap, for a cursor older than its coverage, or for more of the latest messages than it holds.
 - **Sends can't double.** Each send carries its own key, which the inbox turns into one Matrix transaction ID. A queue flush derives its key from the queued items, so a flush retried after a lost answer reuses it and the homeserver drops the repeat.
 - **Bridge failures are errors.** When the Grok Bot bridge reports that a message failed, the send is refused with the bridge's reason and doesn't count against the budget.
 - **Cursors** are `<timestamp>:<event ID>`. A cursor from the Beeper Desktop days was a plain number; `grok_bot_read` ignores one, says so, and returns the latest messages.
-- **Replies that are still being written.** A bot may edit one message as it writes. A changed text counts as activity, and the replies returned are the texts of the last look.
+- **Replies that are still being written.** A bot may edit one message as it writes. An edit counts as activity, and the replies returned are the texts as they last read.
+- **Old messages aren't replies.** Reading history, or a bridge filling in the past, can make sync deliver an old message. The wait only counts messages sent after the relay's own (with a minute of slack for clocks).
 
 Differences from the Beeper Desktop version: `grok_bots` no longer shows each bot's latest message (the inbox keeps no message text) or leaves archived chats out, and a bot renamed in Grok shows its new name only after the inbox's directory is rebuilt, which an unknown name triggers by itself.
 
-## Switching Hermes over
+## The switch (2026-11-21)
 
-Not done yet (see Status). When the read cost is solved:
+Hermes's log showed its Grok tools failing since the day before with "Beeper Desktop is not reachable on Leon's Mac mini": Beeper Desktop there froze about 20 seconds after every launch.
 
-1. Check that the mini's queue is empty (`~/.local/share/grok-relay-hermes/state/outbox.json`). Chat IDs are the same room IDs here, so a queued item can be copied into this relay's `outbox.json` as it is.
-2. Save Hermes's current `grok` server entry under `/opt/data/backups/`, then replace it with `command: node`, `args: [/opt/data/beeper-inbox/app/beeper-inbox.mjs, mcp, grok-relay]`.
-3. Restart the gateway when no agents are active: a running gateway keeps the old server until then.
-4. From a Hermes session, run `grok_bots`, a `grok_bot_read`, and one short `grok_bot_send`.
-5. On the mini, stop `com.leonsilicon.grok-relay-hermes`. Leave `com.leonsilicon.beeper-watchdog` while Beeper Watch still reads Beeper Desktop.
+- **Tested on Hermes Cloud first**, from the command line: `grok_bots` listed the 14 bots in 0.16 s. One message to an idle bot ("quick test, just reply with ok" to Orca Bot) was answered 12 s later, and the relay returned the reply from the journal.
+- **Config.** The old `grok` entry is saved in `/opt/data/backups/mcp-grok-relay-mini-20261121.json`. The new one is `command: node`, `args: [/opt/data/beeper-inbox/app/beeper-inbox.mjs, mcp, grok-relay]`.
+- **Gateway.** A running gateway keeps the old server, so it was restarted while idle (no active agents). Slack, the relay platform and the API server reconnected within a minute.
+- **From a Hermes session** (a one-off cron agent run): `grok_bots` returned 14 bots, and `grok_bot_read` showed the test exchange with Hermes's message as "Hermes (as Leon)".
+- **The mini.** Its queue was empty and its log showed no use since 2026-11-19. `com.leonsilicon.grok-relay-hermes` was stopped and disabled there. `com.leonsilicon.beeper-watchdog` stays while Beeper Watch still reads Beeper Desktop.
+
+To go back: restore the saved entry, restart the gateway when idle, and on the mini run `launchctl enable gui/$(id -u)/com.leonsilicon.grok-relay-hermes` and `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.grok-relay-hermes.plist`. That path needs Beeper Desktop on the mini to work again.
 
 ## State
 
@@ -67,6 +69,6 @@ Events go to the inbox's `logs/daemon.log` tagged `grok-relay`: bot names, count
 node --test packages/com/leonsilicon/ai/services/grok-relay/__tests__/*.test.ts
 ```
 
-Offline, with a fake Beeper: the policy, the queue and its merged flush, a flush retried with the same key, the budget and its extension, waiting for a reply that is still being edited, cursors, and the mapping from the inbox's tools.
+Offline, with a fake Beeper: the policy, the queue and its merged flush, a flush retried with the same key, the budget and its extension, waiting for a reply that is still being edited, cursors, the mapping from the inbox's tools and journal, and that a send with the journal reads no history.
 
 Public API (`+server.ts`): `grokRelayExtension`, `createGrokRelay`, `inboxBackend`, `callTool`, `TOOLS`, `INSTRUCTIONS`.

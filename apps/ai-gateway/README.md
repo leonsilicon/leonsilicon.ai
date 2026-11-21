@@ -12,6 +12,8 @@ The tunnel has no public hostname: the only way in is the Worker's VPC binding.
 
 ## Endpoints
 
+As of 2026-11-21 the `orca` and `grok` services are stopped (Hermes Cloud runs their replacements itself), so those two URLs answer 502. Their routes go when the gateway does.
+
 | URL                                 | Service                                                                                                | Local target             | Token on the mini                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------- |
 | `https://orca.leonsilicon.ai`       | [Orca bridge](../orca-bridge/README.md): full Orca CLI incl. computer use, plus orca-mcp worker tools  | `127.0.0.1:18787/mcp`    | `ORCA_BRIDGE_TOKEN` (Infisical `/orca-bridge`)                |

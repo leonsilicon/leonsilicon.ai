@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inboxBackend, sortKeyOf } from "#backend";
+import { HISTORY_MAX, inboxBackend, sortKeyOf } from "#backend";
 
 type Call = { name: string; args: Record<string, unknown> };
 
@@ -46,7 +46,7 @@ test("bots: the Grok network's one-to-one chats, across pages, refreshing only w
   );
 });
 
-test("messages: maps events, orders by time then event ID, and pages back until it has enough", async () => {
+test("messages: one page of history, capped, mapped and keyed by time then event ID", async () => {
   const event = (id: string, ts: number, extra: Record<string, unknown> = {}) => ({
     event_id: id,
     ts,
@@ -59,15 +59,17 @@ test("messages: maps events, orders by time then event ID, and pages back until 
   const { calls, backend } = fakeInbox({
     list_messages: [
       {
-        messages: [event("$new", 1795000002000, { type: "m.notice" }), { event_id: "$broken" }],
+        messages: [
+          event("$new", 1795000002000, { type: "m.notice" }),
+          { event_id: "$broken" },
+          event("$old", 1795000001000, { is_me: true }),
+        ],
         next_cursor: "older",
       },
-      { messages: [event("$old", 1795000001000, { is_me: true })], next_cursor: "oldest" },
-      { messages: [], next_cursor: null },
+      { messages: [] },
     ],
   });
-  const found = await backend.messages("!a:beeper.local", 2);
-  assert.deepEqual(found, [
+  assert.deepEqual(await backend.messages("!a:beeper.local", 500), [
     {
       id: "$new",
       chatID: "!a:beeper.local",
@@ -86,17 +88,72 @@ test("messages: maps events, orders by time then event ID, and pages back until 
       timestamp: new Date(1795000001000).toISOString(),
     },
   ]);
+  await backend.messages("!a:beeper.local", 3);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
-      { room_id: "!a:beeper.local", limit: 100 },
-      { room_id: "!a:beeper.local", limit: 100, cursor: "older" },
+      { room_id: "!a:beeper.local", limit: HISTORY_MAX },
+      { room_id: "!a:beeper.local", limit: 3 },
     ],
+    "never more than one capped page: history costs about half a second a message",
   );
   assert.ok(
     sortKeyOf(999, "$z") < sortKeyOf(1000, "$a"),
     "an earlier time sorts first as a string",
   );
+});
+
+test("live: the inbox's journal, as the relay's messages", async () => {
+  const entry = {
+    seq: 4,
+    rev: 9,
+    roomId: "!a:beeper.local",
+    eventId: "$j",
+    sender: "@bot:beeper.local",
+    isMe: false,
+    type: "m.notice",
+    text: "working",
+    html: null,
+    ts: 1795000003000,
+    receivedAt: 1795000003500,
+    edited: true,
+    redacted: false,
+    replyTo: null,
+    attachments: 0,
+  };
+  const asked: unknown[] = [];
+  const { backend } = fakeInbox({});
+  assert.equal(backend.live, undefined, "no journal, no live path");
+  const live = inboxBackend(async () => ({}), {
+    head: async () => 9,
+    coveredSince: async () => 1795000000000,
+    latest: async () => [entry],
+    since: async () => [{ ...entry, redacted: true, text: "" }],
+    changes: async (options) => {
+      asked.push(options);
+      return { entries: [entry], cursor: 9 };
+    },
+  }).live;
+  assert.ok(live);
+  const mapped = {
+    id: "$j",
+    chatID: "!a:beeper.local",
+    sortKey: "1795000003000:$j",
+    isSender: false,
+    text: "working",
+    timestamp: new Date(1795000003000).toISOString(),
+    type: "m.notice",
+  };
+  assert.deepEqual(await live.latest("!a:beeper.local", 5), [mapped]);
+  assert.deepEqual(await live.since("!a:beeper.local", 0), [
+    { ...mapped, text: "", isDeleted: true },
+  ]);
+  assert.deepEqual(await live.changes("!a:beeper.local", 3, 1500), {
+    messages: [mapped],
+    cursor: 9,
+  });
+  assert.deepEqual(asked, [{ after: 3, roomId: "!a:beeper.local", waitMs: 1500 }]);
+  assert.deepEqual([await live.cursor(), await live.coveredSince()], [9, 1795000000000]);
 });
 
 test("send: passes the key through, and a bridge failure is an error", async () => {
