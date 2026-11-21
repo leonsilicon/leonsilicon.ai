@@ -25,24 +25,23 @@ export interface SyncConfig {
   listenerState: string;
   listenerExpiredTarget: string;
   /**
-   * When Hermes reacts with this emoji (Slack's name, no colons) to Leon's message in an issue
-   * channel, the issue moves to `hermesAckState`, so the sidebar shows Hermes has it.
+   * Hermes's reactions (Slack's names, no colons) to Leon's message once it has finished answering
+   * it (✅), or once its turn failed (❌). They decide the issue's status (`Sync.onAnswered`).
    */
-  hermesAckReaction: string;
-  hermesAckState: string;
+  hermesAnsweredReaction: string;
+  hermesFailedReaction: string;
   /**
-   * When Hermes reacts with one of these (Slack's names: ✅ and ❌) to Leon's message in an issue
-   * channel, it has finished answering it, so an issue still in `hermesAckState` or `intakeState`
-   * moves to `leonPingState`: Leon has a response to read.
+   * Statuses an answer without a ping to Leon closes, as `answeredState` (Leon's rule, 2026-11-21:
+   * Hermes pings him when there's something he needs or would want to see, and otherwise the issue
+   * is done). Any other status is one Hermes or someone else chose, and stands.
    */
-  hermesDoneReactions: string[];
+  answerClosesStates: string[];
+  answeredState: string;
   /**
    * When Hermes mentions Leon in an issue channel, it needs something from him, so the issue moves
    * to this status, unless it is already in one of `mentionLeonStates`.
    */
   leonPingState: string;
-  /** The status of an issue made from one of Leon's Slack messages (`Sync.intake`): Linear's default. */
-  intakeState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
   /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
@@ -96,11 +95,11 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     dateTarget: env.DATE_TARGET ?? "Awaiting Start",
     listenerState: env.LISTENER_STATE ?? "Awaiting Listener",
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
-    hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
-    hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
-    hermesDoneReactions: list(env.HERMES_DONE_REACTIONS, ["white_check_mark", "x"]),
+    hermesAnsweredReaction: env.HERMES_ANSWERED_REACTION ?? "white_check_mark",
+    hermesFailedReaction: env.HERMES_FAILED_REACTION ?? "x",
+    answerClosesStates: list(env.ANSWER_CLOSES_STATES, ["Awaiting Init", "Awaiting Leon"]),
+    answeredState: env.ANSWERED_STATE ?? "Done",
     leonPingState: env.LEON_PING_STATE ?? "Awaiting Leon",
-    intakeState: env.INTAKE_STATE ?? "Awaiting Init",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",

@@ -99,12 +99,18 @@ interface SlackMessage {
   text?: string;
 }
 
+/** Hermes finished a turn on Leon's message (`Sync.onAnswered`). */
+interface Answer {
+  channel: string;
+  ts: string;
+  /** Hermes reacted ❌: the turn failed. */
+  failed: boolean;
+}
+
 /** Extras for a live status post. */
 interface StatusPost {
   /** Said after the move, e.g. why it happened. */
   note?: string;
-  /** Leaves Hermes unpinged, when it already has the issue. */
-  quietHermes?: boolean;
   /** Leaves Leon unmentioned, when he was just pinged. */
   quietLeon?: boolean;
 }
@@ -158,6 +164,15 @@ export const isAutolinearIssue = (issueId: string) =>
 
 /** How long an autolinear issue without a channel waits for its hand-over before getting one anyway. */
 export const ADOPT_WAIT_MS = 2 * 60_000;
+
+/**
+ * How long after Hermes's ✅ its answer is judged: Hermes reacts right after its last post, and
+ * that post (and a ping to Leon in it) can reach the queue after the reaction does.
+ */
+export const ANSWER_SETTLE_MS = 10_000;
+
+/** A Slack message ts as milliseconds. */
+const slackTsMs = (ts: string) => Math.round(Number(ts) * 1000);
 
 /**
  * The start of a Slack message as an mrkdwn quote, at most `max` characters, never cut inside a
@@ -273,6 +288,7 @@ export class Sync {
         await this.#linear.openProjects(this.#c.teamKey, this.#c.closedProjectTypes),
       );
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
+    else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "tick") await this.tick();
     else if (kind === "backfill") await this.backfill();
     else this.#log("unknown_job", { kind });
@@ -373,7 +389,7 @@ export class Sync {
       if (!prev) return null;
       if (!prev.archived) {
         if (mode === "live" && prev.stateName !== issue.state.name)
-          await this.#postStatus(prev.channelId, prev.stateName, issue);
+          await this.#postStatus(prev.channelId, prev.stateName, issue, post);
         await this.#unplace(prev.channelId);
         await this.#archive(prev.channelId);
       }
@@ -769,37 +785,69 @@ export class Sync {
   }
 
   /**
-   * Hermes reacts to Leon's message in an issue channel when it takes it up (👀) and when it has
-   * finished answering it (✅, or ❌ when its turn failed).
-   *
-   * - 👀 moves the issue to Awaiting Hermes from whatever status it was in, without pinging
-   *   Hermes, which is already on it.
-   * - ✅ or ❌ moves it on to Awaiting Leon, mentioning him, while it is still in Awaiting Hermes or
-   *   Awaiting Init (Leon's rule, 2026-11-21: once Hermes has answered, the issue waits on Leon
-   *   until he has read the answer, even if it was only a "thanks"). A status Hermes chose during
-   *   its turn, such as Awaiting Others or Done, stands.
-   *
-   * The channel follows at once; Linear's webhook for the move then finds nothing to do.
+   * Hermes reacts ✅ to Leon's message in an issue channel once it has finished answering it, or ❌
+   * when its turn failed. Nothing moves then: the status is decided by `onAnswered` a few seconds
+   * later, once Hermes's last posts (and a ping to Leon in them) have come in. Its 👀, when it
+   * starts, moves nothing (Leon's rule, 2026-11-21: no status moves while Hermes works).
    */
   async onSlackReaction(event: SlackReactionEvent): Promise<void> {
-    const { hermesAckReaction, hermesAckState, hermesDoneReactions } = this.#c;
-    const ack = event.reaction === hermesAckReaction;
-    if (!ack && !hermesDoneReactions.includes(event.reaction)) return;
-    if (event.user !== this.#c.hermesUserId) return;
-    if (event.item_user !== this.#c.leonUserId || event.item.type !== "message") return;
-    const issue = event.item.channel ? await this.#openIssueIn(event.item.channel) : null;
+    const { hermesAnsweredReaction, hermesFailedReaction } = this.#c;
+    if (event.reaction !== hermesAnsweredReaction && event.reaction !== hermesFailedReaction)
+      return;
+    if (event.user !== this.#c.hermesUserId || event.item_user !== this.#c.leonUserId) return;
+    const { channel, ts } = event.item;
+    if (event.item.type !== "message" || !channel || !ts) return;
+    const rec = this.#store.issueByChannel(channel);
+    if (!rec || rec.archived) return;
+    const now = this.#now();
+    const answer: Answer = { channel, ts, failed: event.reaction === hermesFailedReaction };
+    this.#store.enqueue(
+      `answered:${channel}:${ts}`,
+      "answered",
+      answer,
+      now,
+      now + ANSWER_SETTLE_MS,
+    );
+  }
+
+  /**
+   * Hermes has answered Leon's message (Leon's rule, 2026-11-21):
+   *
+   * - If it pinged him since (the ping rule has already moved the issue to Awaiting Leon), or the
+   *   status changed since he wrote (Hermes or someone set what the issue waits on), or he has
+   *   written again (its answer decides), nothing moves.
+   * - Otherwise an issue in `answerClosesStates` (Awaiting Init, Awaiting Leon) is done: an answer
+   *   he doesn't need to see, such as one to his "thanks". Any other status stands.
+   * - A failed turn (❌) goes to Awaiting Leon, mentioning him, so he sees it.
+   */
+  async onAnswered(answer: Answer): Promise<void> {
+    const issue = await this.#openIssueIn(answer.channel);
     if (!issue) return;
     const from = issue.state.name;
-    const note = `(Hermes reacted :${event.reaction}: to Leon's message)`;
-    if (ack) {
-      if (from === hermesAckState) return;
-      await this.#moveNow(issue, hermesAckState, { note, quietHermes: true });
-      this.#log("hermes_ack", { issue: issue.identifier, from });
+    if (answer.failed) {
+      if (from === this.#c.leonPingState || this.#c.mentionLeonStates.includes(from)) return;
+      await this.#moveNow(issue, this.#c.leonPingState, {
+        note: `(Hermes's turn on Leon's message failed)`,
+      });
+      this.#log("hermes_failed", { issue: issue.identifier, from });
       return;
     }
-    if (from !== hermesAckState && from !== this.#c.intakeState) return;
-    await this.#moveNow(issue, this.#c.leonPingState, { note });
-    this.#log("hermes_answered", { issue: issue.identifier, from, reaction: event.reaction });
+    if (!this.#c.answerClosesStates.includes(from)) return;
+    const wrote = slackTsMs(answer.ts);
+    const pinged = this.#store.firedSince("ping:", wrote).some(({ key }) => {
+      if (key.startsWith(`ping:${answer.channel}:`)) return true;
+      const comment = key.startsWith("ping:comment:")
+        ? this.#store.comment(key.slice("ping:comment:".length))
+        : null;
+      return comment?.issueId === issue.id;
+    });
+    if (pinged || this.#store.spokeAfter(answer.channel, answer.ts)) return;
+    const changed = await this.#linear.lastStatusChange(issue.id);
+    if (changed !== null && changed > wrote) return;
+    await this.#moveNow(issue, this.#c.answeredState, {
+      note: "(Hermes answered Leon's message without pinging him)",
+    });
+    this.#log("answered_unpinged", { issue: issue.identifier, from });
   }
 
   /**
@@ -1479,7 +1527,7 @@ export class Sync {
     const lines: string[] = [];
     if (this.#c.mentionLeonStates.includes(status) && !post.quietLeon)
       lines.push(`<@${this.#c.leonUserId}>`);
-    if (this.#c.pingHermesStates.includes(status) && !post.quietHermes)
+    if (this.#c.pingHermesStates.includes(status))
       lines.push(
         `<@${this.#c.hermesUserId}> ${issue.identifier} is now ${status}: ${
           status === "Awaiting Hermes" ? "an agent is waiting on you." : "please pick it up."

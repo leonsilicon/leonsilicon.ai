@@ -297,6 +297,29 @@ export class Store {
     return this.#sql.exec(`SELECT key FROM fired WHERE key = ?`, key).length > 0;
   }
 
+  /** What happened once since `since` (ms) whose key starts with `prefix`, oldest first. */
+  firedSince(prefix: string, since: number): { key: string; at: number }[] {
+    return this.#sql
+      .exec(
+        `SELECT key, at FROM fired WHERE substr(key, 1, ?) = ? AND at > ? ORDER BY at`,
+        prefix.length,
+        prefix,
+        since,
+      )
+      .map((r) => ({ key: r.key as string, at: Number(r.at) }));
+  }
+
+  /** Whether a person wrote in the channel after the message `ts` (their messages become comments). */
+  spokeAfter(channelId: string, ts: string): boolean {
+    return (
+      this.#sql.exec(
+        `SELECT 1 FROM comments WHERE channel_id = ? AND origin = 'slack' AND slack_ts > ? LIMIT 1`,
+        channelId,
+        ts,
+      ).length > 0
+    );
+  }
+
   markFired(key: string, now: number): void {
     this.#sql.exec(`INSERT OR IGNORE INTO fired (key, at) VALUES (?, ?)`, key, now);
   }

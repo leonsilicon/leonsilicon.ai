@@ -39,6 +39,7 @@ export { Store } from "#store";
 export type { CommentRecord, IssueRecord, Job, ProjectRecord, Row, Sql, SqlValue } from "#store";
 export {
   ADOPT_WAIT_MS,
+  ANSWER_SETTLE_MS,
   AUTOLINEAR_ID_PREFIX,
   autolinearIssueId,
   excerptQuote,

@@ -16,8 +16,9 @@ live Slack adapter:
 - ``_build_message_event``: runs only after every gate (auth, channel, mention, bot) has accepted a
   message, so it sees exactly the messages Hermes answers. It waits for the request started early,
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
-  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there, and Linear
-  Sync moves the issue to Awaiting Hermes on 👀 and Awaiting Leon on ✅.
+  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there. Once Hermes
+  has answered (its ✅), Linear Sync leaves the issue in Awaiting Leon if the answer pinged him,
+  and closes it as Done if it didn't.
 
 The copy's own event carries slack-as-leon's marker, so ``slack-as-leon-guard`` drops it and Hermes
 doesn't answer the message twice. That plugin must be enabled too.
@@ -226,8 +227,9 @@ def _note(result: dict) -> str:
     return (
         f"[autolinear: Leon sent this in {result.get('source') or 'Slack'}. It is now "
         f"{issue['identifier']} ({issue['url']}), and this is its channel, #{channel['name']}: "
-        "answer here and keep the conversation here. When you finish, the issue goes to Awaiting "
-        "Leon so he reads your answer; don't close it unless he asks.]")
+        "answer here and keep the conversation here. Ping Leon in your answer only if it holds "
+        "something he needs or would want to see; the issue then waits on him. Without a ping, the "
+        "issue is closed as Done once you finish.]")
 
 
 def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
@@ -333,7 +335,7 @@ def wire(native, adapter) -> None:
             return await build(event, *args, **kwargs)
         copy_ts, team_id = moved_kwargs["ts"], str(moved_kwargs.get("team_id") or "")
         try:
-            # 👀 → ✅ on the copy is what moves the issue, so it always gets the lifecycle.
+            # Hermes's ✅ on the copy is what marks the answer done, so it always gets the lifecycle.
             if adapter._reactions_enabled():
                 adapter._track_reacting_message(team_id, copy_ts)
             # An unfurl edit of the copy must not start a second turn.

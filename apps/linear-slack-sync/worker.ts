@@ -56,8 +56,6 @@ interface Env {
   SLACK_SESSION_COOKIE?: string;
   /** Bearer token for /admin/* (backfill, tick, status). */
   LINEAR_SYNC_ADMIN_TOKEN: string;
-  /** Hermes's reaction that moves an issue to Awaiting Hermes; `eyes` unless set. */
-  HERMES_ACK_REACTION?: string;
   [key: string]: unknown;
 }
 
@@ -81,14 +79,14 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 
 /**
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
- * that mention Leon, and 👀, ✅ and ❌ reactions to messages (the sync checks who reacted to whom,
- * and where).
+ * that mention Leon, and ✅ and ❌ reactions to messages (the sync checks who reacted to whom, and
+ * where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
-      (event.reaction === config.hermesAckReaction ||
-        config.hermesDoneReactions.includes(String(event.reaction))) &&
+      (event.reaction === config.hermesAnsweredReaction ||
+        event.reaction === config.hermesFailedReaction) &&
       (event.item as { type?: string } | undefined)?.type === "message"
     );
   if (!event || event.type !== "message") return false;

@@ -67,6 +67,8 @@ export interface LinearApi {
     integrationId: string;
   }): Promise<void>;
   states(teamKey: string): Promise<LinearState[]>;
+  /** When the issue's status last changed (ms), from its history; null when it never has. */
+  lastStatusChange(id: string): Promise<number | null>;
   /**
    * Creates an issue in the team with the given ID, so a retry reuses it: Linear refuses a second
    * issue with the same ID ("already exists").
@@ -323,6 +325,19 @@ export class LinearClient implements LinearApi {
       after = data.issues.pageInfo.hasNextPage ? data.issues.pageInfo.endCursor : null;
     } while (after);
     return issues;
+  }
+
+  async lastStatusChange(id: string) {
+    const data = await this.gql<{
+      issue: { history: { nodes: { createdAt: string; toState: { id: string } | null }[] } } | null;
+    }>(
+      `query($id: String!) { issue(id: $id) { history(first: 50) { nodes { createdAt toState { id } } } } }`,
+      { id },
+    );
+    const times = (data.issue?.history.nodes ?? [])
+      .filter((n) => n.toState)
+      .map((n) => Date.parse(n.createdAt));
+    return times.length ? Math.max(...times) : null;
   }
 
   async states(teamKey: string) {
