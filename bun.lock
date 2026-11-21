@@ -237,6 +237,10 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-auto-join",
       "version": "1.0.0",
     },
+    "packages/com/leonsilicon/hermes/plugins/slack-flat-replies": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-flat-replies",
+      "version": "1.0.0",
+    },
     "packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply": {
       "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
       "version": "1.0.0",
@@ -351,6 +355,8 @@
     "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard": ["@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard@workspace:packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard"],
 
     "@-/com.leonsilicon.hermes.plugins.slack-auto-join": ["@-/com.leonsilicon.hermes.plugins.slack-auto-join@workspace:packages/com/leonsilicon/hermes/plugins/slack-auto-join"],
+
+    "@-/com.leonsilicon.hermes.plugins.slack-flat-replies": ["@-/com.leonsilicon.hermes.plugins.slack-flat-replies@workspace:packages/com/leonsilicon/hermes/plugins/slack-flat-replies"],
 
     "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply"],
 
