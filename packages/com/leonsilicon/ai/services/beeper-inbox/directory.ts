@@ -10,6 +10,8 @@ export interface BridgeInfo {
   stateKey: string;
   protocolId: string | null;
   protocolName: string | null;
+  /** The bridged network's own ID for this connection, when the bridge gives one (a Slack team ID). */
+  networkId?: string | null;
   channelName: string | null;
   channelId: string | null;
   receiver: string | null;
@@ -110,12 +112,14 @@ export function bridgeFrom(events: readonly StateEvent[]): BridgeInfo | null {
   const content = event.content;
   const protocol = (content.protocol ?? {}) as Record<string, unknown>;
   const channel = (content.channel ?? {}) as Record<string, unknown>;
+  const network = (content.network ?? {}) as Record<string, unknown>;
   const str = (value: unknown): string | null =>
     typeof value === "string" && value ? value : null;
   return {
     stateKey: event.state_key ?? "",
     protocolId: str(protocol.id),
     protocolName: str(protocol.displayname),
+    networkId: str(network.id),
     channelName: str(channel.displayname),
     channelId: str(channel.id),
     receiver: str(channel.receiver),
@@ -295,6 +299,35 @@ export class RoomDirectory {
 
   count(): number {
     return Number((this.#db.prepare("SELECT COUNT(*) AS n FROM rooms").get() as { n: number }).n);
+  }
+
+  /** Each connection the rooms belong to: a bridge and, where it has one, the network's ID. */
+  connections(): Array<{
+    protocolId: string | null;
+    networkId: string | null;
+    name: string | null;
+    rooms: number;
+  }> {
+    const found = new Map<
+      string,
+      { protocolId: string | null; networkId: string | null; name: string | null; rooms: number }
+    >();
+    const rows = this.#db.prepare("SELECT bridge FROM rooms").all() as Array<{
+      bridge: string | null;
+    }>;
+    for (const row of rows) {
+      const bridge = row.bridge ? (JSON.parse(row.bridge) as BridgeInfo) : null;
+      const key = `${bridge?.protocolId ?? ""}\n${bridge?.networkId ?? ""}`;
+      const entry = found.get(key) ?? {
+        protocolId: bridge?.protocolId ?? null,
+        networkId: bridge?.networkId ?? null,
+        name: bridge?.protocolName ?? null,
+        rooms: 0,
+      };
+      entry.rooms += 1;
+      found.set(key, entry);
+    }
+    return [...found.values()];
   }
 
   networks(): Array<{ network: string; rooms: number }> {

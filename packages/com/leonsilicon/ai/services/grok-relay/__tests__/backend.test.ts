@@ -129,6 +129,7 @@ test("live: the inbox's journal, as the relay's messages", async () => {
     coveredSince: async () => 1795000000000,
     latest: async () => [entry],
     since: async () => [{ ...entry, redacted: true, text: "" }],
+    recent: async () => [],
     changes: async (options) => {
       asked.push(options);
       return { entries: [entry], cursor: 9 };

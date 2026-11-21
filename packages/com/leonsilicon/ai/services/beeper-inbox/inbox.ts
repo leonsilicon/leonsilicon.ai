@@ -64,6 +64,20 @@ import {
 } from "#types";
 
 export const VERSION = "0.1.0";
+
+export interface RoomInfo {
+  roomId: string;
+  name: string | null;
+  /** Short network name, as the feed channels use it: whatsapp, instagram, grok… */
+  network: string;
+  /** The bridge's own name for the network: "WhatsApp", "Instagram"… */
+  networkName: string | null;
+  /** The bridge, e.g. "instagramgo"; null for a plain Matrix room. */
+  protocolId: string | null;
+  networkId: string | null;
+  isDirect: boolean;
+  isMuted: boolean;
+}
 /** A page of history that takes longer than this is logged with where its time went. */
 const SLOW_READ_MS = 3000;
 
@@ -184,6 +198,9 @@ export class Inbox {
   #directory: RoomDirectory | null = null;
   #ledger: SendLedger | null = null;
   #journal: MessageJournal | null = null;
+  /** Rooms Leon muted, from his push rules; null until they have been read. */
+  #muted: Set<string> | null = null;
+  #mutedAt = 0;
   #client: PickleClient | null = null;
   #subscription: MatrixSubscription | null = null;
   #account: InboxAccount | null = null;
@@ -309,6 +326,7 @@ export class Inbox {
       }
       this.#bootedAt = this.#now();
       await this.#subscribe();
+      void this.refreshMuted();
       this.#state = "ready";
       this.#log("info", "beeper-inbox ready", {
         userId: account.userId,
@@ -433,6 +451,10 @@ export class Inbox {
       };
       return;
     }
+    if (kind === "accountData" && event.type === "m.push_rules") {
+      this.#setMuted((event.content as { global?: unknown } | undefined)?.global);
+      return;
+    }
     if (kind === "crypto") {
       this.#cryptoEvents.push({
         state: String(event.state),
@@ -544,6 +566,71 @@ export class Inbox {
     );
   }
 
+  /**
+   * Beeper keeps a muted chat as a Matrix push rule for the room with no "notify" action
+   * (measured 2026-11-21: 213 room rules, actions [] or ["dont_notify"], and no Beeper-specific field).
+   */
+  #setMuted(global: unknown): void {
+    const rules = (global as { room?: unknown } | undefined)?.room;
+    if (!Array.isArray(rules)) return;
+    const muted = new Set<string>();
+    for (const rule of rules as Array<{
+      rule_id?: unknown;
+      actions?: unknown;
+      enabled?: unknown;
+    }>) {
+      if (typeof rule.rule_id !== "string" || rule.enabled === false) continue;
+      const actions = Array.isArray(rule.actions) ? rule.actions : [];
+      if (!actions.includes("notify")) muted.add(rule.rule_id);
+    }
+    this.#muted = muted;
+    this.#mutedAt = this.#now();
+  }
+
+  /** Reads Leon's muted chats from the homeserver. Sync also brings changes to them as they happen. */
+  async refreshMuted(): Promise<void> {
+    try {
+      const response = await this.#matrix("/_matrix/client/v3/pushrules/", { timeoutMs: 20_000 });
+      if (response.status === 200)
+        this.#setMuted((response.body as { global?: unknown } | null)?.global);
+      else this.#log("warn", "couldn't read the muted chats", { status: response.status });
+    } catch (error) {
+      this.#log("warn", "couldn't read the muted chats", { error: String(error) });
+    }
+  }
+
+  /** What an extension needs to know about rooms: name, network, connection, direct, muted. */
+  rooms(roomIds: readonly string[]): RoomInfo[] {
+    const { directory } = this.#ready();
+    const out: RoomInfo[] = [];
+    for (const roomId of new Set(roomIds)) {
+      const record = directory.get(roomId);
+      if (!record) continue;
+      out.push({
+        roomId,
+        name: record.name,
+        network: record.network,
+        networkName: record.bridge?.protocolName ?? null,
+        protocolId: record.bridge?.protocolId ?? null,
+        networkId: record.bridge?.networkId ?? null,
+        isDirect: record.isDirect,
+        isMuted: this.#muted?.has(roomId) ?? false,
+      });
+    }
+    return out;
+  }
+
+  /** Each connection Leon's rooms belong to (see RoomDirectory.connections). */
+  connections(): ReturnType<RoomDirectory["connections"]> {
+    return this.#ready().directory.connections();
+  }
+
+  /** Display names for Matrix user IDs, where the homeserver has one. */
+  async names(userIds: readonly string[]): Promise<Record<string, string>> {
+    this.#ready();
+    return Object.fromEntries(await this.#senderNames(userIds));
+  }
+
   /** The journal of messages as sync delivered them (see journal.ts). */
   get journal(): MessageJournal {
     if (!this.#journal)
@@ -562,6 +649,7 @@ export class Inbox {
     journal.alive(this.#now());
     journal.prune(this.#now());
     if (!client || this.#state !== "ready") return;
+    if (this.#now() - this.#mutedAt > 10 * 60_000) await this.refreshMuted();
     for (const due of journal.pendingDue(this.#now())) {
       try {
         const { message } = await this.#read.run(() =>
@@ -734,11 +822,13 @@ export class Inbox {
             bridge_bot: record.bridge.bridgeBot,
             channel_name: record.bridge.channelName,
             channel_id: record.bridge.channelId,
+            network_id: record.bridge.networkId ?? null,
             account: record.bridge.receiver,
             room_type: record.bridge.roomType,
           }
         : null,
       is_direct: record.isDirect,
+      ...(this.#muted ? { is_muted: this.#muted.has(record.roomId) } : {}),
       member_count: record.memberCount,
       encrypted: record.encrypted,
       last_activity: record.lastEventTs ? new Date(record.lastEventTs).toISOString() : null,

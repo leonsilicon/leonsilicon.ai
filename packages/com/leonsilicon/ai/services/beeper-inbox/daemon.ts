@@ -130,12 +130,25 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
             await waitReady();
             return runTool(inbox, name, args);
           },
+          rooms: async (roomIds) => {
+            await waitReady();
+            return inbox.rooms(roomIds);
+          },
+          connections: async () => {
+            await waitReady();
+            return inbox.connections();
+          },
+          senderNames: async (userIds) => {
+            await waitReady();
+            return inbox.names(userIds);
+          },
           // The journal is replaced when the inbox reloads, so it is looked up on every call.
           journal: {
             head: async () => inbox.journal.head(),
             coveredSince: async () => inbox.journal.coveredSince(),
             latest: async (roomId, count) => inbox.journal.latest(roomId, count),
             since: async (roomId, sinceTs) => inbox.journal.since(roomId, sinceTs),
+            recent: async (sinceTs, limit) => inbox.journal.recent(sinceTs, limit),
             changes: async ({ waitMs, ...options }) =>
               waitMs
                 ? inbox.journal.changesWhenAny({ ...options, waitMs })
@@ -158,9 +171,18 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
       switch (method) {
         case "ping":
           return { pid: process.pid, state: inbox.state, version: VERSION };
-        case "status":
+        case "status": {
           await waitReady();
-          return inbox.status();
+          const running: Record<string, unknown> = {};
+          for (const [name, extension] of extensions) {
+            try {
+              running[name] = extension.status?.() ?? { running: true };
+            } catch (error) {
+              running[name] = { error: String(error) };
+            }
+          }
+          return { ...(await inbox.status()), extensions: running };
+        }
         case "tool":
           await waitReady();
           return runTool(

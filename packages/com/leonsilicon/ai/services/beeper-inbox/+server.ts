@@ -9,6 +9,7 @@ export type {
   RunningExtension,
 } from "#extension";
 export { Inbox, LIMITS, VERSION } from "#inbox";
+export type { RoomInfo } from "#inbox";
 export { runMcpServer } from "#mcp";
 export { INSTRUCTIONS, TOOLS, runTool } from "#tools";
 export { inboxPaths } from "#paths";

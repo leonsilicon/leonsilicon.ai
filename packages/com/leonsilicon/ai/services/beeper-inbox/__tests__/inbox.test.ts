@@ -16,7 +16,7 @@ import { test } from "node:test";
 import { callIpc } from "#ipc";
 import { startDaemon } from "#daemon";
 import { inboxPaths } from "#paths";
-import type { ExtensionJournal } from "#extension";
+import type { ExtensionContext } from "#extension";
 import type { PickleRuntime } from "#pickle";
 import type {
   MatrixClientEvent,
@@ -635,7 +635,7 @@ test("extensions: served by the same daemon, reach Beeper through the inbox's to
 
 test("journal: sync messages are written down once; edits, late keys and deletions update them", async (t) => {
   const { env, paths, server, pickle } = setup();
-  let tapped: ExtensionJournal | null = null;
+  let tapped: ExtensionContext | null = null;
   const daemon = await startDaemon({
     env,
     pickle,
@@ -647,7 +647,7 @@ test("journal: sync messages are written down once; edits, late keys and deletio
         name: "tap",
         server: { name: "tap", version: "0", instructions: "", tools: [] },
         start: (context) => {
-          tapped = context.journal;
+          tapped = context;
           return { callTool: async () => ({}) };
         },
       },
@@ -655,8 +655,9 @@ test("journal: sync messages are written down once; edits, late keys and deletio
   });
   assert.ok(daemon);
   await daemon.ready;
-  const journal = tapped as ExtensionJournal | null;
-  assert.ok(journal);
+  const context = tapped as ExtensionContext | null;
+  assert.ok(context);
+  const { journal } = context;
   t.after(() => daemon.shutdown());
   const message = (eventId: string, text: string, extra: Record<string, unknown> = {}) =>
     ({
@@ -733,6 +734,38 @@ test("journal: sync messages are written down once; edits, late keys and deletio
   assert.deepEqual(
     (await journal.latest(ROOM, 5)).map((entry) => entry.eventId),
     ["$m1", "$m3"],
+  );
+
+  // What an extension can ask about rooms. Leon's muted chats are his room push rules that don't
+  // notify; sync brings a change to them as it happens.
+  assert.deepEqual(
+    (await context.rooms([ROOM, "!unknown:beeper.local"])).map((room) => [
+      room.roomId,
+      room.isMuted,
+    ]),
+    [[ROOM, false]],
+  );
+  server.emit({
+    kind: "accountData",
+    type: "m.push_rules",
+    content: {
+      global: {
+        room: [
+          { rule_id: ROOM, actions: [], enabled: true },
+          { rule_id: "!loud:beeper.local", actions: ["notify"], enabled: true },
+          { rule_id: "!off:beeper.local", actions: ["dont_notify"], enabled: false },
+        ],
+      },
+    },
+  });
+  const [room] = await context.rooms([ROOM]);
+  assert.equal(room?.isMuted, true);
+  assert.equal(typeof room?.network, "string");
+  assert.ok((await context.connections()).length >= 1);
+  assert.deepEqual(
+    (await journal.recent(0)).map((entry) => entry.eventId),
+    ["$m1", "$m3"],
+    "every room's messages since a time",
   );
 
   // What an operator sees: no text unless it is asked for.

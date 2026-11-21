@@ -1,3 +1,4 @@
+import type { RoomInfo } from "#inbox";
 import type { JournalEntry } from "#journal";
 import type { Logger } from "#types";
 
@@ -18,6 +19,19 @@ export interface ExtensionContext {
    * with `list_messages` costs about half a second per message, so nothing should do that in a loop.
    */
   journal: ExtensionJournal;
+  /** What the inbox knows about rooms: name, network, connection, whether Leon muted them. */
+  rooms(roomIds: readonly string[]): Promise<RoomInfo[]>;
+  /** Each connection Leon's rooms belong to: a bridge and, where it has one, the network's ID. */
+  connections(): Promise<
+    Array<{
+      protocolId: string | null;
+      networkId: string | null;
+      name: string | null;
+      rooms: number;
+    }>
+  >;
+  /** Display names for Matrix user IDs, where the homeserver has one. */
+  senderNames(userIds: readonly string[]): Promise<Record<string, string>>;
   /** The extension's own directory under the inbox home (0700), for its state. */
   home: string;
   /** The daemon's log, tagged with the extension's name. IDs and counts only, never message text. */
@@ -33,6 +47,8 @@ export interface ExtensionJournal {
   latest(roomId: string, count: number): Promise<JournalEntry[]>;
   /** A room's messages sent at or after a time, oldest first. */
   since(roomId: string, sinceTs: number): Promise<JournalEntry[]>;
+  /** Every room's messages sent at or after a time, oldest first. */
+  recent(sinceTs: number, limit?: number): Promise<JournalEntry[]>;
   /**
    * Messages that arrived or changed after a position, in one room or in all. With `waitMs`, it waits
    * that long for the first one when there is nothing yet.
@@ -47,6 +63,8 @@ export interface ExtensionJournal {
 
 export interface RunningExtension {
   callTool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** A few facts about its health, shown under its name in the daemon's status. */
+  status?(): Record<string, unknown>;
   stop?(): void | Promise<void>;
 }
 

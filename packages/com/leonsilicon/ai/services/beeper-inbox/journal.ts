@@ -126,6 +126,7 @@ export class MessageJournal {
     db.exec("CREATE INDEX IF NOT EXISTS journal_rev ON journal (rev)");
     db.exec("CREATE INDEX IF NOT EXISTS journal_room_rev ON journal (room_id, rev)");
     db.exec("CREATE INDEX IF NOT EXISTS journal_room_ts ON journal (room_id, ts)");
+    db.exec("CREATE INDEX IF NOT EXISTS journal_ts ON journal (ts)");
     db.exec(
       "CREATE TABLE IF NOT EXISTS journal_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)",
     );
@@ -357,6 +358,14 @@ export class MessageJournal {
         "SELECT * FROM journal WHERE room_id = ? AND ts >= ? AND pending = 0 ORDER BY ts, seq LIMIT 500",
       )
       .all(roomId, sinceTs) as unknown as Row[];
+    return rows.map(entry);
+  }
+
+  /** Every room's messages sent at or after a time, oldest first, `limit` at most (the oldest). */
+  recent(sinceTs: number, limit = 2000): JournalEntry[] {
+    const rows = this.#db
+      .prepare("SELECT * FROM journal WHERE ts >= ? AND pending = 0 ORDER BY ts, seq LIMIT ?")
+      .all(sinceTs, Math.min(Math.max(limit, 1), 5000)) as unknown as Row[];
     return rows.map(entry);
   }
 
