@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isTaskBotFor, slackIdentifier, slackThread, taskBotName } from "#handoff";
 import {
   budgetExceededMessage,
   budgetStatus,
@@ -235,10 +236,30 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     if (!Number.isFinite(wait) || wait < 0 || wait > MAX_WAIT_SECONDS)
       throw new Error(`wait_seconds must be 0-${MAX_WAIT_SECONDS}`);
     const isUrgent = args.urgent === true;
+    // Every task carries its Slack thread, and the bot makes a task bot that works there with
+    // Hermes; the instructions for that go after Hermes's own text (see handoff.ts).
+    const thread = slackThread(args.slack_channel, args.slack_thread_ts);
 
-    const target = await resolve(args.bot);
-    const why = guardBot(target.name, args.needs_bot_because);
-    if (why) log({ event: "grok_bot_justified", bot: target.name, reason: why.slice(0, 300) });
+    const asked = await resolve(args.bot);
+    const why = guardBot(asked.name, args.needs_bot_because);
+    if (why) log({ event: "grok_bot_justified", bot: asked.name, reason: why.slice(0, 300) });
+    // One task bot per Slack thread: once a bot exists for this thread (its name ends in the
+    // thread's ts, however the channel was written), the task goes to it, whichever bot was named.
+    const existing = (await bots()).find((bot) => isTaskBotFor(bot.name, thread));
+    const target = existing ?? asked;
+    if (existing && existing.chatID !== asked.chatID)
+      log({ event: "grok_task_bot_reused", asked: asked.name, bot: existing.name });
+    const item: QueuedItem = {
+      text: text.trim(),
+      at: new Date().toISOString(),
+      thread,
+      ...(existing ? { followUp: true } : {}),
+    };
+    const handoff = {
+      slack_identifier: slackIdentifier(thread),
+      task_bot: existing?.name ?? taskBotName(thread),
+      ...(existing && existing.chatID !== asked.chatID ? { redirected_from: asked.name } : {}),
+    };
 
     if (given(args.leon_approved_more)) {
       const { state, extended } = extendBudget(budget, args.leon_approved_more);
@@ -269,7 +290,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     const state = busy(before, Date.now(), { windowed });
     if (!isUrgent && (state.busy || pending)) {
       const box = (outbox[target.chatID] ??= { bot: target.name, items: [] });
-      box.items.push({ text: text.trim(), at: new Date().toISOString() });
+      box.items.push(item);
       saveOutbox();
       const reason = pending
         ? `${pending} earlier message(s) are already queued for this bot`
@@ -288,6 +309,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
         bot: target.name,
         reason,
         cursor: baseline,
+        ...handoff,
         note: QUEUED_NOTE,
       };
     }
@@ -295,7 +317,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     // Taken before the send, so nothing that arrives while it is on its way is missed.
     const position = live ? await live.cursor() : 0;
     const sentAt = Date.now();
-    const messageID = await post(target.chatID, text.trim(), `send-${randomUUID()}`, {
+    const messageID = await post(target.chatID, compose([item]), `send-${randomUUID()}`, {
       urgent: isUrgent,
     });
     log({
@@ -346,6 +368,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
       ok: true,
       bot: target.name,
       sent: { messageID, sentAs: "Leon", label: null },
+      ...handoff,
       replies,
       cursor: replies.at(-1)?.sortKey ?? baseline,
       budget: { used: remaining.used, limit: remaining.limit },

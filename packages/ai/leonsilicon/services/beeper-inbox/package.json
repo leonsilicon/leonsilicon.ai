@@ -21,6 +21,7 @@
     "#paths": "./paths.ts",
     "#pickle": "./pickle.ts",
     "#secrets": "./secrets.ts",
+    "#slack-handoff": "./slack-handoff.ts",
     "#store-trace": "./store-trace.ts",
     "#tools": "./tools.ts",
     "#types": "./types.ts"

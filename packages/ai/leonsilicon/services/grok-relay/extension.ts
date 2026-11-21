@@ -4,7 +4,7 @@ import { inboxBackend } from "#backend";
 import { createGrokRelay } from "#relay";
 import { callTool, INSTRUCTIONS, TOOLS } from "#tools";
 
-export const VERSION = "1.3.0";
+export const VERSION = "1.4.0";
 
 /**
  * The relay as an extension of Hermes's Beeper inbox daemon: `beeper-inbox.mjs mcp grok-relay` is its

@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  codexHandoffBlock,
+  DOT_NETWORKS,
+  slackIdentifier,
+  slackThread,
+  taskName,
+} from "#slack-handoff";
+import {
   existsSync,
   mkdirSync,
   readFileSync,
@@ -1346,10 +1353,38 @@ export class Inbox {
   }
 
   async sendMessage(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const { client } = this.#ready();
+    const { client, directory } = this.#ready();
     const roomId = roomIdOf(args.room_id);
-    const text = typeof args.text === "string" ? args.text : "";
-    if (!text.trim()) throw new InboxError("bad_argument", "text is required");
+    const given = typeof args.text === "string" ? args.text : "";
+    if (!given.trim()) throw new InboxError("bad_argument", "text is required");
+    // A message to Silicon Dot is a task: it carries the Slack thread Hermes works in, and Dot's
+    // Codex session for it talks to Hermes there (slack-handoff.ts).
+    const network = directory.get(roomId)?.network ?? null;
+    const dot = network !== null && DOT_NETWORKS.has(network);
+    const hasThread = args.slack_channel !== undefined || args.slack_thread_ts !== undefined;
+    if (!dot && hasThread)
+      throw new InboxError(
+        "bad_argument",
+        "slack_channel and slack_thread_ts are only for Silicon Dot's chats; for a Grok bot use grok_bot_send",
+      );
+    let text = given;
+    let handoff: Record<string, string> | undefined;
+    if (dot) {
+      let thread;
+      try {
+        thread = slackThread(args.slack_channel, args.slack_thread_ts);
+      } catch (error) {
+        throw new InboxError(
+          "bad_argument",
+          `This is Silicon Dot's chat. ${(error as Error).message}`,
+        );
+      }
+      text = `${given.trim()}\n\n${codexHandoffBlock(thread)}`;
+      handoff = {
+        slack_identifier: slackIdentifier(thread),
+        codex_session_title: taskName(thread),
+      };
+    }
     if (text.length > LIMITS.maxSendChars)
       throw new InboxError("bad_argument", `text is over ${LIMITS.maxSendChars} characters`);
     const replyTo =
@@ -1378,6 +1413,7 @@ export class Inbox {
         ? { reply_to: replyTo, reply_linked: message ? message.replyTo === replyTo : null }
         : {}),
       text_matches: message ? message.text === text : null,
+      ...handoff,
     }));
   }
 

@@ -1,6 +1,6 @@
 # @-/com.leonsilicon.hermes.plugins.slack-as-leon-guard
 
-Hermes plugin that stops Hermes from answering the Slack messages it posted as Leon through the [slack-as-leon](../../../ai/services/slack-as-leon/README.md) MCP server.
+Hermes plugin that stops Hermes from answering the Slack messages it posted as Leon through the [slack-as-leon](../../../../../ai/leonsilicon/services/slack-as-leon/README.md) MCP server.
 
 ## Why
 
@@ -11,6 +11,10 @@ Hermes posts as Leon with Leon's own Slack web session, so Grok Bot bots (which 
 The server stamps every post with a `client_msg_id` whose first group is `de1e6a7e`; Leon's own Slack clients use random UUIDs. Slack keeps the id and delivers it in the event. The plugin wraps the live adapter's `_prefilter_inbound`, which every inbound `message` and `app_mention` event passes through, and drops events carrying the marker, edits included. It logs `slack-as-leon-guard: not answering <channel>:<ts>, Hermes posted it as Leon`.
 
 The messages stay in Slack, and Hermes's thread context still shows them (as Leon's). If the adapter internals change, it logs a warning instead of patching.
+
+## Grok bots' posts
+
+Since 2026-11-21 Grok bots post through the same server to talk to Hermes in a task's thread. Their marker has `b075` as its second group (`GROK_BOT_GROUP`). Those events are let through, and their text starts with `GROK_NOTE`, "[Not Leon: a Grok bot posted this as Leon through slack-puppet …]", so Hermes answers them as the bot's report or question. The log says `… is a Grok bot's post; Hermes answers it as one`.
 
 ## Install
 

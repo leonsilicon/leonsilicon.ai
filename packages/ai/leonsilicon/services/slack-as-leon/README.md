@@ -16,9 +16,23 @@ Leon's Grok Bot bots in Slack answer only Leon. Anything a bot posts is ignored,
 
 The server's instructions tell Hermes to write as Leon (first person, never mentioning Hermes), the same voice rules as the [Grok relay](../../configs/grok-relay-hermes/README.md). They also tell it not to post where people will read it unless Leon asked, and never to raise money, login or security matters.
 
+## Grok bots
+
+Since 2026-11-21 (v2.2.0, Codex since v2.3.0) Leon's Grok Bot bots, and the Codex sessions Silicon Dot starts, use it too, to talk to Hermes in the Slack thread of a task Hermes handed them (the [Grok relay's handoff](../grok-relay/README.md#slack-handoff-v140-2026-11-21)). Grok bots connect with `SLACK_AS_LEON_GROK_TOKEN`, set as the `slack-puppet` server in Grok Bot's account-wide MCP config; Codex sessions with `SLACK_AS_LEON_CODEX_TOKEN`, through the [hermes-thread](../../configs/silicon-dot/hermes-thread/README.md) proxy on Leon's MacBook. Each gets its own instructions and two tools only:
+
+| Tool                 | Does                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hermes_thread_send` | Posts a reply in a channel thread as Leon, starting `🤖 *<from_bot>*:`, and waits (default 90 s) for Hermes, or Leon, to answer. Needs `thread_ts` and `from_bot`. |
+| `hermes_thread_read` | Reads what came after one of the bot's own posts in its thread.                                                                                                    |
+
+- **Marked as a bot's.** Their `client_msg_id` is `de1e6a7e-b075-…` (Grok) or `de1e6a7e-c0de-…` (Codex): the usual first group, so autolinear, Linear Sync and Hermes's autolinear plugin still skip it as "not Leon's words", and a second group Hermes's own posts never use. Hermes's `slack-as-leon-guard` lets those through with a note that a Grok bot wrote it, and `slack-always-react` puts no 👀/✅ on them, so Linear Sync never reads one as Leon's message being answered.
+- **Contained.** Only replies in channel threads: no DMs, no top-level posts, no mentions of people, bots or channels, and no broadcasts. A bot reads only the threads of its own posts.
+- **Counted apart.** `SLACK_AS_LEON_GROK_MAX_PER_HOUR` and `SLACK_AS_LEON_CODEX_MAX_PER_HOUR` (120 each) an hour, in KV keys `grok:`/`codex:<ms>:<ts>`, so a busy task can't use up Hermes's 30.
+- **Read back by Hermes**, an agent's post shows `from: "grok_bot"` or `"codex"`; read by the agent, Hermes's posts as Leon show `from: "hermes"`.
+
 ## Limits
 
-- **Marker.** Every post's `client_msg_id` starts with `de1e6a7e` (`CLIENT_MSG_ID_PREFIX`), and the rest is random. Hermes's [`slack-as-leon-guard`](../../../hermes/plugins/slack-as-leon-guard/README.md) plugin drops events carrying it, so Hermes doesn't answer its own posts. Other bots don't see any difference.
+- **Marker.** Every post's `client_msg_id` starts with `de1e6a7e` (`CLIENT_MSG_ID_PREFIX`), and the rest is random. Hermes's [`slack-as-leon-guard`](../../../../com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md) plugin drops events carrying it, so Hermes doesn't answer its own posts. Other bots don't see any difference.
 - **Refused.** The users in `SLACK_AS_LEON_BLOCKED_USERS`, which is required (Silicon Dot, in practice): no DM and no mention. Silicon Dot acts on Leon's own messages, and Hermes hands it tasks through its Beeper chat (Leon's rule, 2026-11-12), not in Leon's name in Slack. Change this with `SLACK_AS_LEON_BLOCKED_USERS`. `@channel`, `@here` and `@everyone` are refused too.
 - **Rate.** 30 messages per rolling hour (`SLACK_AS_LEON_MAX_PER_HOUR`), counted in a `RateStore` (Workers KV in production).
 - **Reading.** It reads only the answers to its own posts, never other conversations. Hermes's read-only `slack` MCP covers channels its bot is in.

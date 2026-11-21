@@ -1,3 +1,4 @@
+import { followUpBlock, handoffBlock, slackIdentifier, type SlackThread } from "#handoff";
 import type { BudgetState, QueuedItem } from "#types";
 
 /**
@@ -144,13 +145,34 @@ export function busy(
   return { busy: false, reason: `the bot finished replying ${secs(quiet)} ago` };
 }
 
-/** One item goes out unchanged; several become one numbered message, in Leon's lowercase voice. */
+/**
+ * One item goes out unchanged; several become one numbered message, in Leon's lowercase voice.
+ * Then the handoff block of each Slack thread the items carry, once per thread.
+ */
 export function compose(items: ReadonlyArray<string | QueuedItem>): string {
-  const texts = items
-    .map((item) => (typeof item === "string" ? item : item.text).trim())
-    .filter(Boolean);
-  if (texts.length <= 1) return texts[0] ?? "";
-  return `a few more things, in order:\n\n${texts.map((text, index) => `${index + 1}. ${text}`).join("\n\n")}`;
+  const kept = items
+    .map((item) => (typeof item === "string" ? { text: item } : item))
+    .map((item) => ({ ...item, text: item.text.trim() }))
+    .filter((item) => item.text);
+  const body =
+    kept.length <= 1
+      ? (kept[0]?.text ?? "")
+      : `a few more things, in order:\n\n${kept.map((item, index) => `${index + 1}. ${item.text}`).join("\n\n")}`;
+  const threads = new Map<string, { thread: SlackThread; items: number[]; followUp: boolean }>();
+  kept.forEach((item, index) => {
+    if (!("thread" in item) || !item.thread) return;
+    const key = slackIdentifier(item.thread);
+    const entry = threads.get(key) ?? { thread: item.thread, items: [], followUp: true };
+    entry.items.push(index + 1);
+    entry.followUp &&= "followUp" in item && item.followUp === true;
+    threads.set(key, entry);
+  });
+  const blocks = [...threads.values()].map(({ thread, items: numbers, followUp }) =>
+    followUp
+      ? followUpBlock(thread)
+      : handoffBlock(thread, kept.length > 1 && threads.size > 1 ? numbers : undefined),
+  );
+  return [body, ...blocks].join("\n\n");
 }
 
 /** The longest prefix of the queue whose composed message fits in `max` characters (at least one item). */

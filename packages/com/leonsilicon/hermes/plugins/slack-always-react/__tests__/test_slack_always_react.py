@@ -110,3 +110,24 @@ def test_missing_internals_fail_closed(caplog):
     plugin.wire(None, bare)
     assert not hasattr(bare, "_build_message_event")
     assert "internals changed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_grok_bot_post_is_answered_without_reactions(adapter):
+    """A Grok bot's post (slack-as-leon marker, group b075) is Leon's only in name: no 👀/✅."""
+    plugin.wire(None, adapter)
+    ts = "1700000000.000030"
+    await adapter._handle_slack_message(_event(
+        ts, thread_ts="1700000000.000003", client_msg_id="de1e6a7e-b075-45d1-94bb-f80359112347"))
+    adapter.handle_message.assert_awaited_once()
+    assert not any(ts in marker for marker in map(str, adapter._reacting_message_ids))
+
+
+@pytest.mark.asyncio
+async def test_codex_post_is_answered_without_reactions(adapter):
+    plugin.wire(None, adapter)
+    ts = "1700000000.000031"
+    await adapter._handle_slack_message(_event(
+        ts, thread_ts="1700000000.000003", client_msg_id="de1e6a7e-c0de-45d1-94bb-f80359112347"))
+    adapter.handle_message.assert_awaited_once()
+    assert not any(ts in marker for marker in map(str, adapter._reacting_message_ids))

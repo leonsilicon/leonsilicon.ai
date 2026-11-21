@@ -58,8 +58,13 @@ export interface GrokLive {
 export type RelayLog = (entry: Record<string, unknown>) => void;
 
 export interface QueuedItem {
+  /** Hermes's own text, without the handoff block. */
   text: string;
   at: string;
+  /** The task's Slack thread; the block for it is added when the queue goes out. */
+  thread?: { channel: string; threadTs: string };
+  /** For the thread's task bot itself: a follow-up note instead of the "make a task bot" block. */
+  followUp?: boolean;
 }
 
 export interface BudgetState {

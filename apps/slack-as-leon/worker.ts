@@ -17,7 +17,7 @@ interface KVNamespace {
 interface Env {
   /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/slack-as-leon/index.html. */
   ASSETS: Assets;
-  /** One key per post, expiring after an hour: the hourly limit. */
+  /** One key per post, expiring after an hour: the hourly limits (`post:` Hermes, `grok:` Grok bots, `codex:` Codex sessions). */
   RATE: KVNamespace;
   SLACK_AS_LEON_MCP_TOKEN: string;
   SLACK_SESSION_TOKEN: string;
@@ -25,15 +25,19 @@ interface Env {
   SLACK_AS_LEON_PUBLIC_ORIGIN?: string;
   SLACK_AS_LEON_MAX_PER_HOUR?: string;
   SLACK_AS_LEON_BLOCKED_USERS?: string;
+  SLACK_AS_LEON_GROK_TOKEN?: string;
+  SLACK_AS_LEON_GROK_MAX_PER_HOUR?: string;
+  SLACK_AS_LEON_CODEX_TOKEN?: string;
+  SLACK_AS_LEON_CODEX_MAX_PER_HOUR?: string;
 }
 
-function kvRateStore(kv: KVNamespace): RateStore {
+function kvRateStore(kv: KVNamespace, prefix = "post"): RateStore {
   return {
     count: async (sinceMs) =>
-      (await kv.list({ prefix: "post:" })).keys.filter(
+      (await kv.list({ prefix: `${prefix}:` })).keys.filter(
         (key) => Number(key.name.split(":")[1]) >= sinceMs,
       ).length,
-    add: (atMs, id) => kv.put(`post:${atMs}:${id}`, "1", { expirationTtl: 3900 }),
+    add: (atMs, id) => kv.put(`${prefix}:${atMs}:${id}`, "1", { expirationTtl: 3900 }),
   };
 }
 
@@ -42,7 +46,10 @@ let handler: ((request: Request) => Promise<Response>) | undefined;
 function build(env: Env): (request: Request) => Promise<Response> {
   const { ASSETS: _assets, RATE, ...vars } = env;
   const config = loadConfig(vars);
-  const service = new SlackAsLeon(config, sessionClient(config.session), kvRateStore(RATE));
+  const service = new SlackAsLeon(config, sessionClient(config.session), kvRateStore(RATE), {
+    grokRate: kvRateStore(RATE, "grok"),
+    codexRate: kvRateStore(RATE, "codex"),
+  });
   return createHandler(config, service);
 }
 

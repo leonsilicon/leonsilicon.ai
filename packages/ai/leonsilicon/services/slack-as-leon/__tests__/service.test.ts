@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadConfig } from "#config";
 import { linkBotMentions, type SlackUser } from "#directory";
-import { CLIENT_MSG_ID_PREFIX, isMarked, newClientMsgId } from "#marker";
+import {
+  CLIENT_MSG_ID_PREFIX,
+  GROK_BOT_GROUP,
+  isGrokBotPost,
+  isMarked,
+  newClientMsgId,
+} from "#marker";
 import { createHandler } from "#mcp";
 import { memoryRateStore, Refused, SlackAsLeon, tsKey } from "#service";
 import { SlackError, sessionClient, type SlackCall, type SlackParams } from "#slack";
@@ -427,4 +433,221 @@ test("loadConfig needs the blocked-users list, which has no built-in default", (
   const config = loadConfig({ ...base, SLACK_AS_LEON_BLOCKED_USERS: ` ${DOT}, ${FRIEND} ,` });
   assert.deepEqual(config.blockedUsers, [DOT, FRIEND]);
   assert.deepEqual(loadConfig({ ...base, SLACK_AS_LEON_BLOCKED_USERS: "" }).blockedUsers, []);
+});
+
+const HERMES = "U0HERMES001";
+const ROOT = "1794499999.000001";
+
+/** A Slack where Hermes answers a Grok bot's post in its thread at once. */
+function grokSetup(overrides: { grokMaxPerHour?: number } = {}) {
+  const clock = { t: 0 };
+  const fake = fakeSlack(clock);
+  fake.messages.get(TODO)!.push({ ts: ROOT, user: LEON, text: "the task" });
+  const slack: SlackCall = async (method, params = {}) => {
+    const out = await fake.slack(method, params);
+    if (method === "chat.postMessage" && isGrokBotPost(params.client_msg_id))
+      fake.messages.get(TODO)!.push({
+        ts: `${1794500000 + Math.floor(clock.t / 1000) + 5}.500000`,
+        thread_ts: String(params.thread_ts),
+        user: HERMES,
+        bot_id: "B0HERMES01",
+        bot_profile: { name: "Captain Claude" },
+        text: "Got it, go ahead.",
+      });
+    return out;
+  };
+  const settings = {
+    maxPerHour: 30,
+    grokMaxPerHour: overrides.grokMaxPerHour ?? 120,
+    blockedUsers: [DOT],
+    maxWaitSeconds: 150,
+  };
+  const service = new SlackAsLeon(settings, slack, memoryRateStore(), {
+    now: () => clock.t,
+    sleep: async (ms: number) => {
+      clock.t += ms;
+    },
+    pollMs: 1000,
+    settleMs: 3000,
+    grokRate: memoryRateStore(),
+  });
+  return { clock, service, ...fake };
+}
+
+const NAME = `Task slack:${TODO}/${ROOT}`;
+
+test("Grok bot posts carry a second marker group that Hermes's own posts never use", () => {
+  const grok = newClientMsgId("grok");
+  assert.match(grok, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.ok(grok.startsWith(`${CLIENT_MSG_ID_PREFIX}-${GROK_BOT_GROUP}-`));
+  assert.ok(isMarked(grok), "still skipped by everything that skips Hermes's posts");
+  assert.ok(isGrokBotPost(grok));
+  for (let i = 0; i < 5000; i++) assert.ok(!isGrokBotPost(newClientMsgId()));
+});
+
+test("a Grok bot posts a labelled, marked reply in its task thread and waits for Hermes", async () => {
+  const { service, calls } = grokSetup();
+  const result = await service.send(
+    { channel: "#todo", thread_ts: ROOT, text: "Starting: the task.", from_bot: NAME },
+    "grok",
+  );
+  const post = calls.find((c) => c.method === "chat.postMessage")!;
+  assert.equal(post.params.text, `🤖 *${NAME}*: Starting: the task.`);
+  assert.equal(post.params.thread_ts, ROOT);
+  assert.ok(isGrokBotPost(post.params.client_msg_id));
+  assert.equal(result.answered, true);
+  assert.deepEqual(
+    result.replies.map((r) => [r.from, r.author, r.text]),
+    [["bot", "Captain Claude", "Got it, go ahead."]],
+  );
+  // Read back by the bot, its own post is "you"; read by Hermes, it is a Grok bot's.
+  const mine = await service.read({ channel: TODO, ts: result.ts, after: ROOT }, "grok");
+  assert.equal(mine.replies[0]?.from, "you");
+  const hermes = await service.read({ channel: TODO, ts: result.ts, after: ROOT });
+  assert.equal(hermes.replies[0]?.from, "grok_bot");
+});
+
+test("Grok bots post only in channel threads, without mentions, under their own name", async () => {
+  const { service, calls } = grokSetup();
+  const send = (args: Partial<Parameters<SlackAsLeon["send"]>[0]>) =>
+    service.send(
+      { channel: "#todo", thread_ts: ROOT, text: "hi", from_bot: NAME, ...args },
+      "grok",
+    );
+  await assert.rejects(send({ thread_ts: undefined }), /thread_ts is required/);
+  await assert.rejects(send({ from_bot: " " }), /from_bot is required/);
+  await assert.rejects(send({ channel: TASK_DM }), /only in channel threads/);
+  await assert.rejects(send({ channel: `@Fri` }), /only in channel threads/);
+  await assert.rejects(send({ text: `ask <@${FRIEND}>` }), /can't mention/);
+  await assert.rejects(send({ text: "<!here> done" }), Refused);
+  assert.ok(!calls.some((c) => c.method === "chat.postMessage"));
+});
+
+test("Grok bots read only their own posts' threads and count against their own hourly limit", async () => {
+  const { service } = grokSetup({ grokMaxPerHour: 1 });
+  const hermesPost = await service.send({ channel: "#todo", text: "note", thread_ts: ROOT });
+  await assert.rejects(service.read({ channel: TODO, ts: hermesPost.ts }, "grok"), Refused);
+  await service.send({ channel: "#todo", thread_ts: ROOT, text: "one", from_bot: NAME }, "grok");
+  await assert.rejects(
+    service.send({ channel: "#todo", thread_ts: ROOT, text: "two", from_bot: NAME }, "grok"),
+    /Grok bots have posted 1/,
+  );
+  // Hermes's own allowance is untouched.
+  await service.send({ channel: "#todo", text: "still fine", thread_ts: ROOT });
+});
+
+test("the Grok token gets only the thread tools and their instructions", async () => {
+  const { service } = grokSetup();
+  const token = "k".repeat(64);
+  const grokToken = "g".repeat(64);
+  const handle = createHandler(
+    { token, grokToken, publicOrigin: "https://ai.example.com" },
+    service,
+  );
+  const rpc = async (body: unknown, auth: string) =>
+    (await handle(
+      new Request("https://ai.example.com/mcp", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${auth}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ).then((r) => r.json())) as {
+      result: { tools: { name: string }[]; instructions: string };
+      error?: { code: number };
+    };
+  const grokList = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, grokToken);
+  assert.deepEqual(
+    grokList.result.tools.map((t) => t.name),
+    ["hermes_thread_send", "hermes_thread_read"],
+  );
+  const grokInit = await rpc({ jsonrpc: "2.0", id: 2, method: "initialize" }, grokToken);
+  assert.match(grokInit.result.instructions, /talk to Hermes/);
+  const refused = await rpc(
+    {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "slack_send_as_leon", arguments: { channel: TODO, text: "hi" } },
+    },
+    grokToken,
+  );
+  assert.equal(refused.error?.code, -32602);
+  const hermesList = await rpc({ jsonrpc: "2.0", id: 4, method: "tools/list" }, token);
+  assert.ok(hermesList.result.tools.some((t) => t.name === "slack_send_as_leon"));
+  assert.ok(!hermesList.result.tools.some((t) => t.name === "hermes_thread_send"));
+});
+
+test("loadConfig takes an optional Grok token that must differ from Hermes's", () => {
+  const base = {
+    SLACK_AS_LEON_MCP_TOKEN: "t".repeat(40),
+    SLACK_SESSION_TOKEN: "xoxc-session",
+    SLACK_SESSION_COOKIE: "cookie",
+    SLACK_AS_LEON_BLOCKED_USERS: "",
+  };
+  assert.equal(loadConfig(base).grokToken, undefined);
+  assert.equal(
+    loadConfig({ ...base, SLACK_AS_LEON_GROK_TOKEN: "g".repeat(40) }).grokToken,
+    "g".repeat(40),
+  );
+  assert.throws(() => loadConfig({ ...base, SLACK_AS_LEON_GROK_TOKEN: "short" }), /strong token/);
+  assert.throws(
+    () => loadConfig({ ...base, SLACK_AS_LEON_GROK_TOKEN: "t".repeat(40) }),
+    /must differ/,
+  );
+});
+
+test("Codex sessions get their own token, marker group, label and allowance", async () => {
+  const { service, calls } = grokSetup();
+  const codexName = `Task slack:${TODO}/${ROOT}`;
+  await service.send(
+    { channel: "#todo", thread_ts: ROOT, text: "Starting: the fix.", from_bot: codexName },
+    "codex",
+  );
+  const post = calls.filter((c) => c.method === "chat.postMessage").at(-1)!;
+  assert.ok(String(post.params.client_msg_id).startsWith(`${CLIENT_MSG_ID_PREFIX}-c0de-`));
+  assert.ok(isMarked(post.params.client_msg_id));
+  assert.ok(!isGrokBotPost(post.params.client_msg_id));
+  assert.equal(post.params.text, `🤖 *${codexName}*: Starting: the fix.`);
+  for (let i = 0; i < 3000; i++) assert.ok(!/^de1e6a7e-(b075|c0de)-/.test(newClientMsgId()));
+
+  const config = loadConfig({
+    SLACK_AS_LEON_MCP_TOKEN: "t".repeat(40),
+    SLACK_SESSION_TOKEN: "xoxc-session",
+    SLACK_SESSION_COOKIE: "cookie",
+    SLACK_AS_LEON_BLOCKED_USERS: "",
+    SLACK_AS_LEON_GROK_TOKEN: "g".repeat(40),
+    SLACK_AS_LEON_CODEX_TOKEN: "c".repeat(40),
+  });
+  assert.equal(config.codexToken, "c".repeat(40));
+  assert.throws(
+    () =>
+      loadConfig({
+        SLACK_AS_LEON_MCP_TOKEN: "t".repeat(40),
+        SLACK_SESSION_TOKEN: "xoxc-session",
+        SLACK_SESSION_COOKIE: "cookie",
+        SLACK_AS_LEON_BLOCKED_USERS: "",
+        SLACK_AS_LEON_GROK_TOKEN: "g".repeat(40),
+        SLACK_AS_LEON_CODEX_TOKEN: "g".repeat(40),
+      }),
+    /must differ/,
+  );
+  const handle = createHandler(
+    {
+      token: "t".repeat(40),
+      grokToken: "g".repeat(40),
+      codexToken: "c".repeat(40),
+      publicOrigin: "https://ai.example.com",
+    },
+    service,
+  );
+  const init = (await (
+    await handle(
+      new Request("https://ai.example.com/mcp", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${"c".repeat(40)}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+      }),
+    )
+  ).json()) as { result: { instructions: string } };
+  assert.match(init.result.instructions, /Codex session that Silicon Dot/);
 });

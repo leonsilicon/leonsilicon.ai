@@ -6,21 +6,25 @@ Leon's Beeper messages are still copied to the Slack #feed- channels by [Beeper 
 
 ## Tools
 
-| Tool                  | Does                                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `list_conversations`  | Searches the joined rooms by name, participant, network or exact room ID, newest activity first. Each has its room ID, name, short network name (`whatsapp`, `instagram`…) and bridge identity.        |
-| `get_conversation`    | One room: name, network, bridge, member count, encryption.                                                                                                                                             |
-| `list_messages`       | One bounded page of history (up to 100 raw events), decrypted, oldest first, with `next_cursor`. Events that couldn't be decrypted are listed under `undecryptable` and the page is `complete: false`. |
-| `get_message`         | One original event, with full text, reply link and attachments, or an explicit "could not decrypt" with the error.                                                                                     |
-| `download_attachment` | Decrypts an attachment and saves the real bytes under `downloads/<day>/`, returning the path, filename, media type, byte count and SHA-256. Up to 64 MB.                                               |
-| `send_message`        | Text, optionally a reply (`reply_to` = an event ID in the same room). Returns the event ID, a readback and the bridge's delivery status when it reports one.                                           |
-| `send_file`           | A file from the machine, with filename and media type; media as media unless `send_as: "file"`. Up to 50 MB. Downloads the upload back and compares SHA-256.                                           |
-| `send_reaction`       | An emoji reaction.                                                                                                                                                                                     |
-| `inbox_status`        | Device, encryption and key backup state, sync health, directory size, recent sends, limits and what isn't supported.                                                                                   |
+| Tool                  | Does                                                                                                                                                                                                                              |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_conversations`  | Searches the joined rooms by name, participant, network or exact room ID, newest activity first. Each has its room ID, name, short network name (`whatsapp`, `instagram`…) and bridge identity.                                   |
+| `get_conversation`    | One room: name, network, bridge, member count, encryption.                                                                                                                                                                        |
+| `list_messages`       | One bounded page of history (up to 100 raw events), decrypted, oldest first, with `next_cursor`. Events that couldn't be decrypted are listed under `undecryptable` and the page is `complete: false`.                            |
+| `get_message`         | One original event, with full text, reply link and attachments, or an explicit "could not decrypt" with the error.                                                                                                                |
+| `download_attachment` | Decrypts an attachment and saves the real bytes under `downloads/<day>/`, returning the path, filename, media type, byte count and SHA-256. Up to 64 MB.                                                                          |
+| `send_message`        | Text, optionally a reply (`reply_to` = an event ID in the same room). Returns the event ID, a readback and the bridge's delivery status when it reports one. In Silicon Dot's chats it needs the task's Slack thread (see below). |
+| `send_file`           | A file from the machine, with filename and media type; media as media unless `send_as: "file"`. Up to 50 MB. Downloads the upload back and compares SHA-256.                                                                      |
+| `send_reaction`       | An emoji reaction.                                                                                                                                                                                                                |
+| `inbox_status`        | Device, encryption and key backup state, sync health, directory size, recent sends, limits and what isn't supported.                                                                                                              |
 
 Room IDs are opaque and used exactly as the homeserver gives them (`:beeper.local` is normal for bridged rooms; room version 12 IDs have no server part). The chat ID in a #feed- post is the room ID. A Slack ts is not an event ID; the tools refuse one with a pointer to `list_messages`.
 
 Not implemented: starting conversations with new contacts, edits and deletions, Beeper's merged chats (each bridged room is its own conversation), network-specific actions, and thread replies in bridged rooms (Beeper answers `/relations` with 403 there).
+
+## Silicon Dot's tasks (2026-11-21)
+
+Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task, so `send_message` there requires `slack_channel` and `slack_thread_ts`, the Slack thread Hermes works in, and refuses the send without them (`slack-handoff.ts`). It appends Leon's standing rule in his voice: start a Codex session titled `Task slack:<channel>/<thread_ts>`, one per Slack thread (a session whose title ends in that ts gets the message instead), reply with its link, and have it work with Hermes in that thread with slack-puppet's agent tools. The result carries `slack_identifier` and `codex_session_title`. Elsewhere the two fields are refused. The thread check is shared with the [Grok relay](../grok-relay/README.md#slack-handoff-v140-2026-11-21). Codex gets the tools from [`configs/silicon-dot/hermes-thread`](../../configs/silicon-dot/hermes-thread/README.md) on Leon's MacBook.
 
 ## How it works
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { codexHandoffBlock, slackThread, taskName } from "#slack-handoff";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -28,6 +29,8 @@ import type {
 
 const ME = "@leon:beeper.com";
 const ROOM = "!chat:beeper.local";
+/** Silicon Dot's chat: a ChatGPT Dots room. */
+const DOT_ROOM = "!dot:beeper.local";
 const ENC = encodeURIComponent(ROOM);
 
 /** A homeserver that dedupes sends by transaction ID, as the spec requires, and can lose responses. */
@@ -100,6 +103,19 @@ class FakeHomeserver {
                   { type: "m.room.name", state_key: "", content: { name: "Sam" } },
                   { type: "m.room.encryption", state_key: "", content: {} },
                   { type: "m.bridge", state_key: "b", content: { protocol: { id: "whatsapp" } } },
+                ],
+              },
+            },
+            [DOT_ROOM]: {
+              state: {
+                events: [
+                  { type: "m.room.name", state_key: "", content: { name: "Silicon Dot" } },
+                  { type: "m.room.encryption", state_key: "", content: {} },
+                  {
+                    type: "m.bridge",
+                    state_key: "d",
+                    content: { protocol: { id: "chatgpt-dots" } },
+                  },
                 ],
               },
             },
@@ -780,4 +796,59 @@ test("journal: sync messages are written down once; edits, late keys and deletio
       ["$m3", 0, false],
     ],
   );
+});
+
+test("send_message: Silicon Dot's chats need the task's Slack thread, and get the Codex handoff", async () => {
+  const { env, paths, server, pickle } = setup();
+  const daemon = await startDaemon({
+    env,
+    pickle,
+    baseFetch: server.fetch,
+    embedded: true,
+    bridgeStatusWaitMs: 20,
+  });
+  assert.ok(daemon);
+  await daemon.ready;
+  await assert.rejects(
+    tool(paths.socket, "send_message", { room_id: DOT_ROOM, text: "fix the bug" }),
+    /Silicon Dot's chat\. slack_channel and slack_thread_ts are required/,
+  );
+  await assert.rejects(
+    tool(paths.socket, "send_message", {
+      room_id: DOT_ROOM,
+      text: "fix the bug",
+      slack_channel: "D0LEONDM01",
+      slack_thread_ts: "1795280000.123456",
+    }),
+    /not a DM/,
+  );
+  await assert.rejects(
+    tool(paths.socket, "send_message", {
+      room_id: ROOM,
+      text: "hi",
+      slack_channel: "C0TASKS001",
+      slack_thread_ts: "1795280000.123456",
+    }),
+    /only for Silicon Dot's chats/,
+  );
+  const sent = await tool(paths.socket, "send_message", {
+    room_id: DOT_ROOM,
+    text: "fix the bug",
+    slack_channel: "C0TASKS001",
+    slack_thread_ts: "1795280000.123456",
+  });
+  assert.equal(sent.codex_session_title, "Task slack:C0TASKS001/1795280000.123456");
+  assert.equal(sent.slack_identifier, "slack:C0TASKS001/1795280000.123456");
+  await daemon.shutdown();
+});
+
+test("the Codex handoff names the session after the thread and tells it how to reach Hermes", () => {
+  const thread = slackThread("C0TASKS001", "1795280000.123456");
+  const block = codexHandoffBlock(thread);
+  assert.match(block, /^---\nSlack thread for this task: slack:C0TASKS001\/1795280000\.123456/);
+  assert.match(block, /titled exactly "Task slack:C0TASKS001\/1795280000\.123456"/);
+  assert.match(block, /clickable link/);
+  assert.match(block, /hermes_thread_send \(channel C0TASKS001, thread_ts 1795280000\.123456/);
+  assert.equal(taskName(thread), "Task slack:C0TASKS001/1795280000.123456");
+  assert.throws(() => slackThread("general", "1795280000.123456"), /channel ID/);
 });

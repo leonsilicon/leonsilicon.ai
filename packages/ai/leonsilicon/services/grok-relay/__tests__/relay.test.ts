@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { followUpBlock, handoffBlock } from "#handoff";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,10 @@ import { HOURLY_BUDGET } from "#policy";
 import { createGrokRelay } from "#relay";
 import { callTool } from "#tools";
 import type { GrokBackend, GrokLive, GrokMessage } from "#types";
+
+/** The Slack thread every delegated task now carries. */
+const THREAD = { slack_channel: "C0TASKS001", slack_thread_ts: "1795280000.123456" };
+const BLOCK = handoffBlock({ channel: "C0TASKS001", threadTs: "1795280000.123456" });
 
 /** The relay against a fake Beeper: offline, sends nothing real. */
 function setup() {
@@ -72,7 +77,12 @@ test("idle bot: sends directly and counts against the budget", async () => {
   const { relay, posted, add } = setup();
   add("c-task", true, "earlier", 3600_000);
   add("c-task", false, "Earlier full answer, done and verified.", 3500_000);
-  const result = await relay.send({ bot: "Task Bot", text: "please do X", wait_seconds: 0 });
+  const result = await relay.send({
+    ...THREAD,
+    bot: "Task Bot",
+    text: "please do X",
+    wait_seconds: 0,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.queued, undefined);
   assert.equal(posted.length, 1);
@@ -83,8 +93,8 @@ test("idle bot: sends directly and counts against the budget", async () => {
 test("busy bot: queued, merged into one message on flush once idle", async () => {
   const { relay, posted, add, stateDir } = setup();
   add("c-task", true, "first ask", 30_000); // no reply yet: busy
-  const first = await relay.send({ bot: "Task", text: "also do Y", wait_seconds: 0 });
-  const second = await relay.send({ bot: "Task", text: "and Z", wait_seconds: 0 });
+  const first = await relay.send({ ...THREAD, bot: "Task", text: "also do Y", wait_seconds: 0 });
+  const second = await relay.send({ ...THREAD, bot: "Task", text: "and Z", wait_seconds: 0 });
   assert.equal(first.queued, true);
   assert.equal(second.position, 2);
   assert.equal(posted.length, 0);
@@ -107,7 +117,11 @@ test("busy bot: queued, merged into one message on flush once idle", async () =>
   );
   await relay.flushOnce();
   assert.equal(posted.length, 1);
-  assert.equal(posted[0]?.text, "a few more things, in order:\n\n1. also do Y\n\n2. and Z");
+  // Both carry the same thread, so its handoff block follows once.
+  assert.equal(
+    posted[0]?.text,
+    `a few more things, in order:\n\n1. also do Y\n\n2. and Z\n\n${BLOCK}`,
+  );
   assert.equal((await relay.read({ bot: "Task Bot" })).queued, undefined);
   assert.equal(relay.budget().used, 1);
 });
@@ -115,7 +129,7 @@ test("busy bot: queued, merged into one message on flush once idle", async () =>
 test("a flush retried after a lost answer reuses its key, so it can't post twice", async () => {
   const { relay, posted, add, calls, logs } = setup();
   add("c-task", true, "first ask", 30_000);
-  await relay.send({ bot: "Task Bot", text: "also do Y", wait_seconds: 0 });
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "also do Y", wait_seconds: 0 });
   add(
     "c-task",
     false,
@@ -137,6 +151,7 @@ test("urgent goes straight out even when busy", async () => {
   const { relay, posted, add } = setup();
   add("c-task", true, "first ask", 10_000);
   const result = await relay.send({
+    ...THREAD,
     bot: "Task Bot",
     text: "stop, wrong account",
     urgent: true,
@@ -149,11 +164,12 @@ test("urgent goes straight out even when busy", async () => {
 test("Linear Bot needs a reason; with one it is allowed and logged", async () => {
   const { relay, posted, logs } = setup();
   await assert.rejects(
-    relay.send({ bot: "Linear Bot", text: "read back LEON-6", wait_seconds: 0 }),
+    relay.send({ ...THREAD, bot: "Linear Bot", text: "read back LEON-6", wait_seconds: 0 }),
     /linear\/todoist MCP tools/,
   );
   assert.equal(posted.length, 0);
   const result = await relay.send({
+    ...THREAD,
     bot: "Linear Bot",
     text: "create the workflow status",
     needs_bot_because: "the linear MCP cannot create workflow states",
@@ -173,13 +189,14 @@ test("budget: refused at the limit with ask-Leon text; Leon's quote extends it",
   // a new relay picks the saved budget up, as after a restart
   const relay = open();
   await assert.rejects(
-    relay.send({ bot: "Task Bot", text: "one more", wait_seconds: 0 }),
+    relay.send({ ...THREAD, bot: "Task Bot", text: "one more", wait_seconds: 0 }),
     /Ask Leon in Slack/,
   );
   const refused = await callTool(relay, "grok_bot_send", { bot: "Task Bot", text: "one more" });
   assert.equal(refused.ok, false);
   assert.equal((refused.error as { code: string }).code, "grok_relay_error");
   const result = await relay.send({
+    ...THREAD,
     bot: "Task Bot",
     text: "one more",
     wait_seconds: 0,
@@ -197,7 +214,12 @@ test("waits for the reply and returns it as it finally reads", async () => {
       reply.text = "Working… done: the form is submitted.";
     }, 30);
   }, 20);
-  const result = await relay.send({ bot: "Task Bot", text: "submit the form", wait_seconds: 0.2 });
+  const result = await relay.send({
+    ...THREAD,
+    bot: "Task Bot",
+    text: "submit the form",
+    wait_seconds: 0.2,
+  });
   const replies = result.replies as Array<{ from: string; text: string; sortKey: string }>;
   assert.deepEqual(
     replies.map((reply) => [reply.from, reply.text]),
@@ -211,7 +233,7 @@ test("read: tells Hermes's messages from Leon's, pages by cursor, drops a pre-mo
   const { relay, add } = setup();
   add("c-task", true, "typed by Leon himself", 400_000);
   add("c-task", false, "An answer to Leon.", 390_000);
-  await relay.send({ bot: "Task Bot", text: "from Hermes", wait_seconds: 0 });
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "from Hermes", wait_seconds: 0 });
   add("c-task", false, "An answer to Hermes.");
   const all = await relay.read({ bot: "task" });
   const lines = all.messages as Array<{ from: string; text: string; sortKey: string }>;
@@ -317,8 +339,13 @@ test("with the journal: a send reads no history, and returns the reply as it fin
     setTimeout(() => arrive(false, "Working… done: submitted.", 0, reply.id), 25);
     setTimeout(() => arrive(false, "Anything else?"), 40);
   }, 20);
-  const result = await relay.send({ bot: "Task Bot", text: "submit the form", wait_seconds: 5 });
-  assert.deepEqual(posted, ["submit the form"]);
+  const result = await relay.send({
+    ...THREAD,
+    bot: "Task Bot",
+    text: "submit the form",
+    wait_seconds: 5,
+  });
+  assert.deepEqual(posted, [`submit the form\n\n${BLOCK}`]);
   assert.deepEqual(
     (result.replies as Array<{ from: string; text: string }>).map((reply) => [
       reply.from,
@@ -341,6 +368,7 @@ test("with the journal: busy is judged from the last minutes alone", async () =>
   const first = setupLive();
   first.arrive(false, "Here is part one of the long answer you asked for earlier today.", 30_000);
   const queued = await first.relay.send({
+    ...THREAD,
     bot: "Task Bot",
     text: "one more thing",
     wait_seconds: 0,
@@ -353,7 +381,7 @@ test("with the journal: busy is judged from the last minutes alone", async () =>
   const second = setupLive();
   second.arrive(false, "All done.", 20 * 60_000);
   assert.equal(
-    (await second.relay.send({ bot: "Task Bot", text: "hi", wait_seconds: 0 })).queued,
+    (await second.relay.send({ ...THREAD, bot: "Task Bot", text: "hi", wait_seconds: 0 })).queued,
     undefined,
   );
 
@@ -361,12 +389,13 @@ test("with the journal: busy is judged from the last minutes alone", async () =>
   const third = setupLive();
   third.arrive(true, "do the thing", 2 * 60_000);
   assert.equal(
-    (await third.relay.send({ bot: "Task Bot", text: "and this", wait_seconds: 0 })).queued,
+    (await third.relay.send({ ...THREAD, bot: "Task Bot", text: "and this", wait_seconds: 0 }))
+      .queued,
     true,
   );
   third.arrive(false, "Done, here are the full results and the readback you wanted.", 90_000);
   await third.relay.flushOnce();
-  assert.deepEqual(third.posted, ["and this"]);
+  assert.deepEqual(third.posted, [`and this\n\n${BLOCK}`]);
   assert.equal(third.calls.history, 0);
 });
 
@@ -390,10 +419,44 @@ test("with the journal: reads come from it when it holds what is asked, from his
 
 test("a journal younger than the busy window isn't trusted yet", async () => {
   const { relay, calls } = setupLive({ coveredMinutes: 5 });
-  await relay.send({ bot: "Task Bot", text: "hi", wait_seconds: 0 });
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "hi", wait_seconds: 0 });
   assert.equal(
     calls.history,
     1,
     "one small page of history decides busy until the journal is old enough",
   );
+});
+
+test("one task bot per Slack thread: a task for a thread that has one goes to it", async () => {
+  const { relay, chats, posted } = setup();
+  // The thread's task bot, made earlier with the channel written as a name.
+  chats["c-thread"] = { title: "Task slack:#leon-42-fix/1795280000.123456", messages: [] };
+  const result = await relay.send({
+    ...THREAD,
+    bot: "Task Bot",
+    text: "one more thing",
+    wait_seconds: 0,
+  });
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0]?.chatID, "c-thread", "not the bot that was named");
+  assert.equal(
+    posted[0]?.text,
+    `one more thing\n\n${followUpBlock({ channel: "C0TASKS001", threadTs: "1795280000.123456" })}`,
+  );
+  assert.equal(result.task_bot, "Task slack:#leon-42-fix/1795280000.123456");
+  assert.equal(result.redirected_from, "Task Bot");
+  // Another thread still gets a new task bot from the bot that was named.
+  const other = await relay.send({
+    bot: "Task Bot",
+    text: "a new task",
+    slack_channel: "C0TASKS001",
+    slack_thread_ts: "1795280099.000001",
+    wait_seconds: 0,
+  });
+  assert.equal(posted.at(-1)?.chatID, "c-task");
+  assert.match(
+    posted.at(-1)?.text ?? "",
+    /Create a new bot for it named exactly "Task slack:C0TASKS001\/1795280099\.000001"/,
+  );
+  assert.equal(other.redirected_from, undefined);
 });

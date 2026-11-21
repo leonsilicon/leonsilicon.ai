@@ -1,18 +1,28 @@
 # @-/ai.leonsilicon.services.grok-relay
 
-The Grok Bot relay for Hermes (v1.3.0). It gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`, that message Leon's Grok Bot bots in their own chats, as Leon and with no label. Leon's Grok bots answer only Leon and ignore Hermes in Slack, so this is how Hermes reaches them; Leon sees the whole exchange in Beeper.
+The Grok Bot relay for Hermes (v1.4.0). It gives Captain Claude three MCP tools, `grok_bots`, `grok_bot_send` and `grok_bot_read`, that message Leon's Grok Bot bots in their own chats, as Leon and with no label. Leon's Grok bots answer only Leon and ignore Hermes in Slack, so this is how Hermes reaches them; Leon sees the whole exchange in Beeper.
 
 It runs on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and reaches the bots over Matrix through that inbox, with none of Leon's computers involved. Hermes's `grok` MCP server has pointed at it since 2026-11-21. From 2026-11-06 until then the relay ran on the Mac mini and went through Beeper Desktop ([`configs/grok-relay-hermes`](../../configs/grok-relay-hermes/README.md), v1.2.0); that copy is stopped.
 
 ## Tools
 
-| Tool            | Does                                                                                                                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `grok_bots`     | Lists the bots: the one-to-one chats on Beeper's Grok Bot network, with when each was last active and how many messages are queued for it.                                                                         |
-| `grok_bot_send` | Sends one message as Leon and waits up to `wait_seconds` (default 90, at most 150) for the reply, stopping 20 s after the bot goes quiet. A message to a bot that is still working is queued instead (see Policy). |
-| `grok_bot_read` | The latest messages of one bot's chat, oldest first, with Hermes's own shown as "Hermes (as Leon)". `after` takes the cursor a send or an earlier read returned.                                                   |
+| Tool            | Does                                                                                                                                                                                                                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grok_bots`     | Lists the bots: the one-to-one chats on Beeper's Grok Bot network, with when each was last active and how many messages are queued for it.                                                                                                                                                                        |
+| `grok_bot_send` | Sends one task as Leon, with its Slack thread (`slack_channel`, `slack_thread_ts`, both required) and the handoff below, and waits up to `wait_seconds` (default 90, at most 150) for the reply, stopping 20 s after the bot goes quiet. A message to a bot that is still working is queued instead (see Policy). |
+| `grok_bot_read` | The latest messages of one bot's chat, oldest first, with Hermes's own shown as "Hermes (as Leon)". `after` takes the cursor a send or an earlier read returned.                                                                                                                                                  |
 
 A refused call comes back as `{ ok: false, error: { code: "grok_relay_error", message } }`, with a message written for Hermes: an unknown bot lists the ones there are, and a reached budget says what to ask Leon. The tool descriptions and the server instructions in `tools.ts` carry Leon's rules (how to write as him, what Hermes may approve for him, how to save Grok usage), so they change only when he changes a rule.
+
+## Slack handoff (v1.4.0, 2026-11-21)
+
+Leon's design: every task Hermes hands a Grok bot carries the Slack thread Hermes is working in, and the bot doesn't do the task in its own chat. It makes a task bot for it, named `Task slack:<channel>/<thread_ts>`, so the name says where to report, and that bot works with Hermes in that thread.
+
+- **The relay adds it** (`handoff.ts`), so it is the same every time. After Hermes's text comes a block, in Leon's voice: the identifier, make the task bot under exactly that name (or pass the task on if one exists), give it the task and the block, then reply only with its name. It also tells the task bot to post in the thread with slack-puppet's Grok tools, that Hermes's answers there count as Leon's, and to delete itself with grokbot-admin when Hermes says the task is done. The result carries `slack_identifier` and `task_bot`.
+- **One task bot per thread.** A task for a thread that already has a task bot (a bot named `Task slack:…/<thread_ts>`, whatever the channel was written as) goes to that bot, whichever bot Hermes named, with a short follow-up note instead of the block; the result says `redirected_from`. Deleted bots drop out of the list, so a thread whose task bot is gone gets a new one. The block also tells the parent to look for an existing bot by the thread's ts.
+- **Queued tasks** keep their thread; when several go out merged, each thread's block follows once, naming its items when there are several threads.
+- **Checks.** Both fields are required. The channel is an ID (`C…`, `G…`) or `#name`, never a DM, since Grok bots can post only in channel threads; the ts is a Slack ts.
+- **The other pieces:** slack-puppet's Grok token and tools ([`slack-as-leon`](../slack-as-leon/README.md#grok-bots)), Hermes's [`slack-as-leon-guard`](../../../../com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md) (lets the task bot's posts through, labelled not-Leon) and [`slack-always-react`](../../../../com/leonsilicon/hermes/plugins/slack-always-react/README.md) (no 👀/✅ on them, so Linear Sync doesn't close or hand over the issue), and [grokbot-admin](../grok-bot-roster/README.md) for the deletion.
 
 ## Policy
 

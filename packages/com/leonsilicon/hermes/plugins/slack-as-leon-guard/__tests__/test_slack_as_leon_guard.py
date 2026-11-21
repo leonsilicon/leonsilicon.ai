@@ -19,6 +19,7 @@ _spec.loader.exec_module(plugin)
 
 LEON = "U0LEON00001"
 MARKED = "de1e6a7e-ccdc-45d1-94bb-f80359112347"
+GROK_BOT = "de1e6a7e-b075-45d1-94bb-f80359112347"
 LEONS_OWN = "3f2b1c4d-1111-4222-8333-944455556666"
 
 
@@ -43,9 +44,12 @@ def _event(ts: str, client_msg_id: str, **extra) -> dict:
 
 def test_marker_matches_the_mini_service():
     """The TypeScript service's CLIENT_MSG_ID_PREFIX must equal MARKER."""
-    marker_ts = (_root.parents[3] / "leonsilicon/ai/services/slack-as-leon/marker.ts").read_text()
+    marker_ts = (_root.parents[4] / "ai/leonsilicon/services/slack-as-leon/marker.ts").read_text()
     match = re.search(r'CLIENT_MSG_ID_PREFIX = "([0-9a-f]{8})"', marker_ts)
     assert match and match.group(1) == plugin.MARKER
+    groups = dict(re.findall(r'(grok|codex): "([0-9a-f]{4})"', marker_ts))
+    assert set(groups.values()) == set(plugin.AGENT_GROUPS)
+    assert groups["grok"] == plugin.GROK_BOT_GROUP
 
 
 @pytest.mark.asyncio
@@ -112,3 +116,37 @@ def test_is_marked():
     assert not plugin.is_marked({"client_msg_id": "de1e6a7e"})
     assert not plugin.is_marked({})
     assert not plugin.is_marked(None)
+
+
+@pytest.mark.asyncio
+async def test_grok_bot_post_is_answered_and_labelled_not_leon(adapter):
+    plugin.wire(None, adapter)
+    await adapter._handle_slack_message(_event(
+        "1700000000.000020", GROK_BOT, thread_ts="1700000000.000001",
+        text="🤖 *Task slack:C_TODO/1700000000.000001*: Done, the list has milk."))
+    adapter.handle_message.assert_awaited_once()
+    text = adapter.handle_message.await_args.args[0].text
+    assert text.startswith(plugin.GROK_NOTE)
+    assert "Done, the list has milk." in text
+
+
+def test_only_hermes_own_posts_count_as_marked():
+    assert plugin.is_marked({"client_msg_id": MARKED})
+    assert not plugin.is_marked({"client_msg_id": GROK_BOT})
+    assert plugin.is_grok_bot_post({"client_msg_id": GROK_BOT})
+    assert not plugin.is_grok_bot_post({"client_msg_id": LEONS_OWN})
+    event = {"text": "hi"}
+    plugin._label(event)
+    plugin._label(event)
+    assert event["text"] == f"{plugin.GROK_NOTE}\nhi"
+
+
+@pytest.mark.asyncio
+async def test_codex_post_is_answered_and_labelled_as_codex(adapter):
+    plugin.wire(None, adapter)
+    await adapter._handle_slack_message(_event(
+        "1700000000.000040", "de1e6a7e-c0de-45d1-94bb-f80359112347", thread_ts="1700000000.000001",
+        text="🤖 *Task slack:C_TODO/1700000000.000001*: PR is up."))
+    adapter.handle_message.assert_awaited_once()
+    text = adapter.handle_message.await_args.args[0].text
+    assert text.startswith(plugin.agent_note("a Codex session that Silicon Dot started"))

@@ -13,6 +13,20 @@ export interface SlackAsLeonConfig {
   blockedUsers: readonly string[];
   /** Longest a call may wait for a reply: stays under Hermes Cloud's 180 s MCP timeout. */
   maxWaitSeconds: number;
+  /**
+   * Bearer token Leon's Grok Bot bots send to talk to Hermes in Slack threads (40+ characters).
+   * Without it, only Hermes's token works.
+   */
+  grokToken?: string;
+  /** Most posts per rolling hour from Grok bots, counted apart from Hermes's. */
+  grokMaxPerHour: number;
+  /**
+   * Bearer token Codex sessions (started by Silicon Dot on Leon's MacBook) send to talk to Hermes in
+   * Slack threads (40+ characters). Without it, Codex can't connect.
+   */
+  codexToken?: string;
+  /** Most posts per rolling hour from Codex sessions. */
+  codexMaxPerHour: number;
 }
 
 const list = (value: string) =>
@@ -44,5 +58,26 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): S
     maxPerHour: Number(env.SLACK_AS_LEON_MAX_PER_HOUR ?? 30),
     blockedUsers: list(blocked),
     maxWaitSeconds: Math.min(Number(env.SLACK_AS_LEON_MAX_WAIT_SECONDS ?? 150), 165),
+    ...agentTokens(env, token),
+    grokMaxPerHour: Number(env.SLACK_AS_LEON_GROK_MAX_PER_HOUR ?? 120),
+    codexMaxPerHour: Number(env.SLACK_AS_LEON_CODEX_MAX_PER_HOUR ?? 120),
   };
+}
+
+function agentTokens(env: Readonly<Record<string, string | undefined>>, token: string) {
+  const out: { grokToken?: string; codexToken?: string } = {};
+  for (const [key, name] of [
+    ["grokToken", "SLACK_AS_LEON_GROK_TOKEN"],
+    ["codexToken", "SLACK_AS_LEON_CODEX_TOKEN"],
+  ] as const) {
+    const value = env[name]?.trim();
+    if (!value) continue;
+    if (value.length < 40) throw new Error(`${name} must be a strong token (40+ characters)`);
+    if (value === token || Object.values(out).includes(value))
+      throw new Error(
+        `${name} must differ from SLACK_AS_LEON_MCP_TOKEN and the other agent tokens`,
+      );
+    out[key] = value;
+  }
+  return out;
 }

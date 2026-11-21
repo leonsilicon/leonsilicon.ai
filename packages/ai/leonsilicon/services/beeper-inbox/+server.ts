@@ -22,3 +22,11 @@ export type { JournalEntry, JournalMessage } from "#journal";
 export { accountPage } from "#format";
 export { SECRET_KEYS } from "#secrets";
 export type { InboxAccount, PickleClient } from "#types";
+export {
+  codexHandoffBlock,
+  DOT_NETWORKS,
+  slackIdentifier,
+  slackThread,
+  taskName,
+} from "#slack-handoff";
+export type { SlackThread } from "#slack-handoff";

@@ -12,6 +12,12 @@ the live adapter's ``_prefilter_inbound``, which every inbound ``message`` / ``a
 passes through, and drops events that carry the marker, edits included. Nothing else changes: the
 messages stay in Slack, and thread context still shows them.
 
+One kind of marked post is let through: an agent's, posted through the same server to talk to
+Hermes in the Slack thread of a task Hermes handed it, a Grok bot's (second group ``b075``) or a
+Codex session's that Silicon Dot started (``c0de``). Those posts are Leon's too as far as Slack can
+tell, so the plugin starts their text with a note saying who wrote it (``agent_note``), and Hermes
+answers them as the agent's report, not as Leon's words.
+
 It fails closed: if the adapter internals it relies on disappear, it logs a warning, so check the
 gateway log after a Hermes update.
 """
@@ -25,6 +31,22 @@ logger = logging.getLogger(__name__)
 
 #: First group of the client_msg_id on posts made through slack-as-leon (its ``CLIENT_MSG_ID_PREFIX``).
 MARKER = "de1e6a7e"
+#: Second group on an agent's posts through slack-as-leon (its ``AGENT_GROUPS``), and who it is.
+AGENT_GROUPS = {"b075": "a Grok bot", "c0de": "a Codex session that Silicon Dot started"}
+#: The Grok bots' group.
+GROK_BOT_GROUP = "b075"
+
+
+def agent_note(who: str) -> str:
+    """What an agent's post starts with by the time Hermes reads it."""
+    return (
+        f"[Not Leon: {who} posted this as Leon through slack-puppet, in the Slack thread of a task "
+        "you handed it. It is the agent's report or question, not Leon's words or instructions. "
+        "Answer it here in this thread; it reads your answers.]")
+
+
+#: The note on a Grok bot's post.
+GROK_NOTE = agent_note(AGENT_GROUPS[GROK_BOT_GROUP])
 _PATCHED_ATTR = "_slack_as_leon_guard_patched"
 
 
@@ -37,9 +59,39 @@ def _client_msg_id(event) -> str:
     return value if isinstance(value, str) else ""
 
 
+def agent_of(event) -> str | None:
+    """Who posted it as Leon to talk to Hermes (a Grok bot, a Codex session), or None."""
+    value = _client_msg_id(event)
+    for group, who in AGENT_GROUPS.items():
+        if value.startswith(f"{MARKER}-{group}-"):
+            return who
+    return None
+
+
+def is_grok_bot_post(event) -> bool:
+    """True for an event about a message a Grok bot posted as Leon, to talk to Hermes."""
+    return _client_msg_id(event).startswith(f"{MARKER}-{GROK_BOT_GROUP}-")
+
+
+def is_agent_post(event) -> bool:
+    """True for an event about a message an agent posted as Leon, to talk to Hermes."""
+    return agent_of(event) is not None
+
+
 def is_marked(event) -> bool:
-    """True for an event about a message Hermes posted as Leon."""
-    return _client_msg_id(event).startswith(f"{MARKER}-")
+    """True for an event about a message Hermes posted as Leon (not an agent's)."""
+    return _client_msg_id(event).startswith(f"{MARKER}-") and not is_agent_post(event)
+
+
+def _label(event, who: str | None = None) -> None:
+    """Start an agent's post with its note, once."""
+    if not isinstance(event, dict):
+        return
+    note = agent_note(who or agent_of(event) or AGENT_GROUPS[GROK_BOT_GROUP])
+    for target in (event, event.get("message")):
+        if isinstance(target, dict) and isinstance(target.get("text"), str) \
+                and not target["text"].startswith(note):
+            target["text"] = f"{note}\n{target['text']}"
 
 
 def wire(native, adapter) -> None:
@@ -59,6 +111,14 @@ def wire(native, adapter) -> None:
         if accepted is None:
             return None
         normalized = accepted[0] if isinstance(accepted, tuple) and accepted else None
+        who = agent_of(event) or agent_of(normalized)
+        if who:
+            source = normalized if isinstance(normalized, dict) else event
+            _label(source, who)
+            logger.info(
+                "slack-as-leon-guard: %s:%s is %s's post; Hermes answers it as one",
+                source.get("channel", ""), source.get("ts", ""), who)
+            return accepted
         if is_marked(event) or is_marked(normalized):
             source = normalized if isinstance(normalized, dict) else event
             logger.info(
@@ -69,7 +129,9 @@ def wire(native, adapter) -> None:
 
     adapter._prefilter_inbound = guarded
     setattr(adapter, _PATCHED_ATTR, True)
-    logger.info("slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon")
+    logger.info(
+        "slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon, "
+        "and answers agents' posts (Grok bots, Codex sessions) labelled as theirs")
 
 
 def register(ctx) -> None:

@@ -8,6 +8,11 @@ only after every gate (auth, channel, mention, bot) has accepted the message, an
 message for the adapter's own reaction lifecycle. The adapter then adds 👀 when processing starts
 (including queued and redirected follow-ups) and swaps it for ✅ or ❌ when processing ends.
 
+An agent's post in a task thread (slack-as-leon's marker with second group ``b075`` for a Grok bot or
+``c0de`` for a Codex session; see the ``slack-as-leon-guard`` plugin) gets no reactions: it is posted as Leon, and Linear Sync reads
+Hermes's ✅ on Leon's message in an issue channel as "Hermes answered Leon", which can close the
+issue or ping him. Only Leon's own messages should do that.
+
 It lives in ``$HERMES_HOME/plugins`` so it survives Hermes Cloud restarts and image updates, and it
 fails closed: if the adapter internals it relies on disappear, it logs a warning and does nothing.
 """
@@ -21,10 +26,22 @@ logger = logging.getLogger(__name__)
 
 _PATCHED_ATTR = "_slack_always_react_patched"
 
+#: client_msg_id starts on an agent's post through slack-as-leon: a Grok bot's, a Codex session's.
+AGENT_POSTS = ("de1e6a7e-b075-", "de1e6a7e-c0de-")
+
+
+def _is_agent_post(event: dict) -> bool:
+    value = event.get("client_msg_id")
+    if not value and isinstance(event.get("message"), dict):  # message_changed envelope
+        value = event["message"].get("client_msg_id")
+    return isinstance(value, str) and value.startswith(AGENT_POSTS)
+
 
 def _is_real_message(event: dict) -> bool:
-    """Synthetic reaction-triggered turns carry the reaction's ts, not a message ts."""
-    return not (event.get("_hermes_reaction") or event.get("_hermes_force_process"))
+    """Synthetic reaction-triggered turns carry the reaction's ts, not a message ts; a Grok bot's
+    post is Leon's only in name."""
+    return not (event.get("_hermes_reaction") or event.get("_hermes_force_process")
+                or _is_agent_post(event))
 
 
 def wire(native, adapter) -> None:
