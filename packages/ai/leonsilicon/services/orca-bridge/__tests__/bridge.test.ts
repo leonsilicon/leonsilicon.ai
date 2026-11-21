@@ -60,10 +60,13 @@ test("timeoutFor gives launches and explicit waits longer, never past maxCallMs"
   assert.equal(timeoutFor(["terminal", "wait", "--timeout-ms", "600000"], 170_000), 170_000);
 });
 
-test("orca-mcp's waits are capped to fit one call", async () => {
+test("orca-mcp's waits are capped to fit one call", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
   const calls: string[][] = [];
   const run: OrcaRunner = async (args) => {
     calls.push([...args]);
+    if (args[0] === "terminal" && args[1] === "show") now += 1;
     return { ok: true, result: { terminal: { handle: "t1" }, done: true } };
   };
   const tools = workerTools(config, { run });
@@ -72,7 +75,7 @@ test("orca-mcp's waits are capped to fit one call", async () => {
   assert.match(wait.description, /at most 165 s/);
   await wait.handler({ terminal: "t1", for: "done", timeoutMs: 600_000 } as never);
   const waitCall = calls.find((c) => c[0] === "terminal" && c[1] === "wait");
-  assert.ok(waitCall?.includes("--timeout-ms=165000"), JSON.stringify(calls));
+  assert.ok(waitCall?.includes("--timeout-ms=164999"), JSON.stringify(calls));
 });
 
 let base = "";
