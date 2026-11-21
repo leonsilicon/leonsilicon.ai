@@ -4,16 +4,16 @@ Hermes plugin that gives each of Leon's Slack messages its own Linear issue and 
 
 ## Why
 
-Leon's rule (2026-11-21): every message he sends in Slack becomes a new issue in Awaiting Init, the LEON team's default status, with its own channel, at once. His message is edited right away to link the channel where Hermes will answer, and Hermes keeps the conversation there. Once Hermes has answered, the issue waits on Leon, so he reads the answer; Hermes doesn't close it unless he says so, even after a "thanks".
+Every message Leon sends to Hermes outside an issue channel gets a new Linear issue in Awaiting Init and its own Slack channel. AutoLinear edits his message to link the channel where Hermes answers and keeps the conversation.
 
 ## What happens
 
 1. Leon writes to Hermes outside an issue channel: a DM, `#general`, a project channel, a reply under a `#feed-` post.
 2. AutoLinear's Slack app usually starts intake before Hermes receives the message. Once the message reaches Hermes and passes dedup and the bot check, the plugin calls `POST /intake` in the background to get the running or finished intake. AutoLinear creates the issue, opens its `leon-<n>-<first words>` channel, and posts a copy of the message there as Leon. Once Slack confirms the copy, AutoLinear replaces the original message with the channel link.
 3. Meanwhile Hermes reads the thread and downloads files as usual. When it builds the turn, the plugin waits for autolinear's answer and builds the turn as if Leon had written that copy: same text, files and thread history, in the new channel, with a one-line note naming the issue. Hermes's reply, its session and its 👀 → ✅ reactions all land in the issue channel. With [slack-flat-replies](../slack-flat-replies/README.md), the reply is at the top of the channel, not in a thread.
-4. Nothing moves while Hermes works. When it has answered, a ping to Leon in its answer leaves the issue in Awaiting Leon, and an answer without one (to his "thanks", say) closes it as Done. A failed turn goes to Awaiting Leon. A status Hermes sets during its turn, such as Awaiting Others, stands.
+4. Hermes's 👀 moves the issue to Awaiting Hermes. Hermes posts the complete reply and mentions Leon if he needs or would want to see it. Slack22Linear moves the issue to Awaiting Leon from that posted reply. Hermes leaves the status field unset when recording notes or drafting the handoff. Slack22Linear handles unpinged answers and failures through the completion reactions.
 
-Leon's later messages in that channel are ordinary issue-channel messages: Hermes answers them there and nothing new is created.
+The plugin adds the same handoff instructions to Hermes's channel prompt for Leon's follow-ups in existing issue channels.
 
 ## Which messages
 
@@ -47,7 +47,7 @@ They're read on every message, so removing the token turns the plugin off once H
 
 Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/autolinear/` (`/opt/data` on Hermes Cloud), add `autolinear` to `plugins.enabled` in `config.yaml`, and restart the gateway. The gateway log then shows `autolinear: each of Leon's Slack messages gets a Linear issue and channel at once`, followed by `(off until …)` when a setting is missing. Each moved message logs `autolinear: <channel>:<ts> is LEON-<n> ({…step timings…}); Hermes answers in #leon-<n>-…`.
 
-Hermes's `SOUL.md` says the same rule in words: answer in the issue channel, don't open a second issue for the message, and leave closing to Leon.
+Hermes Cloud's `SOUL.md`, `issue-execution-sweep`, and `leon-messaging-voice` should use the same order for Slack replies. A sweep originating in Linear can use a Linear comment with Leon's mention to trigger the handoff.
 
 ## Test
 

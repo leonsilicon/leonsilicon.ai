@@ -126,6 +126,7 @@ async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
         "[autolinear: Leon sent this in a DM with Hermes. It is now LEON-401 "
         "(https://linear.app/x/issue/LEON-401), and this is its channel, #leon-401-check-rogers")
     assert turn.text.endswith("\n\ncan you check whether Rogers billed me twice?")
+    assert turn.channel_prompt.endswith(plugin._HANDOFF_PROMPT)
     assert turn.raw_message["channel"] == NEW and turn.raw_message["ts"] == COPY_TS
     assert turn.raw_message["_autolinear"] == {
         "from_channel": DM, "from_ts": ts, "issue": "LEON-401"}
@@ -159,16 +160,30 @@ async def test_a_thread_reply_keeps_its_thread_context(adapter, intake):
 
 
 @pytest.mark.parametrize("event", [
-    _message(ISSUE, "1794000000.000020"),  # already in its issue channel
     _message(GENERAL, "1794000000.000021", user="U0SOMEONE1"),  # not Leon
-    _message(DM, "1794000000.000022", "/new"),  # a command
+    _message(ISSUE, "1794000000.000022", "/new"),  # a command in an issue channel
 ])
 @pytest.mark.asyncio
-async def test_issue_channels_others_and_commands_are_answered_in_place(adapter, intake, event):
+async def test_other_users_and_commands_are_answered_in_place(adapter, intake, event):
     plugin.wire(None, adapter)
     await adapter._handle_slack_message(dict(event))
     assert intake.requests == []
-    assert _turn(adapter).source.chat_id == event["channel"]
+    turn = _turn(adapter)
+    assert turn.source.chat_id == event["channel"]
+    assert plugin._HANDOFF_PROMPT not in (turn.channel_prompt or "")
+
+
+@pytest.mark.asyncio
+async def test_an_existing_issue_keeps_its_message_and_gets_the_handoff_rule(adapter, intake):
+    adapter.config.extra["channel_prompts"] = {ISSUE: "Keep the question brief."}
+    plugin.wire(None, adapter)
+    await adapter._handle_slack_message(_message(ISSUE, "1794000000.000020", "Show me the draft."))
+
+    assert intake.requests == []
+    turn = _turn(adapter)
+    assert turn.source.chat_id == ISSUE
+    assert turn.text == "Show me the draft."
+    assert turn.channel_prompt == f"Keep the question brief.\n\n{plugin._HANDOFF_PROMPT}"
 
 
 @pytest.mark.parametrize("answers", [

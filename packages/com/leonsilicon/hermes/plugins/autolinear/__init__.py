@@ -16,9 +16,9 @@ live Slack adapter:
 - ``_build_message_event``: runs only after every gate (auth, channel, mention, bot) has accepted a
   message, so it sees exactly the messages Hermes answers. It waits for the request started early,
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
-  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there. Once Hermes
-  has answered (its ✅), slack22linear leaves the issue in Awaiting Leon if the answer pinged him,
-  and closes it as Done if it didn't.
+  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there. Both new and
+  existing issue channels get the same handoff rule: post the reply that mentions Leon and let
+  slack22linear move the issue to Awaiting Leon from that message.
 
 The copy's own event carries slack-as-leon's marker, so ``slack-as-leon-guard`` drops it and Hermes
 doesn't answer the message twice. That plugin must be enabled too.
@@ -70,6 +70,14 @@ _THREAD_KEYS = (
     "latest_reply", "replies", "subscribed", "last_read", "edited", "_slack_changed_event_ts",
 )
 _MENTION = re.compile(r"<@([UW][A-Z0-9]+)")
+_HANDOFF_PROMPT = (
+    "Slack22Linear owns the handoff to Awaiting Leon in this issue channel. "
+    "When Leon needs or would want to see something, post the complete reply here with "
+    "a real Slack @mention of Leon. Keep that mention in the Slack reply so Slack22Linear "
+    "moves the issue after the reply is posted. Omit the status field from Linear updates "
+    "that save notes, drafts, or approval details for this handoff. Slack22Linear also "
+    "handles completion for replies that don't need a mention."
+)
 
 
 def _settings() -> Optional[dict[str, Any]]:
@@ -227,9 +235,11 @@ def _note(result: dict) -> str:
     return (
         f"[autolinear: Leon sent this in {result.get('source') or 'Slack'}. It is now "
         f"{issue['identifier']} ({issue['url']}), and this is its channel, #{channel['name']}: "
-        "answer here and keep the conversation here. Ping Leon in your answer only if it holds "
-        "something he needs or would want to see; the issue then waits on him. Without a ping, the "
-        "issue is closed as Done once you finish.]")
+        "answer here and keep the conversation here.]")
+
+
+def _add_handoff_prompt(msg_event) -> None:
+    msg_event.channel_prompt = "\n\n".join(filter(None, (msg_event.channel_prompt, _HANDOFF_PROMPT)))
 
 
 def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
@@ -246,13 +256,10 @@ def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
 
 async def _move(adapter, settings: dict, event: dict, kwargs: dict):
     """``(event, kwargs)`` for the copy in the issue's channel, or None to answer in place."""
-    if kwargs.get("is_command_text") or event.get("_hermes_reaction") or event.get(
-            "_hermes_force_process") or _is_marked(event):
-        return None
     channel_id = str(kwargs.get("channel_id") or "")
     ts = str(kwargs.get("ts") or "")
     team_id = str(kwargs.get("team_id") or "")
-    if str(kwargs.get("user_id") or "") != settings["user"] or not channel_id or not ts:
+    if not channel_id or not ts:
         return None
     task = _pending(adapter).get((channel_id, ts)) or await _start(
         adapter, settings, event, channel_id, team_id)
@@ -315,16 +322,24 @@ def wire(native, adapter) -> None:
     @functools.wraps(build)
     async def build_in_issue_channel(event, *args, **kwargs):
         settings = _settings()
-        target = None
-        if settings is not None and isinstance(event, dict):
-            try:
-                target = await _move(adapter, settings, event, kwargs)
-            except Exception:
-                logger.warning(
-                    "autolinear: no issue for %s:%s; answering it there",
-                    kwargs.get("channel_id"), kwargs.get("ts"), exc_info=True)
-        if target is None:
+        if (settings is None or not isinstance(event, dict)
+                or kwargs.get("user_id") != settings["user"] or kwargs.get("is_command_text")
+                or event.get("_hermes_reaction") or event.get("_hermes_force_process")
+                or _is_marked(event)):
             return await build(event, *args, **kwargs)
+        try:
+            target = await _move(adapter, settings, event, kwargs)
+        except Exception:
+            logger.warning(
+                "autolinear: no issue for %s:%s; answering it there",
+                kwargs.get("channel_id"), kwargs.get("ts"), exc_info=True)
+            target = None
+        if target is None:
+            msg_event = await build(event, *args, **kwargs)
+            if msg_event is not None and settings["issue_channel"].match(
+                    msg_event.source.chat_name or ""):
+                _add_handoff_prompt(msg_event)
+            return msg_event
         moved, moved_kwargs = target
         try:
             msg_event = await build(moved, *args, **moved_kwargs)
@@ -333,6 +348,8 @@ def wire(native, adapter) -> None:
                 "autolinear: could not build the turn in %s; answering in place",
                 moved_kwargs["channel_id"], exc_info=True)
             return await build(event, *args, **kwargs)
+        if msg_event is not None:
+            _add_handoff_prompt(msg_event)
         copy_ts, team_id = moved_kwargs["ts"], str(moved_kwargs.get("team_id") or "")
         try:
             # Hermes's ✅ on the copy is what marks the answer done, so it always gets the lifecycle.
