@@ -38,7 +38,16 @@ export type {
 export { botClient, Sidebar, SlackError, tolerate } from "#slack";
 export type { Section, SlackCall, SlackParams, SlackResponse } from "#slack";
 export { Store } from "#store";
-export type { CommentRecord, IssueRecord, Job, ProjectRecord, Row, Sql, SqlValue } from "#store";
+export type {
+  AckRecord,
+  CommentRecord,
+  IssueRecord,
+  Job,
+  ProjectRecord,
+  Row,
+  Sql,
+  SqlValue,
+} from "#store";
 export {
   ADOPT_WAIT_MS,
   ANSWER_SETTLE_MS,

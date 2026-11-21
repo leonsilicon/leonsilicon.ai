@@ -44,6 +44,16 @@ export interface ProjectRecord {
   requestedAt: number | null;
 }
 
+/**
+ * Hermes's 👀 moved an issue to Awaiting Hermes: the status it had before, and when the move was
+ * done (ms; null while it's under way), so its answer is judged as if the issue had stayed put.
+ */
+export interface AckRecord {
+  issueId: string;
+  fromState: string;
+  at: number | null;
+}
+
 export interface Job {
   id: string;
   kind: string;
@@ -71,6 +81,7 @@ const MIGRATIONS = [
     project_id TEXT PRIMARY KEY, name TEXT NOT NULL, status_name TEXT NOT NULL, channel_id TEXT,
     section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER)`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -318,6 +329,30 @@ export class Store {
         ts,
       ).length > 0
     );
+  }
+
+  ack(issueId: string): AckRecord | null {
+    const row = this.#sql.exec(`SELECT from_state, at FROM acks WHERE issue_id = ?`, issueId)[0];
+    if (!row) return null;
+    return {
+      issueId,
+      fromState: row.from_state as string,
+      at: row.at === null || row.at === undefined ? null : Number(row.at),
+    };
+  }
+
+  putAck(ack: AckRecord): void {
+    this.#sql.exec(
+      `INSERT INTO acks (issue_id, from_state, at) VALUES (?, ?, ?)
+       ON CONFLICT (issue_id) DO UPDATE SET from_state = excluded.from_state, at = excluded.at`,
+      ack.issueId,
+      ack.fromState,
+      ack.at,
+    );
+  }
+
+  dropAck(issueId: string): void {
+    this.#sql.exec(`DELETE FROM acks WHERE issue_id = ?`, issueId);
   }
 
   markFired(key: string, now: number): void {

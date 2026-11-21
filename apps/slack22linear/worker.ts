@@ -85,14 +85,16 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 
 /**
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
- * that mention Leon, and ✅ and ❌ reactions to messages (the sync checks who reacted to whom, and
- * where).
+ * that mention Leon, and Hermes's 👀, ✅ and ❌ on Leon's messages (the sync checks where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
-      (event.reaction === config.hermesAnsweredReaction ||
+      (event.reaction === config.hermesAckReaction ||
+        event.reaction === config.hermesAnsweredReaction ||
         event.reaction === config.hermesFailedReaction) &&
+      event.user === config.hermesUserId &&
+      event.item_user === config.leonUserId &&
       (event.item as { type?: string } | undefined)?.type === "message"
     );
   if (!event || event.type !== "message") return false;
