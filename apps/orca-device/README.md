@@ -19,7 +19,7 @@ How the bundle is put together: Orca's `orcad.js` refuses to start without `.ver
 
 ## Status (2026-11-19)
 
-Live. Hermes's `orca` MCP server is `command: node`, `args: [/opt/data/orca-device/app/orca-device.mjs, mcp]` (stdio); it was the mini bridge's URL with a bearer header. The mini bridge still runs, unused, as a fallback.
+Live. Hermes's `orca` MCP server is `command: node`, `args: [/opt/data/orca-device/app/orca-device.mjs, mcp]` (stdio); it was the mini bridge's URL with a bearer header. The mini bridge was stopped on 2026-11-21 ([how to bring it back](../orca-bridge/README.md)).
 
 - **Tailnet.** Node `hermes-cloud` (`tag:hermes-cloud`), joined with a one-time pre-approved tagged key that was then removed from Hermes's `.env`. Policy changes:
   - `tagOwners`: `"tag:hermes-cloud": ["autogroup:admin"]`.
@@ -45,7 +45,7 @@ Rebuild after Orca updates on the Macs, so Hermes's CLI keeps their version:
 
 ## Rollback
 
-1. Restore the `orca` server from `/opt/data/backups/mcp-orca-bridge-20261119.json` and restart the gateway when no agents are active.
+1. Start the bridge on the mini again ([orca-bridge](../orca-bridge/README.md)), then restore the `orca` server from `/opt/data/backups/mcp-orca-bridge-20261119.json` and restart the gateway when no agents are active.
 2. Run `node /opt/data/orca-device/app/orca-device.mjs stop`.
 3. Remove the `hermes-cloud` node in the tailnet admin console, and revert the policy:
    - Set the catch-all grant's `src` back to `["*"]`.
