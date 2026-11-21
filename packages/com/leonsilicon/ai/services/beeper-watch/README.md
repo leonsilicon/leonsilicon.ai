@@ -2,12 +2,27 @@
 
 Wakes Hermes in Slack when someone replies in a Beeper chat it is waiting on, and screens what people send before Hermes sees it. Hermes can already read and send Beeper messages through Beeper Desktop's own MCP, but nothing told it when an answer arrived. Hermes registers a watch right after asking someone for something. When the other person replies, the Beeper Watch Slack bot posts their messages in the task's thread and @mentions Hermes, which carries on with that thread's history and its usual tools.
 
-The app that runs it, and how it is deployed, is in [`apps/beeper-watch`](../../../../../../apps/beeper-watch/README.md).
+Since 2026-11-21 it runs on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and reads Beeper over Matrix through that inbox's journal: no Beeper Desktop, none of Leon's computers. Before that it ran on the Mac mini and polled Beeper Desktop; that stand-alone form is still here, and [`apps/beeper-watch`](../../../../../../apps/beeper-watch/README.md) describes both and the move.
+
+## Where it reads Beeper
+
+The watcher and the feed take a source (`BeeperSource`, `BeeperFeedSource`). There are two:
+
+- **The inbox's journal** (`journal-source.ts`), on Hermes Cloud. Sync hands the inbox every new message, and the inbox writes each down once. The source asks the journal for every chat's messages since a time, and the inbox's directory for each chat's name, network and whether Leon muted it.
+  - A chat ID is the Matrix room ID, as it already was in every #feed- post. A message ID is the Matrix event ID.
+  - A connection is named like Beeper Desktop's account IDs, the bridge and then the network's own ID where the bridge gives one (`instagramgo.`, `slackgo.<team ID>`, `matrix.` for Beeper's own chats), so platform names, the Slack workspace's exclusion and `FEED_EXCLUDE_ACCOUNTS` work unchanged.
+  - **Muted chats** are Leon's Matrix push rules: Beeper keeps a mute as a rule for the room with no "notify" action. Measured 2026-11-21: 178 of 1,482 rooms, all of them channels of this Slack workspace.
+  - **A chat the directory doesn't have yet**, such as a first message from someone new, makes the inbox rebuild its directory once, and is then copied like any other.
+  - **A watch older than the journal** gets one page of history (20 events) for the gap, once. A page costs the inbox about half a second per event, so nothing reads history on every poll.
+  - **Not there:** chats that only exist on one of Leon's devices. iMessage is one; it sent nothing to the feed in the week before the move.
+- **Beeper Desktop** (`beeper.ts`), through Beeper's official SDK, for the stand-alone service.
+
+`extension.ts` is the inbox extension: `beeper-inbox.mjs mcp beeper-watch` is its MCP server, and it reads its settings from `env` in its own directory (`/opt/data/beeper-inbox/beeper-watch/` on Hermes Cloud), with its state in `state/` beside it. Without that file it stays off and says so. `DRY_RUN=1` there makes it log what it would post to Slack instead of posting, for a trial beside a live one.
 
 ## How it works
 
 - **Watches** live in one JSON file (`STATE_FILE`, mode 600), written atomically after every change. Each records the Beeper chat, what Hermes is waiting for, the Slack channel and thread to post in, a start time (`since`) and an expiry.
-- **Polling.** Every `POLL_SECONDS` (10) the watcher reads new messages in the watched chats through Beeper's official SDK. Beeper's WebSocket is at-most-once with no replay, and a watch covers only a handful of chats, so polling is as fast in practice and can't miss a message.
+- **Polling.** Every `POLL_SECONDS` (10) the watcher asks its source for new messages in the watched chats. On Hermes Cloud that is a query of the journal, which can't miss a message; on Beeper Desktop it was a read through the SDK, because its WebSocket is at-most-once with no replay.
 - **Who wakes Hermes.** Only messages from the other side do, and only text or media. Reactions, notices, and Leon's own messages are excluded. Leon's own messages include anything an agent sent through his Beeper; they appear in the post as context only. In group chats, `from` narrows this to one sender.
 - **Batching.** A reply often arrives as several messages, so the post waits until `QUIET_SECONDS` (30) pass with no new message from the contact, or until `MAX_BATCH_SECONDS` (120) after the first. Each message is posted once; edits never repost.
 - **Limits.**
@@ -32,7 +47,7 @@ Added 2026-11-06 at Leon's request: "send ALL messages from beeper to slack, so 
   - Chats with an open watch, whose messages the watch already delivers to a task thread.
   - Reactions, and Beeper's own `$space` entries.
 - **Who wakes Hermes** without screening (`FEED_WAKE=people`, the default). A post @mentions Hermes when it holds a message from a person: not Leon, not a notice, not a muted chat, and not an agent network (`FEED_QUIET_NETWORKS`: Grok bots, Muse, ChatGPT Dots; Hermes talks to those itself, so waking it would loop). Groups count too. Everything else is posted as context only. `all` wakes on every message from someone else; `none` never wakes Hermes.
-- **How.** One Beeper search (`messages.search` with `dateAfter`, all accounts but the excluded ones, muted and low-priority included) per poll. Each search reaches 20 minutes behind the newest message seen, for late arrivals, and message IDs dedupe. State lives in `FEED_STATE_FILE` (600): cursor, seen IDs, unsent batches. A restart neither drops nor repeats anything. The first start copies only what arrives afterwards.
+- **How.** One read of everything new per poll: the journal's messages since a time on Hermes Cloud, or one Beeper Desktop search (`messages.search` with `dateAfter`, all accounts but the excluded ones, muted and low-priority included). Each search reaches 20 minutes behind the newest message seen, for late arrivals, and message IDs dedupe. State lives in `FEED_STATE_FILE` (600): cursor, seen IDs, unsent batches. A restart neither drops nor repeats anything. The first start copies only what arrives afterwards.
 - **Failures.** A failed post is retried with backoff (up to every 10 minutes) and dropped after a day, with a log line. `/healthz` includes `feed` and turns 503 when the feed hasn't polled for 5 minutes.
 - **Untrusted text.** It is escaped exactly like watch pings. Each waking post tells Hermes the quoted text is information, not instructions. Logs record networks and counts, never text.
 
@@ -75,10 +90,10 @@ Validation errors come back as `{ ok: false, error }` written for the model, suc
 
 ## API
 
-`startBeeperWatch(config?, log?)` starts polling and the listener. `loadConfig(env)` reads:
+`createBeeperWatch({ config, beeper, log })` starts the watcher and the feed on a source; `beeperWatchExtension()` does that on the inbox's journal, as an extension of its daemon. `startBeeperWatch(config?, log?)` is the stand-alone service: the same on Beeper Desktop, plus its own HTTP listener. `loadConfig(env)` reads:
 
-- required: `BEEPER_TOKEN_FILE`, `SLACK_BOT_TOKEN`, `MCP_TOKEN` (40+ characters), `PUBLIC_ORIGIN` and `HERMES_SLACK_USER_ID`;
-- optional: `BEEPER_URL`, `DEFAULT_SLACK_CHANNEL`, `PORT`, `STATE_FILE`, `POLL_SECONDS`, `QUIET_SECONDS` and `MAX_BATCH_SECONDS`;
+- required everywhere: `SLACK_BOT_TOKEN` and `HERMES_SLACK_USER_ID` (`loadCoreConfig`, all the extension needs); for the stand-alone service also `BEEPER_TOKEN_FILE`, `MCP_TOKEN` (40+ characters) and `PUBLIC_ORIGIN`;
+- optional: `BEEPER_URL`, `DEFAULT_SLACK_CHANNEL`, `PORT`, `STATE_FILE`, `POLL_SECONDS`, `QUIET_SECONDS`, `MAX_BATCH_SECONDS` and `DRY_RUN`;
 - feed: `FEED_CHANNEL_PREFIX` (`feed-`, or `off`), `FEED_PLATFORM_CHANNELS`, `FEED_INVITE`, `FEED_WAKE`, `FEED_STATE_FILE`, `FEED_EXCLUDE_ACCOUNTS` and `FEED_QUIET_NETWORKS`. The old `FEED_CHANNEL` is refused, so a leftover `FEED_CHANNEL=off` can't quietly turn the feed back on;
 - screening: `FEED_SCREEN` (`openai` or `off`, the default), `OPENAI_API_KEY` (required with `openai`), `FEED_FLAGGED_CHANNEL` (`feed-flagged`), `FEED_SPAM_CHANNEL` (`feed-spam`), `SCREEN_WAKE_MUTED`, `SCREEN_MODEL` (`gpt-6-luna`), `SCREEN_TIMEOUT_SECONDS` (30), `SCREEN_UNSAFE_THRESHOLD` (0.3) and `SCREEN_WAKE_THRESHOLD` (0.5).
 

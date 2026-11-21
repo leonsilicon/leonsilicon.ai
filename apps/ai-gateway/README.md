@@ -12,7 +12,7 @@ The tunnel has no public hostname: the only way in is the Worker's VPC binding.
 
 ## Endpoints
 
-As of 2026-11-21 the `orca` and `grok` services are stopped (Hermes Cloud runs their replacements itself), so those two URLs answer 502. Their routes go when the gateway does.
+As of 2026-11-21 the `orca`, `grok` and `watch` services are stopped (Hermes Cloud runs their replacements itself), so those three URLs answer 502. Their routes go when the gateway does. `beeper` still points at Beeper Desktop, which has been frozen since 2026-11-19, and `cronometer` still works.
 
 | URL                                 | Service                                                                                                | Local target             | Token on the mini                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------- |

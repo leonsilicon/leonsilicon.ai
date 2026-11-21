@@ -13,7 +13,7 @@ Services for Leon's agents (Hermes Cloud and others). The MCP servers each check
 | [`orca`](www/ai/leonsilicon/orca/index.html)                 | [Orca bridge](apps/orca-bridge/README.md), stopped 2026-11-21                                                   | Mac mini, through [ai-edge](apps/ai-edge/README.md) |
 | [`grok`](www/ai/leonsilicon/grok/index.html)                 | [Grok Bot relay, old copy](packages/com/leonsilicon/ai/configs/grok-relay-hermes/README.md), stopped 2026-11-21 | Mac mini, through ai-edge                           |
 | [`beeper`](www/ai/leonsilicon/beeper/index.html)             | Beeper Desktop's own MCP (no source of ours)                                                                    | Mac mini, through ai-edge                           |
-| [`watch`](www/ai/leonsilicon/watch/index.html)               | [Beeper Watch](apps/beeper-watch/README.md)                                                                     | Mac mini, through ai-edge                           |
+| [`watch`](www/ai/leonsilicon/watch/index.html)               | [Beeper Watch](apps/beeper-watch/README.md), moved to Hermes Cloud 2026-11-21                                   | Mac mini, through ai-edge                           |
 | [`cronometer`](www/ai/leonsilicon/cronometer/index.html)     | [Cronometer](packages/com/leonsilicon/ai/configs/cronometer-mcp-http/README.txt)                                | Mac mini, through ai-edge                           |
 | [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html) | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                                                     | Its own Cloudflare Worker                           |
 | [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html) | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                                                         | Its own Cloudflare Worker                           |
@@ -26,11 +26,12 @@ The [endpoint map](apps/ai-gateway/README.md) has the mini's local targets.
 
 Services that run on Hermes Cloud's own machine, as local MCP servers with no public address. The plan is to move everything that is still on the mini here or onto Workers.
 
-| What                                                                    | State                                                                                                          |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [Orca device](apps/orca-device/README.md)                               | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge                     |
-| [Beeper inbox](apps/beeper-inbox/README.md)                             | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop            |
-| [Grok relay](packages/com/leonsilicon/ai/services/grok-relay/README.md) | Live since 2026-11-21: Hermes messages Leon's Grok bots through the Beeper inbox. It replaced the mini's relay |
+| What                                                                    | State                                                                                                                              |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [Orca device](apps/orca-device/README.md)                               | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge                                         |
+| [Beeper inbox](apps/beeper-inbox/README.md)                             | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop                                |
+| [Grok relay](packages/com/leonsilicon/ai/services/grok-relay/README.md) | Live since 2026-11-21: Hermes messages Leon's Grok bots through the Beeper inbox. It replaced the mini's relay                     |
+| [Beeper Watch](apps/beeper-watch/README.md)                             | Live since 2026-11-21: the #feed- channels and reply watches, read from the Beeper inbox's journal. It replaced the mini's service |
 
 ## Also here
 

@@ -1,5 +1,13 @@
-export { jsonLogger, loadConfig, startBeeperWatch } from "#service";
-export type { BeeperWatchConfig } from "#service";
+export { beeperWatchExtension, parseEnv } from "#extension";
+export { accountOf, journalSource, typeOf } from "#journal-source";
+export {
+  createBeeperWatch,
+  jsonLogger,
+  loadConfig,
+  loadCoreConfig,
+  startBeeperWatch,
+} from "#service";
+export type { BeeperWatchConfig, BeeperWatchCore, CoreConfig } from "#service";
 export { callTool, INSTRUCTIONS, TOOLS } from "#mcp";
 export { Watcher, UserError, LIMITS } from "#watcher";
 export type { WatchSummary, WatcherOptions } from "#watcher";

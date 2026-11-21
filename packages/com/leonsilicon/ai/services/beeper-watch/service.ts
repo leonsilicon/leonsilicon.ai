@@ -7,18 +7,25 @@ import { createListener } from "#mcp";
 import { decisionsScreener } from "#screen";
 import { slackPoster } from "#slack";
 import { WatchStore } from "#store";
-import type { Logger } from "#types";
+import type { BeeperFeedSource, BeeperSource, Logger } from "#types";
 import { Watcher } from "#watcher";
 
-export interface BeeperWatchConfig {
+/** What only the stand-alone service needs: Beeper Desktop, and its own HTTP MCP endpoint. */
+export interface BeeperWatchConfig extends CoreConfig {
   beeperURL: string;
   beeperTokenFile: string;
-  slackBotToken: string;
-  hermesUserId: string;
-  defaultChannel: string;
   mcpToken: string;
   publicOrigin: string;
   port: number;
+}
+
+/** The settings of the watcher and the feed themselves, wherever they run. */
+export interface CoreConfig {
+  slackBotToken: string;
+  hermesUserId: string;
+  defaultChannel: string;
+  /** Log what would be posted to Slack instead of posting it, for a trial run beside the live one. */
+  dryRun: boolean;
   stateFile: string;
   pollMs: number;
   quietMs: number;
@@ -60,6 +67,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BeeperWatchCon
     if (!value) throw new Error(`${name} is required`);
     return value;
   };
+  const mcpToken = required("MCP_TOKEN");
+  if (mcpToken.length < 40) throw new Error("MCP_TOKEN must be at least 40 characters");
+  return {
+    ...loadCoreConfig(env),
+    beeperURL: env.BEEPER_URL ?? "http://127.0.0.1:23373",
+    beeperTokenFile: required("BEEPER_TOKEN_FILE"),
+    mcpToken,
+    publicOrigin: required("PUBLIC_ORIGIN"),
+    port: Number(env.PORT ?? 18789),
+  };
+}
+
+export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig {
+  const required = (name: string): string => {
+    const value = env[name]?.trim();
+    if (!value) throw new Error(`${name} is required`);
+    return value;
+  };
   const seconds = (name: string, fallback: number): number => {
     const value = Number(env[name] ?? fallback);
     if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
@@ -71,8 +96,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BeeperWatchCon
       throw new Error(`${name} must be a number above 0 and at most 1`);
     return value;
   };
-  const mcpToken = required("MCP_TOKEN");
-  if (mcpToken.length < 40) throw new Error("MCP_TOKEN must be at least 40 characters");
   const screen = screenMode(env.FEED_SCREEN);
   // Until 2026-11-18 one FEED_CHANNEL held the whole feed; FEED_CHANNEL=off must not turn it back on.
   if (env.FEED_CHANNEL !== undefined)
@@ -80,14 +103,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BeeperWatchCon
       "FEED_CHANNEL was replaced by FEED_CHANNEL_PREFIX (feed-, or off), one channel per connection",
     );
   return {
-    beeperURL: env.BEEPER_URL ?? "http://127.0.0.1:23373",
-    beeperTokenFile: required("BEEPER_TOKEN_FILE"),
     slackBotToken: required("SLACK_BOT_TOKEN"),
     hermesUserId: required("HERMES_SLACK_USER_ID"),
     defaultChannel: env.DEFAULT_SLACK_CHANNEL ?? "home",
-    mcpToken,
-    publicOrigin: required("PUBLIC_ORIGIN"),
-    port: Number(env.PORT ?? 18789),
+    dryRun: /^(1|true|yes|on)$/i.test(env.DRY_RUN ?? ""),
     stateFile: env.STATE_FILE ?? path.join(os.homedir(), ".local/share/beeper-watch/watches.json"),
     pollMs: seconds("POLL_SECONDS", 10),
     quietMs: seconds("QUIET_SECONDS", 30),
@@ -158,15 +177,63 @@ export const jsonLogger: Logger = (level, message, fields) => {
   else console.error(line);
 };
 
-/** Starts polling watched Beeper chats and serving the MCP tools. Resolves once both are running. */
-export async function startBeeperWatch(
-  config: BeeperWatchConfig = loadConfig(),
-  log: Logger = jsonLogger,
-) {
-  const slack = slackPoster(config.slackBotToken);
+/**
+ * A Slack poster that posts nothing: it looks channels up, creates none, and logs what would have
+ * gone out. For running a second Beeper Watch beside the live one, to compare what each picks up.
+ */
+function dryRunPoster(real: ReturnType<typeof slackPoster>, log: Logger): typeof real {
+  let posts = 0;
+  const lookup = async (nameOrId: string) => {
+    try {
+      return await real.channel(nameOrId);
+    } catch {
+      return { id: `dry-${nameOrId}`, name: nameOrId, isPrivate: false, isMember: true };
+    }
+  };
+  return {
+    identity: () => real.identity(),
+    channel: lookup,
+    ensureChannel: lookup,
+    post: async (channel, text, threadTs) => {
+      posts += 1;
+      log("info", "dry run: would post", {
+        channel,
+        chars: text.length,
+        thread: Boolean(threadTs),
+        mentions: /<@[A-Z0-9]+>/.test(text),
+      });
+      return { ts: `dry.${posts}` };
+    },
+  };
+}
+
+export interface BeeperWatchCore {
+  watcher: Watcher;
+  feed: Feed | null;
+  slackBot: string;
+  /** What the feed and the screener are set to, for the start-up log line. */
+  summary: { feed: string; screener: string };
+  health(): Record<string, unknown>;
+  stop(): Promise<void>;
+}
+
+/**
+ * The watcher and the feed, polling a Beeper source and posting to Slack. The source decides where
+ * Beeper is read: Beeper Desktop for the stand-alone service, the inbox's journal on Hermes Cloud.
+ */
+export async function createBeeperWatch({
+  config,
+  beeper,
+  log = jsonLogger,
+}: {
+  config: CoreConfig;
+  beeper: BeeperSource & BeeperFeedSource;
+  log?: Logger;
+}): Promise<BeeperWatchCore> {
+  const real = slackPoster(config.slackBotToken);
+  const slack = config.dryRun ? dryRunPoster(real, log) : real;
   const identity = await slack.identity();
   const store = new WatchStore(config.stateFile, log);
-  const beeper = beeperSource({ baseURL: config.beeperURL, tokenFile: config.beeperTokenFile });
   const screener =
     config.screen === "openai" && config.openaiApiKey
       ? decisionsScreener({
@@ -233,13 +300,17 @@ export async function startBeeperWatch(
 
   let stopped = false;
   let feedError: string | null = null;
+  let watchError: string | null = null;
+  const startedAt = new Date().toISOString();
   const loop = (async () => {
     while (!stopped) {
       const started = Date.now();
       try {
         await watcher.tick();
+        watchError = null;
       } catch (error) {
-        log("error", "poll failed", { error: (error as Error).message });
+        watchError = (error as Error).message;
+        log("error", "poll failed", { error: watchError });
       }
       if (feed) {
         try {
@@ -256,9 +327,50 @@ export async function startBeeperWatch(
     }
   })();
 
-  const listener = createListener({
+  return {
     watcher,
     feed,
+    slackBot: identity.userId,
+    summary: {
+      feed:
+        config.feedChannelPrefix === null
+          ? "off"
+          : `#${config.feedChannelPrefix}<platform>, created as needed${
+              screener
+                ? `; people's messages screened (wake Hermes when it should know), held in ${config.flaggedChannel} and ${config.spamChannel}`
+                : ` (wake: ${config.feedWake})`
+            }`,
+      screener: screener
+        ? `OpenAI Decisions ${config.screenModel} (unsafe ≥ ${config.screenUnsafeThreshold}, wake ≥ ${config.screenWakeThreshold})`
+        : "off",
+    },
+    health: () => ({
+      started_at: startedAt,
+      dry_run: config.dryRun,
+      watches: store.list().length,
+      watch_error: watchError,
+      feed: feed ? { ...feed.health(), error: feedError } : "off",
+    }),
+    async stop(): Promise<void> {
+      stopped = true;
+      await loop;
+    },
+  };
+}
+
+/** Starts polling watched Beeper chats and serving the MCP tools. Resolves once both are running. */
+export async function startBeeperWatch(
+  config: BeeperWatchConfig = loadConfig(),
+  log: Logger = jsonLogger,
+) {
+  const core = await createBeeperWatch({
+    config,
+    beeper: beeperSource({ baseURL: config.beeperURL, tokenFile: config.beeperTokenFile }),
+    log,
+  });
+  const listener = createListener({
+    watcher: core.watcher,
+    feed: core.feed,
     token: config.mcpToken,
     publicOrigin: config.publicOrigin,
     log,
@@ -267,27 +379,16 @@ export async function startBeeperWatch(
   await new Promise<void>((resolve) => listener.listen(config.port, "127.0.0.1", resolve));
   log("info", "beeper-watch started", {
     listening: `127.0.0.1:${config.port}`,
-    slackBot: identity.userId,
-    watches: store.list().length,
-    feed:
-      config.feedChannelPrefix === null
-        ? "off"
-        : `#${config.feedChannelPrefix}<platform>, created as needed${
-            screener
-              ? `; people's messages screened (wake Hermes when it should know), held in ${config.flaggedChannel} and ${config.spamChannel}`
-              : ` (wake: ${config.feedWake})`
-          }`,
-    screener: screener
-      ? `OpenAI Decisions ${config.screenModel} (unsafe ≥ ${config.screenUnsafeThreshold}, wake ≥ ${config.screenWakeThreshold})`
-      : "off",
+    slackBot: core.slackBot,
+    watches: core.watcher.list().length,
+    ...core.summary,
   });
 
   return {
-    watcher,
+    watcher: core.watcher,
     async stop(): Promise<void> {
-      stopped = true;
       await new Promise<void>((resolve) => listener.close(() => resolve()));
-      await loop;
+      await core.stop();
     },
   };
 }

@@ -94,6 +94,7 @@ $B restart                   # same device and store
 $B tool list_conversations '{"query":"note to self"}'
 $B journal                   # what sync delivered lately, without text; '{"after":N,"room_id":"!…"}' narrows it
 $B extension grok-relay grok_bots   # one of the Grok relay's tools, as Hermes would call it
+$B extension beeper-watch beeper_watch_list   # Beeper Watch's open watches
 tail /opt/data/beeper-inbox/logs/daemon.log
 ```
 
