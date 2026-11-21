@@ -9,7 +9,7 @@ Leon's rule (2026-11-21): every message he sends in Slack becomes a new issue in
 ## What happens
 
 1. Leon writes to Hermes outside an issue channel: a DM, `#general`, a project channel, a reply under a `#feed-` post.
-2. As soon as the message reaches Hermes and has passed dedup and the bot check, the plugin calls autolinear's `POST /intake` in the background. autolinear creates the issue, opens its channel `leon-<n>-<first words>`, edits Leon's message to end with `→ #leon-<n>-…`, and posts his message again in the channel as Leon, all in about a second.
+2. autolinear has usually started already: its Slack app gets Leon's message straight from Slack, before Hermes does. Either way, as soon as the message reaches Hermes and has passed dedup and the bot check, the plugin calls autolinear's `POST /intake` in the background, and gets the running or finished intake for it. autolinear creates the issue, opens its channel `leon-<n>-<first words>`, edits Leon's message to end with `→ #leon-<n>-…`, and posts his message again in the channel as Leon, all in about a second.
 3. Meanwhile Hermes reads the thread and downloads files as usual. When it builds the turn, the plugin waits for autolinear's answer and builds the turn as if Leon had written that copy: same text, files and thread history, in the new channel, with a one-line note naming the issue. Hermes's reply, its session and its 👀 → ✅ reactions all land in the issue channel.
 4. Linear Sync moves the issue to Awaiting Hermes on 👀 and to Awaiting Leon, mentioning him, on ✅ or ❌. A status Hermes sets during its turn, such as Awaiting Others, stands.
 

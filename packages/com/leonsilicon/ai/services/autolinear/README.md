@@ -15,11 +15,16 @@ Makes one of Leon's Slack messages a Linear issue with its own Slack channel, as
 
 It answers `{ ok, issue, channel, ts, source, ms }`, where `ts` is the copy's and `ms` the milliseconds until each step was done, or `{ ok: false, skipped }` for someone else's message (`not_leon`) or one in an issue channel (`issue_channel`). Each step is recorded in `Progress` as it's done, so a retry carries on where the last try stopped.
 
+## Slack's events
+
+`messageFromEvent(event, config, lookups)` reads a `message` event from the autolinear Slack app's user events and returns the intake for it, or null. It starts only on messages Hermes is sure to answer, since nothing else would answer the copy: Leon's own (not a bot's, not one carrying the slack-as-leon marker, not an edit or a join), with no `/` or `!` command and no mention of anyone but Hermes, in his DM with Hermes (`SLACK_HERMES_DM_ID`, looked up with `conversations.open` when unset) or in a public channel that isn't an issue channel or in `AUTOLINEAR_SKIP_CHANNELS`. `fastPathKind` makes the checks that need no lookup; most events stop there. A private channel or a group DM waits for Hermes's call, since Hermes may not be in it.
+
 ## API
 
 - `Intake` with `IntakeDeps`: the config, a Linear client (`issue`, `createIssue`, `team`), Leon's session, `adopt`, the progress store, and an `IntakeCache` shared by the isolate.
 - `loadConfig(env)`: `SLACK_LEON_USER_ID` and `SLACK_HERMES_USER_ID` (required), `LINEAR_TEAM_KEY`, `INTAKE_STATE`, `CHANNEL_PREFIX`, `CHANNEL_NAME_MAX`, and the optional `LINEAR_TEAM_ID`, `LINEAR_INTAKE_STATE_ID` and `SLACK_WORKSPACE_URL`, which spare the lookups.
 - `permalinkOf(workspaceUrl, message)`: a Slack permalink, threads included.
+- `messageFromEvent` and `fastPathKind` for Slack's events, with `EventLookups` for the DM and channel-name lookups.
 
 ## Test
 

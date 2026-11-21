@@ -17,6 +17,10 @@ export interface AutolinearConfig {
   hermesUserId: string;
   /** `https://<workspace>.slack.com`, for permalinks without asking Slack. Looked up when unset. */
   workspaceUrl: string | null;
+  /** Leon's DM with Hermes, the one DM whose messages Slack's events start on. Looked up when unset. */
+  hermesDmId: string | null;
+  /** Channels whose messages Hermes answers where they are (Hermes's `AUTOLINEAR_SKIP_CHANNELS`). */
+  skipChannels: string[];
 }
 
 function required(env: Record<string, string | undefined>, name: string): string {
@@ -39,5 +43,10 @@ export function loadConfig(env: Record<string, string | undefined>): AutolinearC
     leonUserId: required(env, "SLACK_LEON_USER_ID"),
     hermesUserId: required(env, "SLACK_HERMES_USER_ID"),
     workspaceUrl: optional(env.SLACK_WORKSPACE_URL)?.replace(/\/+$/, "") ?? null,
+    hermesDmId: optional(env.SLACK_HERMES_DM_ID),
+    skipChannels: (env.AUTOLINEAR_SKIP_CHANNELS ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean),
   };
 }

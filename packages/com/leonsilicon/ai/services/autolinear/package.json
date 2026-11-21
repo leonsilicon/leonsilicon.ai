@@ -6,6 +6,7 @@
   "type": "module",
   "imports": {
     "#config": "./config.ts",
+    "#events": "./events.ts",
     "#intake": "./intake.ts"
   },
   "exports": {
