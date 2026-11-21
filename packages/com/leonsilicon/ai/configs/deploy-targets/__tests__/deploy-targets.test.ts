@@ -9,7 +9,7 @@ const workspace = readWorkspace(root);
 
 test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", () => {
   const apps = workspace.workers.map((worker) => worker.app);
-  assert.deepEqual(apps, ["ai-edge", "linear-slack-sync", "slack-as-leon"]);
+  assert.deepEqual(apps, ["ai-edge", "autolinear", "linear-slack-sync", "slack-as-leon"]);
   const config = readFileSync(`${root}vite.config.ts`, "utf8");
   for (const app of apps)
     assert.ok(config.includes(`"deploy:${app}"`), `vite.config.ts has deploy:${app}`);
@@ -19,23 +19,36 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
   assert.deepEqual(affected("apps/ai-edge/worker.ts"), ["ai-edge"]);
+  assert.deepEqual(affected("packages/com/leonsilicon/ai/services/autolinear/intake.ts"), [
+    "autolinear",
+  ]);
+  // autolinear builds on linear-slack-sync's Linear client and helpers, so both go.
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/linear-slack-sync/sync.ts"), [
+    "autolinear",
     "linear-slack-sync",
   ]);
-  // linear-slack-sync imports slack-as-leon's session client, so both go.
+  // Both import slack-as-leon's session client.
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/slack-as-leon/slack.ts"), [
+    "autolinear",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
   // Shared inputs reach every Worker: the pages, the lockfile, the env schema.
   assert.deepEqual(affected("www/ai/leonsilicon/orca/index.html"), [
     "ai-edge",
+    "autolinear",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
-  assert.deepEqual(affected("bun.lock"), ["ai-edge", "linear-slack-sync", "slack-as-leon"]);
+  assert.deepEqual(affected("bun.lock"), [
+    "ai-edge",
+    "autolinear",
+    "linear-slack-sync",
+    "slack-as-leon",
+  ]);
   assert.deepEqual(affected("packages/com/leonsilicon/www/page.ts"), [
     "ai-edge",
+    "autolinear",
     "linear-slack-sync",
     "slack-as-leon",
   ]);

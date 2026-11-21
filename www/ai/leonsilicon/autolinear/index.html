@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>autolinear · autolinear.leonsilicon.ai</title>
+  </head>
+  <body>
+    <main>
+      <p class="host">autolinear.leonsilicon.ai</p>
+      <h1>autolinear</h1>
+      <p>
+        Gives each of Leon's Slack messages its own Linear issue and Slack channel the moment he
+        sends it, and links the channel from his message, so Hermes answers him there. Only Hermes
+        calls it; this page only shows whether it's ready.
+      </p>
+      <dl>
+        <dt>Status</dt>
+        <dd data-health>Checking…</dd>
+      </dl>
+    </main>
+    <script type="module">
+      import { mountServicePage } from "@-/com.leonsilicon.www/client";
+
+      void mountServicePage();
+    </script>
+  </body>
+</html>

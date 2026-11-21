@@ -7,6 +7,7 @@ import {
   channelTopic,
   formatTitle,
   hasTime,
+  intakeTitle,
   linearToSlack,
   localDay,
   localLabel,
@@ -19,6 +20,7 @@ import {
   withDay,
   zonedIso,
 } from "#format";
+import { excerptQuote } from "#sync";
 import { hmacHex, verifyLinear, verifySlack } from "#verify";
 
 test("parseTitle reads the backticked YAML at the end of a title", () => {
@@ -224,4 +226,30 @@ test("linearToSlack keeps a Slack user mention written into Linear, outside code
   assert.equal(linearToSlack("\\<@U0LEON00001\\> escaped"), "<@U0LEON00001> escaped");
   assert.equal(linearToSlack("`<@U0LEON00001>` in code"), "`&lt;@U0LEON00001&gt;` in code");
   assert.equal(linearToSlack("a <b> tag"), "a &lt;b&gt; tag");
+});
+
+test("intakeTitle takes a message's first line as plain words, cut at a word", () => {
+  assert.equal(
+    intakeTitle("\n> **Book** the `dentist` for [Tuesday](https://x.y)\nmore", "x"),
+    "Book the dentist for Tuesday",
+  );
+  assert.equal(
+    intakeTitle("- ship it `{due: 2026-12-01}`", "x"),
+    "ship it {due: 2026-12-01}",
+    "never read as metadata",
+  );
+  assert.equal(intakeTitle("   \n\n", "File: receipt.png"), "File: receipt.png");
+  const long = intakeTitle("word ".repeat(40), "x");
+  assert.ok(long.length <= 80);
+  assert.ok(long.endsWith("word…"));
+  assert.equal(intakeTitle("x".repeat(100), "y").length, 80);
+});
+
+test("excerptQuote quotes the start of a message without cutting a link or entity", () => {
+  assert.equal(excerptQuote("one\ntwo", 50), "> one\n> two");
+  assert.equal(
+    excerptQuote("see <https://example.com/a/very/long/path|the link> now", 20),
+    "> see…",
+  );
+  assert.equal(excerptQuote("a &amp; b", 4), "> a…");
 });

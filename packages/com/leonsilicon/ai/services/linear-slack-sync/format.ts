@@ -322,3 +322,29 @@ export function slackToLinear(text: string, nameOf: NameOf): string {
     .replace(/&amp;/g, "&");
   return restore(out);
 }
+
+/**
+ * A title for an issue made from a Slack message (in Linear Markdown, as `slackToLinear` gives
+ * it): its first line of text, as plain words, cut at a word boundary. Backticks go, so the line
+ * can't end in what `parseTitle` would read as status metadata. `fallback` names a message
+ * without text, such as a file on its own.
+ */
+export function intakeTitle(markdown: string, fallback: string, max = 80): string {
+  const line =
+    markdown
+      .split("\n")
+      .map((l) =>
+        l
+          .replace(/^\s*(?:>+|[-*+•]|#{1,6}|\d+[.)])\s+/, "")
+          .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+          .replace(/\*\*|__|~~|`/g, "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .find(Boolean) ?? "";
+  const title = line || fallback;
+  if (title.length <= max) return title;
+  const cut = title.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}

@@ -9,11 +9,19 @@ import type {
   LinearIssue,
   LinearProject,
   LinearState,
+  NewIssue,
   ProjectChannelSettings,
 } from "#linear";
 import { SlackError, type SlackCall, type SlackParams } from "#slack";
 import { Store, type Sql, type SqlValue } from "#store";
-import { PROJECT_GRACE_MS, STARRED, Sync } from "#sync";
+import {
+  ADOPT_WAIT_MS,
+  autolinearIssueId,
+  PROJECT_GRACE_MS,
+  STARRED,
+  Sync,
+  type Adoption,
+} from "#sync";
 
 const LEON = "U0LEON00001";
 const HERMES = "U0HERMES001";
@@ -22,6 +30,7 @@ const BOT = "U0SYNCBOT1";
 const LINEAR_BOT = "U0LINEARBOT";
 
 const STATES: LinearState[] = [
+  "Awaiting Init:unstarted",
   "Awaiting Clarification:backlog",
   "Awaiting Date:unstarted",
   "Awaiting Start:unstarted",
@@ -65,6 +74,7 @@ function fakeLinear(makeChannel: MakeChannel) {
   const comments = new Map<string, LinearComment>();
   const created: { id: string; issueId: string; body: string; parentId?: string }[] = [];
   const updates: { id: string; input: IssueUpdate }[] = [];
+  const newIssues: NewIssue[] = [];
   const api: LinearApi = {
     issue: async (id) =>
       issues.get(id) ?? [...issues.values()].find((i) => i.identifier === id) ?? null,
@@ -74,6 +84,24 @@ function fakeLinear(makeChannel: MakeChannel) {
         (i) => !["completed", "canceled", "duplicate"].includes(i.state.type),
       ),
     states: async () => STATES,
+    createIssue: async (input) => {
+      if (issues.has(input.id)) throw new Error("Entity already exists");
+      newIssues.push(input);
+      const number = Math.max(400, ...[...issues.values()].map((i) => i.number)) + 1;
+      const issue: LinearIssue = {
+        id: input.id,
+        identifier: `LEON-${number}`,
+        number,
+        title: input.title,
+        url: `https://linear.app/leonsilicon/issue/LEON-${number}`,
+        description: input.description,
+        state: STATES.find((s) => s.id === input.stateId)!,
+        teamKey: "LEON",
+        dueDate: null,
+      };
+      issues.set(issue.id, issue);
+      return { ...issue };
+    },
     createComment: async (input) => {
       created.push(input);
       comments.set(input.id, {
@@ -126,9 +154,15 @@ function fakeLinear(makeChannel: MakeChannel) {
     projects.set(project.id, project);
     return project;
   };
-  const addIssue = (number: number, title: string, status: string, description = "") => {
+  const addIssue = (
+    number: number,
+    title: string,
+    status: string,
+    description = "",
+    id = `issue-${number}`,
+  ) => {
     const issue: LinearIssue = {
-      id: `issue-${number}`,
+      id,
       identifier: `LEON-${number}`,
       number,
       title,
@@ -147,6 +181,7 @@ function fakeLinear(makeChannel: MakeChannel) {
     comments,
     created,
     updates,
+    newIssues,
     addIssue,
     projects,
     addProject,
@@ -163,6 +198,22 @@ interface Channel {
   archived: boolean;
   members: Set<string>;
   topic: string;
+  /** A DM's other person, seen from Leon's side. */
+  im?: string;
+}
+
+interface Post {
+  channel: string;
+  ts: string;
+  text: string;
+  username?: string;
+  thread_ts?: string;
+  by: string;
+  /** The author's user ID. */
+  user: string;
+  client_msg_id?: string;
+  blocks?: unknown[];
+  files?: { name?: string; title?: string; permalink?: string }[];
 }
 
 /** One Slack seen two ways: the sync's bot and Leon's web session. */
@@ -172,15 +223,10 @@ function fakeSlack() {
     { id: "L-stars", name: "", type: "stars", channelIds: [] },
     { id: "L-channels", name: "Channels", type: "channels", channelIds: [] },
   ];
-  const posts: {
-    channel: string;
-    ts: string;
-    text: string;
-    username?: string;
-    thread_ts?: string;
-    by: string;
-  }[] = [];
+  const posts: Post[] = [];
   const calls: { who: string; method: string; params: SlackParams }[] = [];
+  /** Makes the next matching call fail with a Slack error, once. */
+  const failures: { who: string; method: string; code: string }[] = [];
   /** Leon's starred channels. Slack keeps them apart from custom sections: a channel can be in both. */
   const stars = new Set<string>();
   let seq = 0;
@@ -193,6 +239,8 @@ function fakeSlack() {
     (who: "bot" | "leon"): SlackCall =>
     async (method, params = {}) => {
       calls.push({ who, method, params });
+      const failure = failures.findIndex((f) => f.who === who && f.method === method);
+      if (failure >= 0) throw new SlackError(method, failures.splice(failure, 1)[0]!.code);
       const me = who === "bot" ? BOT : LEON;
       const member = (c: Channel) => {
         if (!c.members.has(me)) throw new SlackError(method, "not_in_channel");
@@ -205,7 +253,10 @@ function fakeSlack() {
             ok: true,
             user: {
               name: "leon",
-              profile: { display_name: params.user === LEON ? "Leon" : "Someone" },
+              profile: {
+                display_name:
+                  params.user === LEON ? "Leon" : params.user === HERMES ? "Hermes" : "Someone",
+              },
             },
           };
         case "conversations.create": {
@@ -225,9 +276,10 @@ function fakeSlack() {
         case "conversations.invite": {
           const c = find(params.channel);
           member(c);
-          if (c.members.has(String(params.users)))
+          const users = String(params.users).split(",");
+          if (users.some((u) => c.members.has(u)))
             throw new SlackError(method, "already_in_channel");
-          c.members.add(String(params.users));
+          for (const u of users) c.members.add(u);
           return { ok: true };
         }
         case "conversations.join": {
@@ -285,13 +337,60 @@ function fakeSlack() {
             username: params.username as string | undefined,
             thread_ts: params.thread_ts as string | undefined,
             by: who,
+            user: me,
+            client_msg_id: params.client_msg_id as string | undefined,
           });
           return { ok: true, ts };
         }
         case "chat.update": {
-          const p = posts.find((m) => m.ts === params.ts)!;
+          const p = posts.find((m) => m.ts === params.ts && m.channel === params.channel);
+          if (!p) throw new SlackError(method, "message_not_found");
+          if (p.user !== me) throw new SlackError(method, "cant_update_message");
           p.text = String(params.text);
+          if (params.blocks) p.blocks = JSON.parse(String(params.blocks)) as unknown[];
           return { ok: true };
+        }
+        case "chat.getPermalink":
+          return {
+            ok: true,
+            permalink: `https://leonsilicon.slack.com/archives/${params.channel}/p${String(params.message_ts).replace(".", "")}`,
+          };
+        case "conversations.info": {
+          const c = find(params.channel);
+          return {
+            ok: true,
+            channel: c.im
+              ? { id: c.id, is_im: true, user: c.im }
+              : { id: c.id, name: c.name, is_private: c.private },
+          };
+        }
+        case "conversations.history": {
+          const c = find(params.channel);
+          member(c);
+          const within = (m: Post) =>
+            m.channel === c.id &&
+            (!m.thread_ts || m.thread_ts === m.ts) &&
+            (!params.oldest || m.ts >= String(params.oldest)) &&
+            (!params.latest || m.ts <= String(params.latest));
+          return { ok: true, messages: structuredClone(posts.filter(within).reverse()) };
+        }
+        case "conversations.replies": {
+          const c = find(params.channel);
+          member(c);
+          const root = posts.find((m) => m.channel === c.id && m.ts === params.ts);
+          if (!root) throw new SlackError(method, "thread_not_found");
+          const replies = posts.filter(
+            (m) =>
+              m.channel === c.id &&
+              m.thread_ts === root.ts &&
+              m.ts !== root.ts &&
+              (!params.oldest || m.ts >= String(params.oldest)) &&
+              (!params.latest || m.ts <= String(params.latest)),
+          );
+          return {
+            ok: true,
+            messages: structuredClone([root, ...replies].slice(0, Number(params.limit ?? 100))),
+          };
         }
         case "users.channelSections.list": {
           return {
@@ -370,6 +469,33 @@ function fakeSlack() {
     channels.push(c);
     return c;
   };
+  /** Leon's DM with someone, as his session sees it. */
+  const addDm = (with_: string) => {
+    const c: Channel = {
+      id: `D${++seq}`,
+      name: "",
+      private: true,
+      archived: false,
+      members: new Set([LEON, with_]),
+      topic: "",
+      im: with_,
+    };
+    channels.push(c);
+    return c;
+  };
+  /** A message someone wrote, as it sits in Slack. */
+  const say = (channel: string, user: string, text: string, extra: Partial<Post> = {}) => {
+    const post: Post = {
+      channel,
+      ts: `1794000000.${String(++seq).padStart(6, "0")}`,
+      text,
+      by: user === LEON ? "leon" : user,
+      user,
+      ...extra,
+    };
+    posts.push(post);
+    return post;
+  };
   /** A public channel made by Linear's Slack app, with the members Linear invited. */
   const addLinearChannel = (name: string, members = [LEON]) => {
     if (channels.some((c) => c.name === name)) throw new SlackError("x", "name_taken");
@@ -396,6 +522,9 @@ function fakeSlack() {
     order,
     addLeonChannel,
     addLinearChannel,
+    addDm,
+    say,
+    failures,
   };
 }
 
@@ -1371,4 +1500,172 @@ test("loadConfig needs both Slack user IDs, which have no built-in defaults", ()
   const config = loadConfig({ SLACK_LEON_USER_ID: LEON, SLACK_HERMES_USER_ID: HERMES });
   assert.equal(config.leonUserId, LEON);
   assert.equal(config.hermesUserId, HERMES);
+});
+
+// ── autolinear's issues ──────────────────────────────────────────────────────
+
+/** An issue autolinear made from a message, and the private channel it opened as Leon. */
+async function autolinearIssue(t: ReturnType<typeof setup>, number = 401, title = "check rogers") {
+  const id = await autolinearIssueId(`D0DM:1794000000.${number}`);
+  const issue = t.linear.addIssue(
+    number,
+    title,
+    "Awaiting Init",
+    "**Leon in Slack** (a DM): hi",
+    id,
+  );
+  const channel = t.slack.addLeonChannel(`leon-${number}-${title.replaceAll(" ", "-")}`);
+  channel.members = new Set([LEON]);
+  const adoption: Adoption = {
+    issueId: id,
+    identifier: issue.identifier,
+    title,
+    stateName: "Awaiting Init",
+    channelId: channel.id,
+    channelName: channel.name,
+    sourceChannel: "D0DM",
+    sourceTs: `1794000000.${number}`,
+    lead: "From Leon's message in <https://x.slack.com/archives/D0DM/p1|a DM with Hermes>.",
+  };
+  return { issue, channel, adoption };
+}
+
+test("autolinear's issue waits for its channel's hand-over instead of getting a second one", async () => {
+  const t = setup();
+  const { slack, store, sync, drain } = t;
+  const { issue, channel, adoption } = await autolinearIssue(t);
+
+  // Linear's webhook for the new issue can come first: nothing is made.
+  await sync.run("linear", issueHook(issue.id, "create"));
+  assert.equal(slack.channels.length, 1);
+  assert.equal(store.issue(issue.id), null);
+  assert.ok(store.timer(`adopt-wait:${issue.id}`) === null, "a queued job, not a timer");
+
+  await sync.adopt(adoption);
+  assert.deepEqual([...channel.members].sort(), [BOT, HERMES, LEON].sort());
+  const invites = slack.calls.filter((c) => c.method === "conversations.invite");
+  assert.equal(invites.length, 1, "one invite for both");
+  assert.equal(store.issueByChannel(channel.id)?.issueId, issue.id);
+
+  await drain();
+  const [intro] = slack.posts.filter((p) => p.channel === channel.id);
+  assert.equal(
+    intro!.text,
+    `*<${issue.url}|LEON-401: check rogers>* · Awaiting Init\n\n${adoption.lead}`,
+    "says where it came from and pings no one",
+  );
+  assert.equal(channel.topic, `Awaiting Init · ${issue.url}`);
+  assert.equal(slack.sectionOf(channel.id), "Awaiting Init");
+
+  // The webhook's second look, two minutes on, finds the channel adopted.
+  t.clock.now += ADOPT_WAIT_MS;
+  const posts = slack.posts.length;
+  await drain();
+  assert.equal(slack.channels.length, 1);
+  assert.equal(slack.posts.length, posts);
+
+  // Handing it over again changes nothing.
+  await sync.adopt(adoption);
+  await drain();
+  assert.equal(slack.posts.length, posts);
+});
+
+test("Hermes's 👀 and ✅ on Leon's message in an adopted channel hand the issue to Leon, with a mention", async () => {
+  const t = setup();
+  const { slack, sync, drain } = t;
+  const { issue, channel, adoption } = await autolinearIssue(t);
+  await sync.adopt(adoption);
+  await drain();
+  const copy = { type: "message", channel: channel.id, ts: "1794000000.000999" };
+  const on = (reaction: string) => eyes(channel.id, { reaction, item: { ...copy } });
+
+  await sync.run("slack", on("eyes"));
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  await sync.run("slack", on("white_check_mark"));
+  assert.equal(
+    issue.state.name,
+    "Awaiting Leon",
+    "even a thanks waits for Leon to read the answer",
+  );
+  assert.equal(
+    slack.posts.at(-1)!.text,
+    `*Awaiting Hermes* → *Awaiting Leon* (Hermes reacted :white_check_mark: to Leon's message)\n<@${LEON}>`,
+  );
+  assert.equal(slack.sectionOf(channel.id), "Awaiting Leon");
+});
+
+test("if the hand-over never comes, the issue gets a channel two minutes on, adopting autolinear's", async () => {
+  const t = setup();
+  const { slack, store, sync, drain } = t;
+  const { issue, channel } = await autolinearIssue(t);
+  await sync.run("linear", issueHook(issue.id, "create"));
+  await drain();
+  assert.equal(store.issue(issue.id), null);
+
+  t.clock.now += ADOPT_WAIT_MS;
+  await drain();
+  assert.equal(store.issue(issue.id)?.channelId, channel.id, "adopted by its number");
+  assert.equal(slack.channels.length, 1);
+});
+
+test("an adopted reply brings its thread's first message; a project channel's message joins the project", async () => {
+  const t = setup();
+  const { linear, slack, sync, drain } = t;
+  const project = linear.addProject("Taxes 2026", "In Progress:started");
+  await sync.run("linear", projectHook(project.id, "create"));
+  const projectChannel = slack.channels.find((c) => c.id === project.slackChannelId)!;
+  const root = slack.say(projectChannel.id, HERMES, "File the T4 *now* or wait for the slip?");
+  const { issue, channel, adoption } = await autolinearIssue(t);
+
+  await sync.adopt({
+    ...adoption,
+    sourceChannel: projectChannel.id,
+    sourceTs: "1794999999.000001",
+    sourceThreadTs: root.ts,
+  });
+  await drain();
+  const update = linear.updates.find((u) => u.id === issue.id)!.input;
+  assert.equal(update.projectId, project.id);
+  assert.equal(
+    update.description,
+    "**Leon in Slack** (a DM): hi\n\n" +
+      `In reply to **Hermes** ([thread](https://leonsilicon.slack.com/archives/${projectChannel.id}/p${root.ts.replace(".", "")})):\n\n` +
+      "> File the T4 **now** or wait for the slip?",
+  );
+  const intro = slack.posts.find((p) => p.channel === channel.id)!;
+  assert.ok(intro.text.endsWith(`${adoption.lead}\n> File the T4 *now* or wait for the slip?`));
+});
+
+test("✅ or ❌ only moves an issue Hermes still holds; a status it chose during its turn stands", async () => {
+  const { linear, slack, sync } = setup();
+  const issue = linear.addIssue(9, "x", "Awaiting Init");
+  await sync.run("linear", issueHook(issue.id, "create"));
+  const channel = slack.channels[0]!.id;
+
+  // ❌: Hermes's turn failed, which Leon needs to see too. Straight from Awaiting Init works.
+  await sync.run("slack", eyes(channel, { reaction: "x" }));
+  assert.equal(issue.state.name, "Awaiting Leon");
+
+  for (const chosen of ["Awaiting Others", "Executing", "Awaiting Date", "Done"]) {
+    issue.state = state("Awaiting Hermes");
+    await sync.run("linear", issueHook(issue.id));
+    issue.state = state(chosen);
+    await sync.run("linear", issueHook(issue.id));
+    const updates = linear.updates.length;
+    await sync.run("slack", eyes(channel, { reaction: "white_check_mark" }));
+    assert.equal(issue.state.name, chosen);
+    assert.equal(linear.updates.length, updates);
+  }
+
+  // Someone else's ✅, or Hermes's ✅ on its own or another bot's message, moves nothing.
+  issue.state = state("Awaiting Hermes");
+  await sync.run("linear", issueHook(issue.id));
+  for (const event of [
+    eyes(channel, { reaction: "white_check_mark", user: LEON }),
+    eyes(channel, { reaction: "white_check_mark", item_user: HERMES }),
+    eyes(channel, { reaction: "white_check_mark", item_user: BOT }),
+    eyes(channel, { reaction: "tada" }),
+  ])
+    await sync.run("slack", event);
+  assert.equal(issue.state.name, "Awaiting Hermes");
 });

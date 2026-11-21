@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "autolinear",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  // A Custom Domain per hostname; Cloudflare issues its certificate.
+  "routes": [{ "pattern": "autolinear.leonsilicon.ai", "custom_domain": true }],
+  "durable_objects": {
+    "bindings": [
+      // One per message: makes each intake happen once, however often it's asked for.
+      { "name": "INTAKE", "class_name": "IntakeObject" },
+      // Linear Sync's own Durable Object, for handing it the channels autolinear opens (/adopt).
+      { "name": "SYNC", "class_name": "SyncObject", "script_name": "linear-slack-sync" },
+    ],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["IntakeObject"] }],
+  // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
+  // @-/com.leonsilicon.www.
+  "assets": {
+    "directory": "../../dist/www",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none",
+  },
+  // No vars here: every var and secret comes from the root .env.schema (#autolinear, values in
+  // Infisical), uploaded by `varlock-wrangler deploy`, which replaces whatever the Worker had.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

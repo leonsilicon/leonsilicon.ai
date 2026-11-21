@@ -9,6 +9,7 @@ import {
   verifySlack,
 } from "@-/com.leonsilicon.ai.services.linear-slack-sync";
 import type {
+  Adoption,
   SlackCall,
   Sql,
   SqlValue,
@@ -80,12 +81,14 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 
 /**
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
- * that mention Leon, and 👀 reactions to messages (the sync checks who reacted to whom, and where).
+ * that mention Leon, and 👀, ✅ and ❌ reactions to messages (the sync checks who reacted to whom,
+ * and where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
-      event.reaction === config.hermesAckReaction &&
+      (event.reaction === config.hermesAckReaction ||
+        config.hermesDoneReactions.includes(String(event.reaction))) &&
       (event.item as { type?: string } | undefined)?.type === "message"
     );
   if (!event || event.type !== "message") return false;
@@ -203,6 +206,8 @@ export class SyncObject {
   readonly #env: Env;
   readonly #store: Store;
   #draining = false;
+  /** The bot's Slack user ID, once `auth.test` has said it. */
+  #botUserId: string | undefined;
 
   constructor(state: DurableObjectState, env: Env) {
     this.#state = state;
@@ -216,6 +221,18 @@ export class SyncObject {
   #session(): SlackCall | null {
     const { SLACK_SESSION_TOKEN: token, SLACK_SESSION_COOKIE: cookie } = this.#env;
     return token && cookie ? sessionClient({ token, cookie }) : null;
+  }
+
+  #sync(): Sync {
+    return new Sync({
+      config: loadConfig(this.#env as Record<string, string | undefined>),
+      store: this.#store,
+      linear: new LinearClient(this.#env.LINEAR_API_KEY),
+      bot: botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN),
+      session: this.#session(),
+      log,
+      botUserId: this.#botUserId,
+    });
   }
 
   async #schedule(): Promise<void> {
@@ -235,6 +252,16 @@ export class SyncObject {
       return json({ queued });
     }
     if (url.pathname === "/status") return json(this.#store.stats());
+    // autolinear's hand-over of a channel it opened, through its binding to this Durable Object
+    // (the Worker above never routes a request here). Answers once the bot and Hermes are in.
+    if (url.pathname === "/adopt") {
+      const adoption = (await request.json()) as Adoption;
+      this.#botUserId ??= (await botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN)("auth.test"))
+        .user_id as string;
+      await this.#sync().adopt(adoption);
+      await this.#schedule();
+      return json({ ok: true });
+    }
     if (url.pathname === "/health") {
       const checks: Record<string, string> = {};
       try {
@@ -276,14 +303,7 @@ export class SyncObject {
     if (this.#draining) return;
     this.#draining = true;
     try {
-      const sync = new Sync({
-        config: loadConfig(this.#env as Record<string, string | undefined>),
-        store: this.#store,
-        linear: new LinearClient(this.#env.LINEAR_API_KEY),
-        bot: botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN),
-        session: this.#session(),
-        log,
-      });
+      const sync = this.#sync();
       const deadline = Date.now() + 10 * 60_000;
       while (Date.now() < deadline) {
         const jobs = this.#store.dueJobs(Date.now(), 10);

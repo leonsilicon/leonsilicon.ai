@@ -35,6 +35,15 @@
         "@-/com.leonsilicon.ai.services.ai-gateway": "workspace:*",
       },
     },
+    "apps/autolinear": {
+      "name": "@-apps/autolinear",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.autolinear": "workspace:*",
+        "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
+        "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
+        "@-/com.leonsilicon.www": "workspace:*",
+      },
+    },
     "apps/beeper-inbox": {
       "name": "@-apps/beeper-inbox",
       "bin": {
@@ -150,6 +159,14 @@
       "name": "@-/com.leonsilicon.ai.services.ai-gateway",
       "version": "1.0.0",
     },
+    "packages/com/leonsilicon/ai/services/autolinear": {
+      "name": "@-/com.leonsilicon.ai.services.autolinear",
+      "version": "1.0.0",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
+        "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
+      },
+    },
     "packages/com/leonsilicon/ai/services/beeper-inbox": {
       "name": "@-/com.leonsilicon.ai.services.beeper-inbox",
       "version": "0.1.0",
@@ -195,6 +212,10 @@
     "packages/com/leonsilicon/ai/services/slack-as-leon": {
       "name": "@-/com.leonsilicon.ai.services.slack-as-leon",
       "version": "2.0.0",
+    },
+    "packages/com/leonsilicon/hermes/plugins/autolinear": {
+      "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
+      "version": "1.0.0",
     },
     "packages/com/leonsilicon/hermes/plugins/beeper-watch-notification-guard": {
       "name": "@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard",
@@ -305,6 +326,8 @@
 
     "@-/com.leonsilicon.ai.services.ai-gateway": ["@-/com.leonsilicon.ai.services.ai-gateway@workspace:packages/com/leonsilicon/ai/services/ai-gateway"],
 
+    "@-/com.leonsilicon.ai.services.autolinear": ["@-/com.leonsilicon.ai.services.autolinear@workspace:packages/com/leonsilicon/ai/services/autolinear"],
+
     "@-/com.leonsilicon.ai.services.beeper-inbox": ["@-/com.leonsilicon.ai.services.beeper-inbox@workspace:packages/com/leonsilicon/ai/services/beeper-inbox"],
 
     "@-/com.leonsilicon.ai.services.beeper-watch": ["@-/com.leonsilicon.ai.services.beeper-watch@workspace:packages/com/leonsilicon/ai/services/beeper-watch"],
@@ -316,6 +339,8 @@
     "@-/com.leonsilicon.ai.services.orca-device": ["@-/com.leonsilicon.ai.services.orca-device@workspace:packages/com/leonsilicon/ai/services/orca-device"],
 
     "@-/com.leonsilicon.ai.services.slack-as-leon": ["@-/com.leonsilicon.ai.services.slack-as-leon@workspace:packages/com/leonsilicon/ai/services/slack-as-leon"],
+
+    "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
 
     "@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard": ["@-/com.leonsilicon.hermes.plugins.beeper-watch-notification-guard@workspace:packages/com/leonsilicon/hermes/plugins/beeper-watch-notification-guard"],
 
@@ -348,6 +373,8 @@
     "@-apps/ai-edge": ["@-apps/ai-edge@workspace:apps/ai-edge"],
 
     "@-apps/ai-gateway": ["@-apps/ai-gateway@workspace:apps/ai-gateway"],
+
+    "@-apps/autolinear": ["@-apps/autolinear@workspace:apps/autolinear"],
 
     "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
 

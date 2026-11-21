@@ -1,0 +1,7 @@
+name: autolinear
+label: autolinear
+version: 1.0.0
+description: >
+  Gives each of Leon's Slack messages outside an issue channel its own Linear issue (Awaiting
+  Init) and channel the moment it arrives, through autolinear, and has Hermes answer it there.
+author: leonsilicon

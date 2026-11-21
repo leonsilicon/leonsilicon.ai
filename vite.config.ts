@@ -59,6 +59,7 @@ export default defineConfig({
           ...[
             "ai-edge",
             "ai-gateway",
+            "autolinear",
             "beeper-inbox",
             "beeper-watch",
             "linear-slack-sync",
@@ -90,6 +91,12 @@ export default defineConfig({
       "deploy:ai-edge": {
         cache: false,
         command: "tsc --noEmit && vp build && wrangler deploy --config apps/ai-edge/wrangler.jsonc",
+      },
+      "deploy:autolinear": {
+        cache: false,
+        // Like deploy:slack-as-leon: varlock-wrangler uploads the #autolinear items.
+        command:
+          "tsc --noEmit && vp build && cd apps/autolinear && varlock-wrangler deploy -c wrangler.jsonc",
       },
       "deploy:linear-slack-sync": {
         cache: false,

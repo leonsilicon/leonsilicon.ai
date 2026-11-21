@@ -164,6 +164,15 @@ export class Store {
     return row ? toProject(row) : null;
   }
 
+  /** The open project whose channel this is. */
+  projectByChannel(channelId: string): ProjectRecord | null {
+    const row = this.#sql.exec(
+      `SELECT * FROM projects WHERE channel_id = ? AND archived = 0`,
+      channelId,
+    )[0];
+    return row ? toProject(row) : null;
+  }
+
   allProjects(): ProjectRecord[] {
     return this.#sql.exec(`SELECT * FROM projects`).map(toProject);
   }

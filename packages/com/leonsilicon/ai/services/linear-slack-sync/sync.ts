@@ -19,7 +19,13 @@ import {
   slackToLinear,
   withDay,
 } from "#format";
-import type { LinearApi, LinearIssue, LinearProject, ProjectChannelSettings } from "#linear";
+import type {
+  IssueUpdate,
+  LinearApi,
+  LinearIssue,
+  LinearProject,
+  ProjectChannelSettings,
+} from "#linear";
 import { Sidebar, SlackError, tolerate } from "#slack";
 import type { SlackCall } from "#slack";
 import type { IssueRecord, ProjectRecord, Store } from "#store";
@@ -64,6 +70,35 @@ export interface SlackReactionEvent {
   item: { type: string; channel?: string; ts?: string };
 }
 
+/**
+ * A channel autolinear opened for an issue it made from one of Leon's Slack messages, handed over
+ * to the sync (`Sync.adopt`). autolinear passes what it already knows, so adopting needs no Linear
+ * call.
+ */
+export interface Adoption {
+  issueId: string;
+  identifier: string;
+  title: string;
+  stateName: string;
+  channelId: string;
+  channelName: string;
+  /** Where Leon wrote the message, and its thread when it's a reply. */
+  sourceChannel: string;
+  sourceTs: string;
+  sourceThreadTs?: string | null;
+  /** The intro's line saying where the issue came from, in Slack mrkdwn. */
+  lead: string;
+}
+
+/** A message as `conversations.replies` returns it. */
+interface SlackMessage {
+  ts: string;
+  user?: string;
+  username?: string;
+  bot_profile?: { name?: string };
+  text?: string;
+}
+
 /** Extras for a live status post. */
 interface StatusPost {
   /** Said after the move, e.g. why it happened. */
@@ -86,6 +121,8 @@ export interface SyncDeps {
   /** Waits, while Linear creates a project channel. Tests pass one that returns at once. */
   sleep?: (ms: number) => Promise<void>;
   log?: (event: string, fields?: Record<string, unknown>) => void;
+  /** The bot's own Slack user ID, when the caller already knows it; else `auth.test` finds it. */
+  botUserId?: string;
 }
 
 interface ChannelInfo {
@@ -103,6 +140,43 @@ export async function stableUuid(seed: string): Promise<string> {
   hash[8] = (hash[8]! & 0x3f) | 0x80;
   const hex = Array.from(hash.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * First group of the ID of every issue autolinear creates. The sync waits for autolinear to hand
+ * over such an issue's channel instead of making one itself (see `Sync.adopt`).
+ */
+export const AUTOLINEAR_ID_PREFIX = "a7011ea7";
+
+/** The ID autolinear gives the issue it makes from a message: stable, so a retry finds it. */
+export async function autolinearIssueId(seed: string): Promise<string> {
+  return `${AUTOLINEAR_ID_PREFIX}${(await stableUuid(`autolinear:${seed}`)).slice(8)}`;
+}
+
+export const isAutolinearIssue = (issueId: string) =>
+  issueId.startsWith(`${AUTOLINEAR_ID_PREFIX}-`);
+
+/** How long an autolinear issue without a channel waits for its hand-over before getting one anyway. */
+export const ADOPT_WAIT_MS = 2 * 60_000;
+
+/**
+ * The start of a Slack message as an mrkdwn quote, at most `max` characters, never cut inside a
+ * `<…>` link or mention or an `&…;` entity.
+ */
+export function excerptQuote(text: string, max: number): string {
+  let cut = text.trim();
+  if (cut.length > max) {
+    cut = cut.slice(0, max);
+    const open = cut.lastIndexOf("<");
+    if (open > cut.lastIndexOf(">")) cut = cut.slice(0, open);
+    const amp = cut.lastIndexOf("&");
+    if (amp > cut.lastIndexOf(";")) cut = cut.slice(0, amp);
+    cut = `${cut.trimEnd()}…`;
+  }
+  return cut
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
 }
 
 const ARCHIVED = ["is_archived", "already_archived"];
@@ -176,6 +250,7 @@ export class Sync {
     this.#now = deps.now ?? Date.now;
     this.#sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.#log = deps.log ?? (() => {});
+    this.#botUserId = deps.botUserId ?? null;
   }
 
   async run(kind: string, payload: unknown): Promise<void> {
@@ -197,6 +272,7 @@ export class Sync {
       await this.#settleDays(
         await this.#linear.openProjects(this.#c.teamKey, this.#c.closedProjectTypes),
       );
+    else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "tick") await this.tick();
     else if (kind === "backfill") await this.backfill();
     else this.#log("unknown_job", { kind });
@@ -310,6 +386,25 @@ export class Sync {
       };
       this.#store.putIssue(closed);
       return closed;
+    }
+
+    // autolinear opens its issues' channels itself and hands them over (`adopt`) within a second or
+    // so. Wait for that rather than race it to a second channel; if it never comes, the issue gets
+    // its channel the usual way (adopting autolinear's by number, if it exists) two minutes later.
+    if (!prev && isAutolinearIssue(issue.id)) {
+      const wait = `adopt-wait:${issue.id}`;
+      if (!this.#store.fired(wait)) {
+        const now = this.#now();
+        this.#store.markFired(wait, now);
+        this.#store.enqueue(
+          wait,
+          "linear",
+          { action: "update", type: "Issue", data: { id: issue.id } },
+          now,
+          now + ADOPT_WAIT_MS,
+        );
+        return null;
+      }
     }
 
     let rec: IssueRecord;
@@ -674,22 +769,37 @@ export class Sync {
   }
 
   /**
-   * Hermes reacting 👀 to Leon's message in an issue channel means it has taken the message up, so
-   * the issue moves to Awaiting Hermes from whatever status it was in. The channel follows at once,
-   * without pinging Hermes, which is already on it; Linear's webhook then finds nothing to do.
+   * Hermes reacts to Leon's message in an issue channel when it takes it up (👀) and when it has
+   * finished answering it (✅, or ❌ when its turn failed).
+   *
+   * - 👀 moves the issue to Awaiting Hermes from whatever status it was in, without pinging
+   *   Hermes, which is already on it.
+   * - ✅ or ❌ moves it on to Awaiting Leon, mentioning him, while it is still in Awaiting Hermes or
+   *   Awaiting Init (Leon's rule, 2026-11-21: once Hermes has answered, the issue waits on Leon
+   *   until he has read the answer, even if it was only a "thanks"). A status Hermes chose during
+   *   its turn, such as Awaiting Others or Done, stands.
+   *
+   * The channel follows at once; Linear's webhook for the move then finds nothing to do.
    */
   async onSlackReaction(event: SlackReactionEvent): Promise<void> {
-    const { hermesAckReaction, hermesAckState } = this.#c;
-    if (event.reaction !== hermesAckReaction || event.user !== this.#c.hermesUserId) return;
+    const { hermesAckReaction, hermesAckState, hermesDoneReactions } = this.#c;
+    const ack = event.reaction === hermesAckReaction;
+    if (!ack && !hermesDoneReactions.includes(event.reaction)) return;
+    if (event.user !== this.#c.hermesUserId) return;
     if (event.item_user !== this.#c.leonUserId || event.item.type !== "message") return;
     const issue = event.item.channel ? await this.#openIssueIn(event.item.channel) : null;
-    if (!issue || issue.state.name === hermesAckState) return;
+    if (!issue) return;
     const from = issue.state.name;
-    await this.#moveNow(issue, hermesAckState, {
-      note: `(Hermes reacted :${hermesAckReaction}: to Leon's message)`,
-      quietHermes: true,
-    });
-    this.#log("hermes_ack", { issue: issue.identifier, from });
+    const note = `(Hermes reacted :${event.reaction}: to Leon's message)`;
+    if (ack) {
+      if (from === hermesAckState) return;
+      await this.#moveNow(issue, hermesAckState, { note, quietHermes: true });
+      this.#log("hermes_ack", { issue: issue.identifier, from });
+      return;
+    }
+    if (from !== hermesAckState && from !== this.#c.intakeState) return;
+    await this.#moveNow(issue, this.#c.leonPingState, { note });
+    this.#log("hermes_answered", { issue: issue.identifier, from, reaction: event.reaction });
   }
 
   /**
@@ -740,6 +850,121 @@ export class Sync {
     await this.#move(issue, to);
     const moved = await this.#linear.issue(issue.id);
     if (moved) await this.syncIssue(moved, "live", post);
+  }
+
+  // ── autolinear's issues ────────────────────────────────────────────────────
+
+  /**
+   * Takes over the channel autolinear opened for an issue it made from one of Leon's Slack
+   * messages (Leon's rule, 2026-11-21: every message gets an issue and a channel at once).
+   * autolinear does only what Leon sees right away (the issue, the channel, the link in his
+   * message, the copy Hermes answers) and calls this through a Durable Object binding as soon as
+   * the channel exists. This invites the bot and Hermes, records the channel, so Hermes's 👀 and ✅
+   * move the issue from then on, and queues an `adopted` job for the rest. Repeating it does nothing.
+   */
+  async adopt(a: Adoption): Promise<void> {
+    if (this.#store.issue(a.issueId)) return;
+    const session = this.#session;
+    if (!session) throw new Error("adopting a channel needs Leon's session to invite the bot");
+    // Invited before the channel is recorded: from then on, any job may post in it.
+    const users = [await this.#botUser(), this.#c.hermesUserId];
+    try {
+      await session("conversations.invite", { channel: a.channelId, users: users.join(",") });
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+      for (const user of users)
+        await tolerate(session("conversations.invite", { channel: a.channelId, users: user }), [
+          "already_in_channel",
+          "cant_invite_self",
+        ]);
+    }
+    this.#store.putIssue({
+      issueId: a.issueId,
+      identifier: a.identifier,
+      title: a.title,
+      stateName: a.stateName,
+      channelId: a.channelId,
+      channelName: a.channelName,
+      section: null,
+      topic: null,
+      archived: false,
+    });
+    this.#store.enqueue(`adopted:${a.issueId}`, "adopted", a, this.#now());
+    this.#log("adopted_channel", { issue: a.identifier, channel: a.channelName });
+  }
+
+  /**
+   * The rest of an adopted channel's setup, off autolinear's path: files the issue in the project
+   * whose channel Leon wrote in, adds a reply's thread to the description, posts the intro (saying
+   * where the issue came from, pinging no one), then sets the topic and section like any sync.
+   */
+  async onAdopted(a: Adoption): Promise<void> {
+    const rec = this.#store.issue(a.issueId);
+    const issue = await this.#linear.issue(a.issueId);
+    if (!rec || rec.archived || !issue) return;
+    const key = `adopted:${a.issueId}`;
+    if (!this.#store.fired(key)) {
+      const update: IssueUpdate = {};
+      const project = this.#store.projectByChannel(a.sourceChannel);
+      if (project) update.projectId = project.projectId;
+      let lead = a.lead;
+      const root =
+        a.sourceThreadTs && a.sourceThreadTs !== a.sourceTs
+          ? await this.#threadRoot(a.sourceChannel, a.sourceThreadTs)
+          : null;
+      if (root?.text) {
+        lead += `\n${excerptQuote(root.text, 300)}`;
+        update.description = `${issue.description ?? ""}\n\n${await this.#inReplyTo(a.sourceChannel, root)}`;
+      }
+      if (Object.keys(update).length) await this.#linear.updateIssue(issue.id, update);
+      await this.#postIntro(rec.channelId, issue, { lead, quiet: true });
+      this.#store.markFired(key, this.#now());
+    }
+    await this.syncIssue((await this.#linear.issue(a.issueId)) ?? issue, "live");
+  }
+
+  /** The first message of a thread, through Leon's session. Null when it can't be read. */
+  async #threadRoot(channelId: string, threadTs: string): Promise<SlackMessage | null> {
+    if (!this.#session) return null;
+    try {
+      const page = await this.#session("conversations.replies", {
+        channel: channelId,
+        ts: threadTs,
+        limit: 1,
+      });
+      const root = (page.messages as SlackMessage[] | undefined)?.[0];
+      return root?.ts === threadTs ? root : null;
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+      this.#log("thread_root_failed", { channel: channelId, error: error.code });
+      return null;
+    }
+  }
+
+  /** A thread's first message, quoted in Markdown for the issue's description. */
+  async #inReplyTo(channelId: string, root: SlackMessage): Promise<string> {
+    const author = root.user
+      ? await this.#nameOf(root.user)
+      : (root.username ?? root.bot_profile?.name ?? "someone");
+    let link = "";
+    try {
+      const data = await this.#session!("chat.getPermalink", {
+        channel: channelId,
+        message_ts: root.ts,
+      });
+      if (typeof data.permalink === "string") link = ` ([thread](${data.permalink}))`;
+    } catch (error) {
+      if (!(error instanceof SlackError)) throw error;
+    }
+    const names = new Map<string, string>();
+    for (const [, id] of (root.text ?? "").matchAll(/<@([UW][A-Z0-9]+)/g))
+      names.set(id!, await this.#nameOf(id!));
+    const quoted = slackToLinear(root.text ?? "", (id) => names.get(id) ?? id)
+      .slice(0, 1500)
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    return `In reply to **${author}**${link}:\n\n${quoted}`;
   }
 
   // ── Times ──────────────────────────────────────────────────────────────────
@@ -1281,12 +1506,18 @@ export class Sync {
     );
   }
 
-  async #postIntro(channelId: string, issue: LinearIssue): Promise<void> {
+  /** `lead` replaces the description's excerpt; `quiet` mentions no one. */
+  async #postIntro(
+    channelId: string,
+    issue: LinearIssue,
+    { lead, quiet = false }: { lead?: string; quiet?: boolean } = {},
+  ): Promise<void> {
     const { name } = parseTitle(issue.title);
     const safe = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const description = issue.description ? linearToSlack(issue.description).trim() : "";
-    const excerpt = description.length > 2500 ? `${description.slice(0, 2500)}…` : description;
-    const mentions = this.#mentions(issue);
+    const excerpt =
+      lead ?? (description.length > 2500 ? `${description.slice(0, 2500)}…` : description);
+    const mentions = quiet ? "" : this.#mentions(issue);
     const text = [
       `*<${issue.url}|${issue.identifier}: ${safe}>* · ${issue.state.name}`,
       excerpt,

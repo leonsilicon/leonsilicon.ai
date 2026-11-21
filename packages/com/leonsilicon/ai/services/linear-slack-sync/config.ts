@@ -31,10 +31,18 @@ export interface SyncConfig {
   hermesAckReaction: string;
   hermesAckState: string;
   /**
+   * When Hermes reacts with one of these (Slack's names: ✅ and ❌) to Leon's message in an issue
+   * channel, it has finished answering it, so an issue still in `hermesAckState` or `intakeState`
+   * moves to `leonPingState`: Leon has a response to read.
+   */
+  hermesDoneReactions: string[];
+  /**
    * When Hermes mentions Leon in an issue channel, it needs something from him, so the issue moves
    * to this status, unless it is already in one of `mentionLeonStates`.
    */
   leonPingState: string;
+  /** The status of an issue made from one of Leon's Slack messages (`Sync.intake`): Linear's default. */
+  intakeState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
   /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
@@ -59,6 +67,7 @@ export const DEFAULT_SECTION_ORDER = [
   "Awaiting Others",
   "Awaiting Listener",
   "Awaiting Hermes",
+  "Awaiting Init",
   "Awaiting Start",
   "Executing",
   "Awaiting Date",
@@ -89,7 +98,9 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
     hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
+    hermesDoneReactions: list(env.HERMES_DONE_REACTIONS, ["white_check_mark", "x"]),
     leonPingState: env.LEON_PING_STATE ?? "Awaiting Leon",
+    intakeState: env.INTAKE_STATE ?? "Awaiting Init",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",

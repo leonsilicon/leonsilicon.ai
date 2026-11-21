@@ -1,0 +1,16 @@
+{
+  "name": "@-apps/autolinear",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.autolinear": "workspace:*",
+    "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
+    "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
+    "@-/com.leonsilicon.www": "workspace:*"
+  },
+  "varlock": {
+    "loadPath": "../../",
+    "filter": "#autolinear"
+  }
+}

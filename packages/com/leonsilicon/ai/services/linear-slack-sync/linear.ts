@@ -67,6 +67,11 @@ export interface LinearApi {
     integrationId: string;
   }): Promise<void>;
   states(teamKey: string): Promise<LinearState[]>;
+  /**
+   * Creates an issue in the team with the given ID, so a retry reuses it: Linear refuses a second
+   * issue with the same ID ("already exists").
+   */
+  createIssue(input: NewIssue): Promise<LinearIssue>;
   createComment(input: {
     id: string;
     issueId: string;
@@ -77,11 +82,29 @@ export interface LinearApi {
   updateIssue(id: string, input: IssueUpdate): Promise<void>;
 }
 
+/** An issue to create: `id` is a UUID chosen by the caller. */
+export interface NewIssue {
+  id: string;
+  teamId: string;
+  title: string;
+  description: string;
+  stateId: string;
+  projectId?: string;
+}
+
+/** A team's ID and statuses, which creating an issue needs. */
+export interface LinearTeam {
+  id: string;
+  states: LinearState[];
+}
+
 /** The issue fields the sync changes. `dueDate` is `YYYY-MM-DD`, or null to clear it. */
 export interface IssueUpdate {
   stateId?: string;
   title?: string;
+  description?: string;
   dueDate?: string | null;
+  projectId?: string;
 }
 
 export class LinearError extends Error {
@@ -308,6 +331,29 @@ export class LinearClient implements LinearApi {
       { team: teamKey },
     );
     return data.workflowStates.nodes;
+  }
+
+  /** The team with this key, or null. Callers cache it: creating an issue then takes one request. */
+  async team(key: string): Promise<LinearTeam | null> {
+    const data = await this.gql<{
+      teams: { nodes: { id: string; states: { nodes: LinearState[] } }[] };
+    }>(
+      `query($key: String!) { teams(filter: { key: { eq: $key } }) {
+        nodes { id states(first: 100) { nodes { id name type } } } } }`,
+      { key },
+    );
+    const node = data.teams.nodes[0];
+    return node ? { id: node.id, states: node.states.nodes } : null;
+  }
+
+  async createIssue(input: NewIssue) {
+    const data = await this.gql<{ issueCreate: { success: boolean; issue: IssueNode | null } }>(
+      `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
+      { input },
+    );
+    if (!data.issueCreate.success || !data.issueCreate.issue)
+      throw new LinearError("issueCreate failed");
+    return toIssue(data.issueCreate.issue);
   }
 
   async createComment(input: { id: string; issueId: string; body: string; parentId?: string }) {
