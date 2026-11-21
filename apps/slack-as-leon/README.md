@@ -8,7 +8,7 @@ Hermes Cloud ──▶ slack-puppet.leonsilicon.ai ──▶ Worker "slack-as-le
      └──── slack-as-leon-guard drops Slack's echo of the post (marked client_msg_id) ◀┘
 ```
 
-The other `*.leonsilicon.ai` services run on the mini behind the [ai-edge](../ai-edge/README.md) Worker. This one is a Worker of its own, so it works whether or not the mini is up. Its Custom Domain has its own certificate, which a two-level name needs.
+This is a Worker of its own, like every `*.leonsilicon.ai` service since 2026-11-21. Until then the others ran on the Mac mini behind an edge Worker. Its Custom Domain has its own certificate, which a two-level name needs.
 
 ## Pieces
 

@@ -61,8 +61,6 @@ export default defineConfig({
           `${ai}/configs/silicon-dot/agents-vault/__tests__/*.test.ts`,
           `${ai}/configs/todoist-automations/__tests__/*.test.ts`,
           ...[
-            "ai-edge",
-            "ai-gateway",
             "autolinear",
             "beeper-inbox",
             "beeper-watch",
@@ -93,10 +91,6 @@ export default defineConfig({
       "test:unsnooze-patch": {
         cache: false,
         command: `node --test ${ai}/configs/patching/codemods/unsnooze/__tests__/connection-loss.integration.mjs`,
-      },
-      "deploy:ai-edge": {
-        cache: false,
-        command: "tsc --noEmit && vp build && wrangler deploy --config apps/ai-edge/wrangler.jsonc",
       },
       "deploy:autolinear": {
         cache: false,

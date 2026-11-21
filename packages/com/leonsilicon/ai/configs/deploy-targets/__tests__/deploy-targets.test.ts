@@ -10,7 +10,6 @@ const workspace = readWorkspace(root);
 test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", () => {
   const apps = workspace.workers.map((worker) => worker.app);
   assert.deepEqual(apps, [
-    "ai-edge",
     "autolinear",
     "cronometer",
     "gmail-feed",
@@ -25,7 +24,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
 test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
-  assert.deepEqual(affected("apps/ai-edge/worker.ts"), ["ai-edge"]);
+  assert.deepEqual(affected("apps/gmail-feed/worker.ts"), ["gmail-feed"]);
   // A Python Worker: its entry, the upstream source it carries and its Python lockfile.
   assert.deepEqual(affected("apps/cronometer/src/entry.py"), ["cronometer"]);
   assert.deepEqual(affected("apps/cronometer/src/cronometer_mcp/client.py"), ["cronometer"]);
@@ -45,8 +44,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack-as-leon",
   ]);
   // Shared inputs reach every Worker: the pages, the lockfile, the env schema.
-  assert.deepEqual(affected("www/ai/leonsilicon/orca/index.html"), [
-    "ai-edge",
+  assert.deepEqual(affected("www/ai/leonsilicon/cronometer/index.html"), [
     "autolinear",
     "cronometer",
     "gmail-feed",
@@ -54,7 +52,6 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack-as-leon",
   ]);
   assert.deepEqual(affected("bun.lock"), [
-    "ai-edge",
     "autolinear",
     "cronometer",
     "gmail-feed",
@@ -62,7 +59,6 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack-as-leon",
   ]);
   assert.deepEqual(affected("packages/com/leonsilicon/www/page.ts"), [
-    "ai-edge",
     "autolinear",
     "cronometer",
     "gmail-feed",

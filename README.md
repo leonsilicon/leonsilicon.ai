@@ -2,29 +2,25 @@
 
 Leon's AI setup, in public: what runs on `leonsilicon.ai` and its subdomains, the Hermes plugins and agent tooling around it, organized as a [Flatcap](https://github.com/leonsilicon/flatcap) workspace with Vite+. Secrets and anything identifying (Slack IDs, tailnet hosts, usernames, private paths) live in Infisical, not here.
 
-Each site's entrypoint is `www/<hostname, labels reversed>/index.html`: `orca.leonsilicon.ai` is [`www/ai/leonsilicon/orca/index.html`](www/ai/leonsilicon/orca/index.html).
+Each site's entrypoint is `www/<hostname, labels reversed>/index.html`: `cronometer.leonsilicon.ai` is [`www/ai/leonsilicon/cronometer/index.html`](www/ai/leonsilicon/cronometer/index.html).
 
 ## `*.leonsilicon.ai`
 
-Services for Leon's agents (Hermes Cloud and others). The MCP servers each check their own bearer token. Browsers get the page in `www/`.
+Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker of its own. The MCP servers each check their own bearer token. Browsers get the page in `www/`.
 
-| Site                                                         | What it is                                                                                                      | Runs on                                              |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [`orca`](www/ai/leonsilicon/orca/index.html)                 | [Orca bridge](apps/orca-bridge/README.md), stopped 2026-11-21                                                   | Mac mini, through [ai-edge](apps/ai-edge/README.md)  |
-| [`grok`](www/ai/leonsilicon/grok/index.html)                 | [Grok Bot relay, old copy](packages/com/leonsilicon/ai/configs/grok-relay-hermes/README.md), stopped 2026-11-21 | Mac mini, through ai-edge                            |
-| [`beeper`](www/ai/leonsilicon/beeper/index.html)             | Beeper Desktop's own MCP (no source of ours), stopped 2026-11-21: Hermes uses its own inbox                     | Mac mini, through ai-edge                            |
-| [`watch`](www/ai/leonsilicon/watch/index.html)               | [Beeper Watch](apps/beeper-watch/README.md), moved to Hermes Cloud 2026-11-21                                   | Mac mini, through ai-edge                            |
-| [`cronometer`](www/ai/leonsilicon/cronometer/index.html)     | [Cronometer](apps/cronometer/README.md)                                                                         | Its own Cloudflare Worker (Python), since 2026-11-21 |
-| [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html) | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                                                     | Its own Cloudflare Worker                            |
-| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html) | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                                                         | Its own Cloudflare Worker                            |
-| [`autolinear`](www/ai/leonsilicon/autolinear/index.html)     | [autolinear: an issue and channel per Slack message](apps/autolinear/README.md)                                 | Its own Cloudflare Worker                            |
-| [`gmail-feed`](www/ai/leonsilicon/gmail-feed/index.html)     | [Gmail feed: every email into Slack](apps/gmail-feed/README.md)                                                 | Its own Cloudflare Worker                            |
+| Site                                                         | What it is                                                                      | Runs on                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [`cronometer`](www/ai/leonsilicon/cronometer/index.html)     | [Cronometer](apps/cronometer/README.md)                                         | Its own Cloudflare Worker (Python), since 2026-11-21 |
+| [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html) | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                     | Its own Cloudflare Worker                            |
+| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html) | [Linear ⇄ Slack sync](apps/linear-slack-sync/README.md)                         | Its own Cloudflare Worker                            |
+| [`autolinear`](www/ai/leonsilicon/autolinear/index.html)     | [autolinear: an issue and channel per Slack message](apps/autolinear/README.md) | Its own Cloudflare Worker                            |
+| [`gmail-feed`](www/ai/leonsilicon/gmail-feed/index.html)     | [Gmail feed: every email into Slack](apps/gmail-feed/README.md)                 | Its own Cloudflare Worker                            |
 
-The [endpoint map](apps/ai-gateway/README.md) has the mini's local targets.
+Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also served `orca`, `grok`, `beeper` and `watch` here, and `cronometer` ran there too. What they did now runs on Hermes Cloud (below) or as a Worker, so those four names and all three pieces were removed, and the mini serves nothing public. The git history has them.
 
 ## On Hermes Cloud
 
-Services that run on Hermes Cloud's own machine, as local MCP servers with no public address. The plan is to move everything that is still on the mini here or onto Workers.
+Services that run on Hermes Cloud's own machine, as local MCP servers with no public address.
 
 | What                                                                    | State                                                                                                                              |
 | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

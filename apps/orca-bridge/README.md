@@ -1,8 +1,8 @@
 # @-apps/orca-bridge
 
-Ran the [Orca bridge](../../packages/com/leonsilicon/ai/services/orca-bridge/README.md) on the Mac mini from 2026-11-12, so Hermes Cloud kept Orca when the MacBook slept. Public URL: `https://orca.leonsilicon.ai`, through the [ai-gateway](../ai-gateway/README.md).
+Ran the [Orca bridge](../../packages/com/leonsilicon/ai/services/orca-bridge/README.md) on the Mac mini from 2026-11-12, so Hermes Cloud kept Orca when the MacBook slept. Public URL: `https://orca.leonsilicon.ai`, through the ai-gateway.
 
-**Stopped on 2026-11-21.** Hermes Cloud has been its own [Orca device](../orca-device/README.md) since 2026-11-19 and no longer uses the bridge, so its LaunchAgent `com.leonsilicon.orca-bridge` was stopped and disabled (`launchctl bootout`, then `launchctl disable`). `orca.leonsilicon.ai` answers 502 until the route is removed with the rest of the gateway. The mini's own Orca (`dev.onorca.serve`) and its watchdog (`com.leonsilicon.orca-watchdog`) still run: Hermes's Orca device reaches the mini through them. To bring the bridge back: `launchctl enable gui/$(id -u)/com.leonsilicon.orca-bridge`, then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.orca-bridge.plist` on the mini.
+**Stopped on 2026-11-21.** Hermes Cloud has been its own [Orca device](../orca-device/README.md) since 2026-11-19 and no longer uses the bridge, so its LaunchAgent `com.leonsilicon.orca-bridge` was stopped and disabled (`launchctl bootout`, then `launchctl disable`). `orca.leonsilicon.ai` no longer exists: the gateway, its tunnel and the edge Worker that carried it were removed the same day. The mini's own Orca (`dev.onorca.serve`) and its watchdog (`com.leonsilicon.orca-watchdog`) still run: Hermes's Orca device reaches the mini through them. To bring the bridge back: `launchctl enable gui/$(id -u)/com.leonsilicon.orca-bridge`, then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.orca-bridge.plist` on the mini, and give it a public route again.
 
 The rest of this page describes the bridge as it ran.
 

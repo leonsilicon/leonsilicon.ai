@@ -19,22 +19,6 @@
         "wrangler": "catalog:",
       },
     },
-    "apps/ai-edge": {
-      "name": "@-apps/ai-edge",
-      "dependencies": {
-        "@-/com.leonsilicon.ai.services.ai-edge": "workspace:*",
-        "@-/com.leonsilicon.www": "workspace:*",
-      },
-    },
-    "apps/ai-gateway": {
-      "name": "@-apps/ai-gateway",
-      "bin": {
-        "_deploy-ai-gateway": "./_deploy-ai-gateway.sh",
-      },
-      "dependencies": {
-        "@-/com.leonsilicon.ai.services.ai-gateway": "workspace:*",
-      },
-    },
     "apps/autolinear": {
       "name": "@-apps/autolinear",
       "dependencies": {
@@ -163,17 +147,6 @@
         "@todoist/automations-cli": "catalog:",
         "varlock": "catalog:",
       },
-    },
-    "packages/com/leonsilicon/ai/services/ai-edge": {
-      "name": "@-/com.leonsilicon.ai.services.ai-edge",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@-/com.leonsilicon.ai.services.ai-gateway": "workspace:*",
-      },
-    },
-    "packages/com/leonsilicon/ai/services/ai-gateway": {
-      "name": "@-/com.leonsilicon.ai.services.ai-gateway",
-      "version": "1.0.0",
     },
     "packages/com/leonsilicon/ai/services/autolinear": {
       "name": "@-/com.leonsilicon.ai.services.autolinear",
@@ -357,10 +330,6 @@
 
     "@-/com.leonsilicon.ai.configs.todoist-automations": ["@-/com.leonsilicon.ai.configs.todoist-automations@workspace:packages/com/leonsilicon/ai/configs/todoist-automations"],
 
-    "@-/com.leonsilicon.ai.services.ai-edge": ["@-/com.leonsilicon.ai.services.ai-edge@workspace:packages/com/leonsilicon/ai/services/ai-edge"],
-
-    "@-/com.leonsilicon.ai.services.ai-gateway": ["@-/com.leonsilicon.ai.services.ai-gateway@workspace:packages/com/leonsilicon/ai/services/ai-gateway"],
-
     "@-/com.leonsilicon.ai.services.autolinear": ["@-/com.leonsilicon.ai.services.autolinear@workspace:packages/com/leonsilicon/ai/services/autolinear"],
 
     "@-/com.leonsilicon.ai.services.beeper-inbox": ["@-/com.leonsilicon.ai.services.beeper-inbox@workspace:packages/com/leonsilicon/ai/services/beeper-inbox"],
@@ -410,10 +379,6 @@
     "@-/com.npmjs.yaml": ["@-/com.npmjs.yaml@workspace:packages/com/npmjs/yaml"],
 
     "@-/com.npmjs.zod": ["@-/com.npmjs.zod@workspace:packages/com/npmjs/zod"],
-
-    "@-apps/ai-edge": ["@-apps/ai-edge@workspace:apps/ai-edge"],
-
-    "@-apps/ai-gateway": ["@-apps/ai-gateway@workspace:apps/ai-gateway"],
 
     "@-apps/autolinear": ["@-apps/autolinear@workspace:apps/autolinear"],
 

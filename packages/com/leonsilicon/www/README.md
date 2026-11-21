@@ -1,10 +1,10 @@
 # @-/com.leonsilicon.www
 
-Serves the pages in [`www/`](../../../../www) from Cloudflare Workers. A hostname's pages live in `www/` under its labels reversed, the same way packages are named: `orca.leonsilicon.ai` is `www/ai/leonsilicon/orca/index.html`. Vite builds every `www/**/index.html` into `dist/www`, which each Worker uploads as its static assets.
+Serves the pages in [`www/`](../../../../www) from Cloudflare Workers. A hostname's pages live in `www/` under its labels reversed, the same way packages are named: `cronometer.leonsilicon.ai` is `www/ai/leonsilicon/cronometer/index.html`. Vite builds every `www/**/index.html` into `dist/www`, which each Worker uploads as its static assets.
 
 ## Behavior
 
-- A browser asking for `https://<host>/<path>` (GET or HEAD with `Accept: text/html`) gets `dist/www/<reversed host>/<path>`, with `index.html` added to a path that ends in `/`. So `https://orca.leonsilicon.ai/` is that service's page.
+- A browser asking for `https://<host>/<path>` (GET or HEAD with `Accept: text/html`) gets `dist/www/<reversed host>/<path>`, with `index.html` added to a path that ends in `/`. So `https://cronometer.leonsilicon.ai/` is that service's page.
 - `/assets/*` (Vite's hashed scripts and styles, shared by every page) is served for any host.
 - Anything else, and anything the build doesn't have, is left to the Worker's own handler. MCP clients ask for JSON or `text/event-stream`, never `text/html`, so the MCP endpoint at `/` keeps working, and so does `/healthz` in a browser.
 - Paths resolve under the host's own directory, so one host can't serve another's pages.
@@ -25,7 +25,7 @@ The Worker needs an assets binding with `run_worker_first`, so it decides before
 
 From `@-/com.leonsilicon.www` (Worker side):
 
-- `sitePath(host)`: the `www/` directory for a hostname, such as `/ai/leonsilicon/orca/`, or `null` for anything that isn't a plain DNS name.
+- `sitePath(host)`: the `www/` directory for a hostname, such as `/ai/leonsilicon/cronometer/`, or `null` for anything that isn't a plain DNS name.
 - `serveSite(request, assets)`: the page or shared asset for a request, or `null` when the Worker's own handler should answer.
 - `Assets`: the assets binding's type. `SHARED_ASSETS` is `/assets/`.
 

@@ -4,16 +4,16 @@ This workspace follows the [Flatcap convention](https://github.com/leonsilicon/f
 
 ## Workspace layout
 
-| Location                                          | Purpose                                                                                                                                                                                               |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `www/<hostname, labels reversed>/index.html`      | A site's entrypoint: `www/ai/leonsilicon/orca/index.html` is `orca.leonsilicon.ai`                                                                                                                    |
-| `apps/<name>/`                                    | Deployable entrypoints (Workers and Mac mini services), deploy commands and `@assets/`                                                                                                                |
-| `packages/com/leonsilicon/www/`                   | Serves the built pages from Workers, plus the script and styles the pages share                                                                                                                       |
-| `packages/com/leonsilicon/ai/services/<name>/`    | The services behind `*.leonsilicon.ai`                                                                                                                                                                |
-| `packages/com/leonsilicon/ai/configs/<name>/`     | Grok relay and Cronometer (copies of what runs on the mini outside this workspace), the mini env-file renderer, Unsnooze patching, Silicon Dot's agents-vault, and the Todoist Automations' manifests |
-| `packages/com/leonsilicon/hermes/plugins/<name>/` | Hermes plugins, installed to `$HERMES_HOME/plugins/<name>/` on Hermes Cloud                                                                                                                           |
-| `packages/com/npmjs/`                             | Wrappers for upstream runtime dependencies                                                                                                                                                            |
-| `patches.gen/`                                    | Committed versioned diffs generated from codemods                                                                                                                                                     |
+| Location                                          | Purpose                                                                                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `www/<hostname, labels reversed>/index.html`      | A site's entrypoint: `www/ai/leonsilicon/cronometer/index.html` is `cronometer.leonsilicon.ai`                                                                                                                |
+| `apps/<name>/`                                    | Deployable entrypoints (Workers and what runs on Hermes Cloud), deploy commands and `@assets/`                                                                                                                |
+| `packages/com/leonsilicon/www/`                   | Serves the built pages from Workers, plus the script and styles the pages share                                                                                                                               |
+| `packages/com/leonsilicon/ai/services/<name>/`    | The services behind `*.leonsilicon.ai` and on Hermes Cloud                                                                                                                                                    |
+| `packages/com/leonsilicon/ai/configs/<name>/`     | The Grok relay and Cronometer as they ran on the Mac mini until 2026-11-21 (kept for reference), the env-file renderer, Unsnooze patching, Silicon Dot's agents-vault, and the Todoist Automations' manifests |
+| `packages/com/leonsilicon/hermes/plugins/<name>/` | Hermes plugins, installed to `$HERMES_HOME/plugins/<name>/` on Hermes Cloud                                                                                                                                   |
+| `packages/com/npmjs/`                             | Wrappers for upstream runtime dependencies                                                                                                                                                                    |
+| `patches.gen/`                                    | Committed versioned diffs generated from codemods                                                                                                                                                             |
 
 Applications use `@-apps/<folder>`. Package names mirror their path beneath `packages/`, joined with dots: `packages/com/leonsilicon/www` becomes `@-/com.leonsilicon.www`. Upstream npm packages are wrapped in `packages/com/npmjs/<name>`.
 
@@ -48,17 +48,17 @@ vp check
 vp build
 ```
 
-Tests need no credentials. Runtime dependencies belong to the consuming package, so the Mac mini's production install (`bun install --production`) doesn't need root development tooling.
+Tests need no credentials. Runtime dependencies belong to the consuming package, so a production install (`bun install --production`) doesn't need root development tooling.
 
 ## Secrets and config
 
-This repository is public, so nothing private is committed: not secrets, and not identifiers either, such as Slack user and channel IDs, tailnet hosts and IPs, usernames or private paths. They live in Infisical, and [varlock](https://varlock.dev) loads them through the root [`.env.schema`](.env.schema). Cloudflare resource IDs (KV namespace, Workers VPC service, tunnel) do stay in the Wrangler and cloudflared configs: they grant nothing without the account's credentials.
+This repository is public, so nothing private is committed: not secrets, and not identifiers either, such as Slack user and channel IDs, tailnet hosts and IPs, usernames or private paths. They live in Infisical, and [varlock](https://varlock.dev) loads them through the root [`.env.schema`](.env.schema). Cloudflare resource IDs (KV namespaces) do stay in the Wrangler configs: they grant nothing without the account's credentials.
 
 - **Infisical.** The project whose ID is in `.env.schema`, environment `prod` (override with `INFISICAL_ENVIRONMENT`), one folder per app (`/slack-as-leon`, `/linear-slack-sync`, `/autolinear`, `/gmail-feed`, `/orca-bridge`, `/beeper-watch`, `/hermes`, `/agents-vault`, `/todoist-automations`, `/cronometer`) and `/shared` for values several apps use, such as Leon's Slack session. The schema says which keys each folder needs.
-- **Access.** A Machine Identity (Universal Auth) in the project: `leonsilicon.com-repo` (named before the move to leonsilicon.ai), role Member, so it can write values as well as read them. Its `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` go in `.env` at the root (gitignored); add a client secret on the identity's Universal Auth page for another machine. `vpx varlock load --filter '#orca-bridge'` checks one app's values, with secrets redacted.
+- **Access.** A Machine Identity (Universal Auth) in the project: `leonsilicon.com-repo` (named before the move to leonsilicon.ai), role Member, so it can write values as well as read them. Its `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` go in `.env` at the root (gitignored); add a client secret on the identity's Universal Auth page for another machine. `vpx varlock load --filter '#gmail-feed'` checks one app's values, with secrets redacted.
 - **Tags.** Every schema item is tagged with the app that uses it, and an app loads only its own tag. A filtered load resolves nothing else, so one app's deploy never fetches, or uploads, another's secrets.
-- **Workers.** `vpr -w deploy:slack-as-leon`, `vpr -w deploy:linear-slack-sync`, `vpr -w deploy:autolinear` and `vpr -w deploy:gmail-feed` run `varlock-wrangler deploy` in the app's directory, whose `package.json` sets `varlock.filter`. Sensitive values become Worker secrets and the rest vars, replacing everything the Worker had, so change values in Infisical rather than with `wrangler secret put`. It also uploads `__VARLOCK_ENV`, the same values as one secret, which the Worker doesn't read. The `ai-edge` Worker has no config and deploys with plain `wrangler`.
-- **Mini services.** `--start` writes `~/.config/<app>/env` (mode 600) on the mini with [`_env-file`](packages/com/leonsilicon/ai/configs/env-file/README.md), straight over SSH, before restarting the service. The values never touch the local disk, and nothing on the mini needs Infisical access.
+- **Workers.** `vpr -w deploy:slack-as-leon`, `vpr -w deploy:linear-slack-sync`, `vpr -w deploy:autolinear`, `vpr -w deploy:gmail-feed` and `vpr -w deploy:cronometer` run `varlock-wrangler deploy` in the app's directory, whose `package.json` sets `varlock.filter`. Sensitive values become Worker secrets and the rest vars, replacing everything the Worker had, so change values in Infisical rather than with `wrangler secret put`. It also uploads `__VARLOCK_ENV`, the same values as one secret, which the Worker doesn't read.
+- **Env files.** [`_env-file`](packages/com/leonsilicon/ai/configs/env-file/README.md) renders an app's items as a `KEY='value'` file. Beeper Watch on Hermes Cloud reads one, `vpx _env-file beeper-watch` put in its directory there ([its README](apps/beeper-watch/README.md) has the details). The Mac mini services, all retired on 2026-11-21, read theirs from `~/.config/<app>/env`, written over SSH by their `--start` deploy scripts.
 - **Hermes Cloud and agents-vault.** The `#hermes` items are set in Hermes's own env (its dashboard's Keys page) by hand, and the agents-vault installer takes `#agents-vault` through `vpx varlock run --filter '#agents-vault' --`.
 - **Adding a value.** Add the item to `.env.schema` with its app's tag: a literal for anything public, `infisical(leonsilicon, "<KEY>", "/<app>")` and `@sensitive` for anything private. Then add the value to Infisical.
 
@@ -68,22 +68,19 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 
 **The Workers deploy themselves.** A push to `main` runs CI's checks and then [Deploy](.github/workflows/deploy.yml), which deploys every Worker the push changed since the last successful run. The changed set is worked out by [deploy-targets](packages/com/leonsilicon/ai/configs/deploy-targets/README.md) from the workspace dependency graph: a Worker's app, every package it reaches, and the shared inputs (`www/`, the lockfile, root config, `.env.schema`). Docs and tests don't trigger it. A failed deploy is retried by the next push. The same workflow publishes the [Todoist Automations](packages/com/leonsilicon/ai/configs/todoist-automations/README.md) on every run, since the repo is their source of truth. To deploy by hand, run Actions → Deploy with `all` or a list of Workers, or run the commands below. Everything else is still deployed by hand.
 
-| What                         | Command                                                                                                           |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `ai-edge` Worker             | Automatic on push to `main`; by hand `vpr -w deploy:ai-edge`                                                      |
-| `slack-as-leon` Worker       | Automatic on push to `main`; by hand `vpr -w deploy:slack-as-leon`                                                |
-| `linear-slack-sync` Worker   | Automatic on push to `main`; by hand `vpr -w deploy:linear-slack-sync`                                            |
-| `autolinear` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:autolinear` (after `linear-slack-sync` when `/adopt` changes) |
-| `gmail-feed` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                   |
-| `cronometer` Worker (Python) | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                   |
-| Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                |
-| Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)        |
-| ai-gateway and tunnel (mini) | `apps/ai-gateway/_deploy-ai-gateway.sh [--start]`                                                                 |
-| Orca bridge (mini)           | `apps/orca-bridge/_deploy-orca-bridge.sh [--start]`                                                               |
-| Beeper Watch (mini)          | `apps/beeper-watch/_deploy-beeper-watch.sh [--start]`                                                             |
-| Todoist Automations          | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                      |
+| What                         | Command                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `slack-as-leon` Worker       | Automatic on push to `main`; by hand `vpr -w deploy:slack-as-leon`                                                                        |
+| `linear-slack-sync` Worker   | Automatic on push to `main`; by hand `vpr -w deploy:linear-slack-sync`                                                                    |
+| `autolinear` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:autolinear` (after `linear-slack-sync` when `/adopt` changes)                         |
+| `gmail-feed` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                           |
+| `cronometer` Worker (Python) | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                           |
+| Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                        |
+| Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                |
+| Grok relay, Beeper Watch     | Part of the Beeper inbox release above. Beeper Watch's settings are a file on Hermes Cloud; see [its README](apps/beeper-watch/README.md) |
+| Todoist Automations          | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                              |
 
-The Worker tasks typecheck and build `www/` before deploying, and every command that writes config needs Infisical access. The mini scripts copy this workspace to the mini over SSH (`DEPLOY_HOST`, default `mini`) and install production dependencies there. The Grok relay and Cronometer are copied by hand; their READMEs have the steps.
+The Worker tasks typecheck and build `www/` before deploying, and every command that writes config needs Infisical access. Nothing is deployed to the Mac mini any more: the scripts that did it (`apps/orca-bridge/_deploy-orca-bridge.sh`, `apps/beeper-watch/_deploy-beeper-watch.sh`) stay with the retired services they belong to.
 
 ## Patching
 

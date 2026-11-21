@@ -1,15 +1,15 @@
 name: Deploy
 
-# Deploys the Cloudflare Workers (ai-edge, autolinear, gmail-feed, linear-slack-sync, slack-as-leon / slack-puppet) whose code
+# Deploys the Cloudflare Workers (autolinear, cronometer, gmail-feed, linear-slack-sync, slack-as-leon / slack-puppet) whose code
 # changed since the last successful run on main, and publishes the Todoist Automations on every run. CI
 # calls this after its checks pass on a push to main; it can also be run by hand (Actions → Deploy → Run
-# workflow) for all or chosen Workers. The Mac mini services and Hermes Cloud are deployed by hand
+# workflow) for all or chosen Workers. What runs on Hermes Cloud is deployed by hand
 # (DEVELOPMENT.md).
 #
 # Secrets live in the `production` environment, which only main can use: CLOUDFLARE_API_TOKEN (an
-# account-owned token: Workers Scripts edit, Workers Routes edit on leonsilicon.ai, Connectivity
-# Directory bind for ai-edge's VPC service, Account Settings read), INFISICAL_CLIENT_ID and
-# INFISICAL_CLIENT_SECRET (varlock resolves #slack-as-leon / #linear-slack-sync / #autolinear / #gmail-feed / #todoist-automations,
+# account-owned token: Workers Scripts edit, Workers Routes edit on leonsilicon.ai, Account Settings read; its Connectivity
+# Directory bind permission was for the edge Worker removed on 2026-11-21 and is unused), INFISICAL_CLIENT_ID and
+# INFISICAL_CLIENT_SECRET (varlock resolves #slack-as-leon / #linear-slack-sync / #autolinear / #gmail-feed / #cronometer / #todoist-automations,
 # Todoist's API token included, from Infisical), and the CLOUDFLARE_ACCOUNT_ID variable.
 
 on:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers to deploy: all, or a comma-separated list (ai-edge, autolinear, cronometer, gmail-feed, linear-slack-sync, slack-as-leon)"
+        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, gmail-feed, linear-slack-sync, slack-as-leon)"
         required: true
         default: all
 

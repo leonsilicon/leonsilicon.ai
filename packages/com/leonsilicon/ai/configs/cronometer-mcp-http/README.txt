@@ -6,7 +6,8 @@ com.leonsilicon.cronometer-mcp-http on the mini was stopped and disabled; the lo
 the mini's files into Infisical (/cronometer). The rest of this file describes the mini's setup as it ran.
 To bring it back: `launchctl enable gui/$(id -u)/com.leonsilicon.cronometer-mcp-http`, then
 `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.cronometer-mcp-http.plist` there,
-and put the cronometer route and Custom Domain back in the gateway and the ai-edge Worker.
+and give it a public route again: the gateway, its tunnel and the ai-edge Worker that carried this one were
+removed the same day (the git history has them).
 
 Upstream is rollecode/cronometer-mcp (MIT), which talks to mobile.cronometer.com, the API Cronometer's
 Android app uses. It needs no Gold subscription. Its client began as a copy of rwestergren/cronometer-api-mcp,
@@ -63,5 +64,5 @@ Update:   ssh mini 'cd ~/.local/share/cronometer-mcp && git fetch && git log --o
 Rotate:   new `openssl rand -hex 32` in the token file, kickstart, then have a Grok bot ask for CRONOMETER_MCP_TOKEN again
           through its secure field (fill it with `orca computer set-value --value-stdin` from the mini) and restart the connector.
 Stop public access to Cronometer only:
-          remove the `cronometer` route and Custom Domain (see "Turn one service off" in apps/ai-gateway/README.md)
+          remove the `cronometer` route and Custom Domain (the gateway's README, now only in the git history, had the steps)
           and redeploy the gateway and the ai-edge Worker.

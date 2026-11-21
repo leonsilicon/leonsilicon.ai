@@ -47,9 +47,9 @@ Hermes's log showed its Grok tools failing since the day before with "Beeper Des
 - **Config.** The old `grok` entry is saved in `/opt/data/backups/mcp-grok-relay-mini-20261121.json`. The new one is `command: node`, `args: [/opt/data/beeper-inbox/app/beeper-inbox.mjs, mcp, grok-relay]`.
 - **Gateway.** A running gateway keeps the old server, so it was restarted while idle (no active agents). Slack, the relay platform and the API server reconnected within a minute.
 - **From a Hermes session** (a one-off cron agent run): `grok_bots` returned 14 bots, and `grok_bot_read` showed the test exchange with Hermes's message as "Hermes (as Leon)".
-- **The mini.** Its queue was empty and its log showed no use since 2026-11-19. `com.leonsilicon.grok-relay-hermes` was stopped and disabled there. `com.leonsilicon.beeper-watchdog` stays while Beeper Watch still reads Beeper Desktop.
+- **The mini.** Its queue was empty and its log showed no use since 2026-11-19. `com.leonsilicon.grok-relay-hermes` was stopped and disabled there. `com.leonsilicon.beeper-watchdog` stays, since Beeper Watch moved here too only to keep Tailscale up.
 
-To go back: restore the saved entry, restart the gateway when idle, and on the mini run `launchctl enable gui/$(id -u)/com.leonsilicon.grok-relay-hermes` and `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.grok-relay-hermes.plist`. That path needs Beeper Desktop on the mini to work again.
+To go back: restore the saved entry, restart the gateway when idle, and on the mini run `launchctl enable gui/$(id -u)/com.leonsilicon.grok-relay-hermes` and `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leonsilicon.grok-relay-hermes.plist`. That path needs Beeper Desktop on the mini to work again. Its public address went with the gateway, the tunnel and the edge Worker, all removed on 2026-11-21, so that path would need a new route to the mini as well.
 
 ## State
 
