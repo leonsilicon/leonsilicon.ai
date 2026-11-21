@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Grok Bot admin · grokbot-admin.leonsilicon.ai</title>
+  </head>
+  <body>
+    <main>
+      <p class="host">grokbot-admin.leonsilicon.ai</p>
+      <h1>Grok Bot admin</h1>
+      <p>
+        An MCP server Leon's Grok Bot bots use to list and delete his bots, which the Grok Bot app
+        doesn't let them do. This page only shows whether its sign-in still works.
+      </p>
+      <dl>
+        <dt>Status</dt>
+        <dd data-health>Checking…</dd>
+      </dl>
+    </main>
+    <script type="module">
+      import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
+
+      void mountServicePage();
+    </script>
+  </body>
+</html>

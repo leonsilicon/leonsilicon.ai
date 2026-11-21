@@ -68,6 +68,13 @@
         "@-/ai.leonsilicon.services.gmail-feed": "workspace:*",
       },
     },
+    "apps/grok-bot-roster": {
+      "name": "@-apps/grok-bot-roster",
+      "dependencies": {
+        "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+        "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*",
+      },
+    },
     "apps/linear-slack-sync": {
       "name": "@-apps/linear-slack-sync",
       "dependencies": {
@@ -199,6 +206,10 @@
         "@-/ai.leonsilicon.services.beeper-watch": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
       },
+    },
+    "packages/ai/leonsilicon/services/grok-bot-roster": {
+      "name": "@-/ai.leonsilicon.services.grok-bot-roster",
+      "version": "2.0.0",
     },
     "packages/ai/leonsilicon/services/grok-relay": {
       "name": "@-/ai.leonsilicon.services.grok-relay",
@@ -334,6 +345,12 @@
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
       },
     },
+    "www/ai/leonsilicon/grokbot-admin": {
+      "name": "@-apps/ai.leonsilicon.grokbot-admin",
+      "dependencies": {
+        "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+      },
+    },
     "www/ai/leonsilicon/linear-slack": {
       "name": "@-apps/ai.leonsilicon.linear-slack",
       "dependencies": {
@@ -396,6 +413,8 @@
 
     "@-/ai.leonsilicon.services.gmail-feed": ["@-/ai.leonsilicon.services.gmail-feed@workspace:packages/ai/leonsilicon/services/gmail-feed"],
 
+    "@-/ai.leonsilicon.services.grok-bot-roster": ["@-/ai.leonsilicon.services.grok-bot-roster@workspace:packages/ai/leonsilicon/services/grok-bot-roster"],
+
     "@-/ai.leonsilicon.services.grok-relay": ["@-/ai.leonsilicon.services.grok-relay@workspace:packages/ai/leonsilicon/services/grok-relay"],
 
     "@-/ai.leonsilicon.services.linear-slack-sync": ["@-/ai.leonsilicon.services.linear-slack-sync@workspace:packages/ai/leonsilicon/services/linear-slack-sync"],
@@ -444,6 +463,8 @@
 
     "@-apps/ai.leonsilicon.gmail-feed": ["@-apps/ai.leonsilicon.gmail-feed@workspace:www/ai/leonsilicon/gmail-feed"],
 
+    "@-apps/ai.leonsilicon.grokbot-admin": ["@-apps/ai.leonsilicon.grokbot-admin@workspace:www/ai/leonsilicon/grokbot-admin"],
+
     "@-apps/ai.leonsilicon.linear-slack": ["@-apps/ai.leonsilicon.linear-slack@workspace:www/ai/leonsilicon/linear-slack"],
 
     "@-apps/ai.leonsilicon.slack-as-leon": ["@-apps/ai.leonsilicon.slack-as-leon@workspace:www/ai/leonsilicon/slack-as-leon"],
@@ -461,6 +482,8 @@
     "@-apps/dailylinear": ["@-apps/dailylinear@workspace:apps/dailylinear"],
 
     "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
+
+    "@-apps/grok-bot-roster": ["@-apps/grok-bot-roster@workspace:apps/grok-bot-roster"],
 
     "@-apps/linear-slack-sync": ["@-apps/linear-slack-sync@workspace:apps/linear-slack-sync"],
 

@@ -14,6 +14,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
     "cronometer",
     "dailylinear",
     "gmail-feed",
+    "grok-bot-roster",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
@@ -26,6 +27,9 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
   assert.deepEqual(affected("apps/gmail-feed/worker.ts"), ["gmail-feed"]);
+  assert.deepEqual(affected("packages/ai/leonsilicon/services/grok-bot-roster/roster.ts"), [
+    "grok-bot-roster",
+  ]);
   // A Python Worker: its entry, the upstream source it carries and its Python lockfile.
   assert.deepEqual(affected("apps/cronometer/src/entry.py"), ["cronometer"]);
   assert.deepEqual(affected("apps/cronometer/src/cronometer_mcp/client.py"), ["cronometer"]);
@@ -55,6 +59,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "cronometer",
     "dailylinear",
     "gmail-feed",
+    "grok-bot-roster",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
@@ -63,6 +68,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "cronometer",
     "dailylinear",
     "gmail-feed",
+    "grok-bot-roster",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
@@ -71,6 +77,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "cronometer",
     "dailylinear",
     "gmail-feed",
+    "grok-bot-roster",
     "linear-slack-sync",
     "slack-as-leon",
   ]);

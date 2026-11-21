@@ -1,0 +1,16 @@
+{
+  "name": "@-/ai.leonsilicon.services.grok-bot-roster",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Lets Leon's Grok Bot bots list and delete any of his bots (grokbot-admin.leonsilicon.ai), through his own Grok Bot sign-in held by a Cloudflare Worker.",
+  "type": "module",
+  "imports": {
+    "#api": "./api.ts",
+    "#config": "./config.ts",
+    "#mcp": "./mcp.ts",
+    "#roster": "./roster.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  }
+}

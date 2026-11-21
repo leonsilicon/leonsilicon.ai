@@ -67,6 +67,7 @@ export default defineConfig({
             "beeper-watch",
             "dailylinear",
             "gmail-feed",
+            "grok-bot-roster",
             "grok-relay",
             "linear-slack-sync",
             "orca-bridge",
@@ -118,6 +119,12 @@ export default defineConfig({
         // Like deploy:slack-as-leon: varlock-wrangler uploads the #gmail-feed items.
         command:
           "tsc --noEmit && vp build && cd apps/gmail-feed && varlock-wrangler deploy -c wrangler.jsonc",
+      },
+      "deploy:grok-bot-roster": {
+        cache: false,
+        // Like deploy:slack-as-leon: varlock-wrangler uploads the #grok-bot-roster items.
+        command:
+          "tsc --noEmit && vp build && cd apps/grok-bot-roster && varlock-wrangler deploy -c wrangler.jsonc",
       },
       "deploy:linear-slack-sync": {
         cache: false,

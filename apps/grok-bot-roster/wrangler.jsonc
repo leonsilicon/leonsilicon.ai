@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "grok-bot-roster",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  // A Custom Domain per hostname; Cloudflare issues its certificate. The Worker kept its first name,
+  // grok-bot-roster; its host has been grokbot-admin since 2026-11-21.
+  "routes": [{ "pattern": "grokbot-admin.leonsilicon.ai", "custom_domain": true }],
+  // `session`: Leon's Grok Bot sign-in for this service (written at setup, then by each refresh).
+  "kv_namespaces": [{ "binding": "STATE", "id": "d3d601cd3e194d688510d90f77c1daf0" }],
+  // Daily: refresh the sign-in once it has less than 30 days of its 60 left.
+  "triggers": { "crons": ["17 9 * * *"] },
+  // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
+  // @-/ai.leonsilicon.configs.cloudflare.
+  "assets": {
+    "directory": "../../dist/www",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none",
+  },
+  // No vars here: every var and secret comes from the root .env.schema (#grok-bot-roster, values in
+  // Infisical), uploaded by `varlock-wrangler deploy`, which replaces whatever the Worker had.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

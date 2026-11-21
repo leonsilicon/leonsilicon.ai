@@ -1,0 +1,14 @@
+{
+  "name": "@-apps/grok-bot-roster",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+    "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*"
+  },
+  "varlock": {
+    "loadPath": "../../",
+    "filter": "#grok-bot-roster"
+  }
+}
