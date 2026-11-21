@@ -87,6 +87,8 @@ With the recovery key, the first start fetches the cross-signing keys from secre
 
 ## Operating it
 
+Since 2026-11-21 this is Hermes's only way into Beeper. Its older `beeper` MCP server, Beeper Desktop's own on the Mac mini, was removed that day (the entry is saved in `/opt/data/backups/mcp-beeper-desktop-mini-20261121.json`), and the four places Hermes's skills named its tools now name this inbox's (`get_conversation`, `list_conversations`, `list_messages`, `send_message`; backups beside each file end in `.bak-20261121-beeper-inbox`). In the three days before, Hermes had still called the old tools 87 times, and since 2026-11-19 every call had failed.
+
 ```sh
 B="node /opt/data/beeper-inbox/app/beeper-inbox.mjs"
 $B status                    # JSON health: device, crypto, sync, directory, recent sends

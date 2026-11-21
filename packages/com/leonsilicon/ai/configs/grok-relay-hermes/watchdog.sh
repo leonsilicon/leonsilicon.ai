@@ -8,6 +8,10 @@
 #   /v1/spec, accounts and search still answered, so the old check never noticed for hours.
 # - A restart quits Beeper, then sends TERM, then KILL: a stuck update dialog blocked both quit and TERM.
 # - Tailscale app not running: launch it.
+# - With the file $OFF present, Beeper is left alone and only Tailscale is kept running. Since 2026-11-21
+#   Hermes Cloud reads Beeper itself (its inbox, the Grok relay and Beeper Watch all run there), so nothing
+#   needs Beeper Desktop here. It had also been freezing about 20 s after every launch since 2026-11-19, and
+#   each forced restart left its helper processes behind: 1,122 of them holding 7.6 GB by 2026-11-21.
 # Test hooks: BEEPER_API, BEEPER_TOKEN_FILE, WATCHDOG_STATE, WATCHDOG_LOG, and WATCHDOG_DRY_RUN=1, which
 # logs "would restart" instead of touching Beeper.
 set -u
@@ -16,6 +20,7 @@ TOKEN_FILE="${BEEPER_TOKEN_FILE:-$HOME/.local/share/grok-relay-hermes/beeper.jso
 STATE="${WATCHDOG_STATE:-$HOME/.local/share/grok-relay-hermes/logs/watchdog.state}"
 LOG="${WATCHDOG_LOG:-$HOME/.local/share/grok-relay-hermes/logs/watchdog.log}"
 DRY="${WATCHDOG_DRY_RUN:-0}"
+OFF="${WATCHDOG_BEEPER_OFF:-$HOME/.local/share/grok-relay-hermes/beeper-off}"
 log() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
 missing=0; silent=0; broken=0
 [ -f "$STATE" ] && read -r missing silent broken < "$STATE"
@@ -47,10 +52,14 @@ restart_beeper() {
     pkill -KILL -x "Beeper Desktop" 2>/dev/null
     sleep 3
   fi
+  # A killed Beeper leaves its helpers (ContactsServer, crashpad) running; nothing reaps them.
+  pkill -KILL -f "Beeper Desktop.app/Contents/" 2>/dev/null
   open -g -a "Beeper Desktop" && log "Beeper relaunched"
 }
 
-if pgrep -xq "Beeper Desktop"; then
+if [ -e "$OFF" ]; then
+  missing=0; silent=0; broken=0
+elif pgrep -xq "Beeper Desktop"; then
   missing=0
   if curl -fsS -m 10 -o /dev/null "$API/v1/spec"; then
     silent=0
