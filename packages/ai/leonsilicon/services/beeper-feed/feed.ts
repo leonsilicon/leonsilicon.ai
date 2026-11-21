@@ -19,6 +19,7 @@ const MAX_RETRY_MS = 10 * 60_000;
 const RETRY_LIFETIME_MS = 7 * 24 * 60 * 60_000;
 const BATCH_SIZE = 100;
 const POSTS_PER_TICK = 10;
+const DIRECTORY_REFRESH_MS = 60_000;
 
 interface Pending {
   message: JournalEntry;
@@ -39,6 +40,7 @@ interface State {
 interface FeedOptions {
   source: Pick<ExtensionContext, "rooms" | "senderNames"> & {
     journal: Pick<ExtensionJournal, "head" | "changes">;
+    refreshRooms(): Promise<void>;
   };
   slack: SlackPoster;
   screener: Screener;
@@ -57,6 +59,7 @@ export class BeeperFeed {
   readonly #channels = new Map<string, string>();
   #state: State | null;
   #lastTick: number | null = null;
+  #lastDirectoryRefresh = -Infinity;
 
   constructor(options: FeedOptions) {
     this.#options = options;
@@ -113,12 +116,7 @@ export class BeeperFeed {
       .filter((item) => item.retryAt <= now)
       .slice(0, POSTS_PER_TICK);
     if (due.length && !stopped()) {
-      const rooms = new Map(
-        (await source.rooms(due.map(({ message }) => message.roomId))).map((room) => [
-          room.roomId,
-          room,
-        ]),
-      );
+      const rooms = await this.#rooms([...new Set(due.map(({ message }) => message.roomId))]);
       const senders = await source.senderNames(
         due
           .filter(({ message }) => !message.isMe && rooms.has(message.roomId))
@@ -149,6 +147,22 @@ export class BeeperFeed {
       }
     }
     this.#lastTick = this.#now();
+  }
+
+  async #rooms(ids: string[]): Promise<Map<string, RoomInfo>> {
+    const { source } = this.#options;
+    let rooms = await source.rooms(ids);
+    const now = this.#now();
+    if (rooms.length < ids.length && now - this.#lastDirectoryRefresh >= DIRECTORY_REFRESH_MS) {
+      this.#lastDirectoryRefresh = now;
+      try {
+        await source.refreshRooms();
+        rooms = await source.rooms(ids);
+      } catch {
+        this.#options.log("warn", "room directory refresh will retry");
+      }
+    }
+    return new Map(rooms.map((room) => [room.roomId, room]));
   }
 
   async #post(item: Pending, room: RoomInfo, platform: string, sender: string): Promise<void> {

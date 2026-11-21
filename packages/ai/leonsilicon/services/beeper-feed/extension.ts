@@ -26,7 +26,14 @@ export function beeperFeedExtension(): DaemonExtension {
         return value;
       };
       const feed = new BeeperFeed({
-        source: context,
+        source: {
+          journal: context.journal,
+          rooms: context.rooms,
+          senderNames: context.senderNames,
+          async refreshRooms() {
+            await context.tool("list_conversations", { refresh: true, limit: 1 });
+          },
+        },
         slack: slackBot(required("SLACK_BOT_TOKEN")),
         screener: decisionsScreener({
           apiKey: required("OPENAI_API_KEY"),

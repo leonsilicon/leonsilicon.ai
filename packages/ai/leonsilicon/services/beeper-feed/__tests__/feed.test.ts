@@ -44,6 +44,8 @@ function setup(t: TestContext) {
   const destinations: Array<{ channel: string; create: boolean }> = [];
   const screened: string[] = [];
   const failures = new Set<string>();
+  const directory = new Map(rooms.map((room) => [room.roomId, room]));
+  let refreshes = 0;
   const slack: SlackPoster = {
     async ensureChannel(channel, { create }) {
       destinations.push({ channel, create });
@@ -62,8 +64,12 @@ function setup(t: TestContext) {
           head: async () => journal.head(),
           changes: async (options) => journal.changes(options),
         },
-        rooms: async (ids) => rooms.filter((room) => ids.includes(room.roomId)),
+        rooms: async (ids) => [...directory.values()].filter((room) => ids.includes(room.roomId)),
         senderNames: async () => ({ "@alice:example.test": "Alice" }),
+        async refreshRooms() {
+          refreshes += 1;
+          for (const room of rooms) directory.set(room.roomId, room);
+        },
       },
       slack,
       screener: {
@@ -115,6 +121,8 @@ function setup(t: TestContext) {
     screened,
     record,
     journal,
+    directory,
+    refreshes: () => refreshes,
     advance: (ms: number) => {
       now += ms;
     },
@@ -179,6 +187,22 @@ test("restarts retry Slack with the saved verdict and apply edits and redactions
   h.record("later", "edited after delivery", "whatsapp", { replaces: "$retry" });
   await h.make().tick();
   assert.equal(h.posts.length, 2);
+});
+
+test("newly joined rooms are resolved before messages are routed", async (t) => {
+  const h = setup(t);
+  h.directory.delete("!whatsapp:example.test");
+  h.directory.delete("!slack:example.test");
+  const feed = h.make();
+  await feed.tick();
+  h.record("new-chat", "hello");
+  h.record("new-slack-chat", "already on Slack", "slack");
+  await feed.tick();
+  assert.equal(h.refreshes(), 1);
+  assert.deepEqual(
+    h.posts.map(({ channel }) => channel),
+    ["feed-whatsapp"],
+  );
 });
 
 test("Beeper Feed asks only about safety and cannot start an MCP adapter or CLI tool", async () => {
