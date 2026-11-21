@@ -6,19 +6,19 @@
   "type": "module",
   "imports": {
     "#config": "./config.ts",
-    "#decisions": "./decisions.ts",
+    "#delivery": "./delivery.ts",
     "#feed": "./feed.ts",
     "#format": "./format.ts",
     "#gmail": "./gmail.ts",
     "#mime": "./mime.ts",
     "#screen": "./screen.ts",
-    "#slack": "./slack.ts",
     "#store": "./store.ts"
   },
   "exports": {
     ".": "./+server.ts"
   },
   "dependencies": {
+    "@-/ai.leonsilicon.services.feed-common": "workspace:*",
     "@-/com.npmjs.openai": "workspace:*"
   }
 }

@@ -20,7 +20,7 @@ export { MatrixFetch } from "#fetch";
 export { MessageJournal } from "#journal";
 export type { JournalEntry, JournalMessage } from "#journal";
 export { accountPage } from "#format";
-export { SECRET_KEYS } from "#secrets";
+export { SECRET_KEYS, writeJsonAtomic } from "#secrets";
 export type { InboxAccount, PickleClient } from "#types";
 export {
   codexHandoffBlock,

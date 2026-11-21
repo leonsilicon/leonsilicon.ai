@@ -15,7 +15,7 @@ Copies every email that reaches Leon's Gmail into Slack. Added 2026-11-19 at Leo
 
 ## Screening
 
-The [screener](decisions.ts) asks OpenAI's Decisions API (`gpt-6-luna` by default) about safety and urgency using the [email prompt](screen.ts).
+The [screener](../feed-common/decisions.ts) asks OpenAI's Decisions API (`gpt-6-luna` by default) about safety and urgency using the [email prompt](screen.ts).
 
 - The model reads one `contact` message: From, Reply-To, To, Cc, Subject, Gmail's category and labels, the sender's SPF/DKIM/DMARC results, whether it's from a mailing list, the attachment names, and the whole body a post shows. The developer message says failed checks, a different Reply-To and a display name that doesn't match the domain are signs of phishing.
 - The wake question is reworded for email: Hermes can read mail but not send it.

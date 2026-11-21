@@ -1,5 +1,5 @@
 /**
- * Slack as the Gmail feed bot, through `fetch`. Its
+ * Slack as the feed bot, through `fetch`. Its
  * scopes: chat:write, chat:write.public, channels:read, groups:read and channels:manage.
  */
 
@@ -15,7 +15,7 @@ export class SlackError extends Error {
 
 /** The slice of Slack the feed uses, so tests can pass a fake. */
 export interface SlackPoster {
-  /** Posts with link and media previews off, so Slack never fetches a link from an email. */
+  /** Posts with link and media previews off, so Slack never fetches a link from a feed message. */
   post(channel: string, text: string, threadTs?: string): Promise<{ ts: string }>;
   /**
    * The ID of a channel given its ID or name. A missing public channel is created (or unarchived)

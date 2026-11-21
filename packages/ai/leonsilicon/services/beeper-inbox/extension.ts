@@ -62,26 +62,28 @@ export interface ExtensionJournal {
 }
 
 export interface RunningExtension {
-  callTool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  callTool?(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** A few facts about its health, shown under its name in the daemon's status. */
   status?(): Record<string, unknown>;
   stop?(): void | Promise<void>;
 }
 
 /**
- * A second set of tools served by the same daemon, such as the Grok relay. It runs inside the store's
- * one owner, so its own state has a single writer too, however many MCP server processes Hermes
- * starts. It reaches Beeper only through the inbox's tools.
+ * A service inside the inbox's single-writer daemon. An extension with an MCP server can also
+ * expose tools through a separate stateless MCP adapter.
  */
 export interface DaemonExtension {
-  /** The argument of `beeper-inbox mcp <name>`, and the name its calls carry over the socket. */
+  /** The extension's directory and status name. */
   name: string;
-  /** How its MCP server introduces itself to Hermes. */
-  server: {
-    name: string;
-    version: string;
-    instructions: string;
-    tools: readonly ExtensionTool[];
-  };
+  server?: ExtensionServer;
   start(context: ExtensionContext): RunningExtension | Promise<RunningExtension>;
 }
+
+interface ExtensionServer {
+  name: string;
+  version: string;
+  instructions: string;
+  tools: readonly ExtensionTool[];
+}
+
+export type McpExtension = DaemonExtension & { server: ExtensionServer };

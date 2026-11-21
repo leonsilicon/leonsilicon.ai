@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import type { Screener, Verdict } from "#decisions";
+import type { Screener, Verdict } from "@-/ai.leonsilicon.services.feed-common";
 import { FEED_LIMITS, GmailFeed, isInbound, type FeedConfig } from "#feed";
 import { GmailError, type GmailApi, type HistoryPage } from "#gmail";
 import type { GmailMessage } from "#mime";
-import type { SlackPoster } from "#slack";
+import type { SlackPoster } from "@-/ai.leonsilicon.services.feed-common";
 import { GIVE_UP_MS, Store, type Sql } from "#store";
 
 const T0 = Date.parse("2026-11-19T18:00:00Z");

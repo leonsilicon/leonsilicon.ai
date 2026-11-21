@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { daemonPid, ensureDaemon, stopDaemon, type DaemonLauncher } from "#client";
 import { EXIT_ALREADY_OWNED, fileLogger, startDaemon } from "#daemon";
-import type { DaemonExtension } from "#extension";
+import type { DaemonExtension, McpExtension } from "#extension";
 import { callIpc } from "#ipc";
 import { runMcpServer } from "#mcp";
 import { ensureDirectories, inboxPaths } from "#paths";
@@ -24,7 +24,7 @@ export const USAGE = `beeper-inbox <command>
 `;
 
 export interface CliOptions {
-  /** More tools the daemon serves, such as the Grok relay; `mcp <name>` is each one's MCP server. */
+  /** Services hosted by the daemon. Only those with a server are available through MCP. */
   extensions?: readonly DaemonExtension[];
 }
 
@@ -36,11 +36,14 @@ export async function runCli(
 ): Promise<number> {
   const [command, ...rest] = argv;
   const extensions = options.extensions ?? [];
-  const extensionNamed = (name: string): DaemonExtension => {
-    const found = extensions.find((extension) => extension.name === name);
+  const mcpExtensions = extensions.filter((extension): extension is McpExtension =>
+    Boolean(extension.server),
+  );
+  const extensionNamed = (name: string): McpExtension => {
+    const found = mcpExtensions.find((extension) => extension.name === name);
     if (!found)
       throw new Error(
-        `no extension "${name}"; this build has: ${extensions.map((extension) => extension.name).join(", ") || "none"}`,
+        `no MCP extension "${name}"; this build has: ${mcpExtensions.map((extension) => extension.name).join(", ") || "none"}`,
       );
     return found;
   };

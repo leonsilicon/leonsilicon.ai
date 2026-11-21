@@ -1,4 +1,4 @@
-import type { ScreenInput, ScreenPrompt } from "#decisions";
+import type { ScreenInput, ScreenPrompt } from "@-/ai.leonsilicon.services.feed-common";
 import { describeAuth, labelNames, size } from "#format";
 import type { Email } from "#mime";
 

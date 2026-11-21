@@ -1,9 +1,9 @@
-import { FAIL_CLOSED, type Screener, type Verdict } from "#decisions";
+import { FAIL_CLOSED, type Screener, type Verdict } from "@-/ai.leonsilicon.services.feed-common";
 import { emailPost, outageText, recoveredText, type PostVerdict } from "#format";
 import { GmailError, type GmailApi } from "#gmail";
 import { parseEmail, pendingParts, type GmailMessage } from "#mime";
 import { screenInput } from "#screen";
-import type { SlackPoster } from "#slack";
+import type { SlackPoster } from "@-/ai.leonsilicon.services.feed-common";
 import type { QueuedMessage, Store } from "#store";
 
 export type LogLevel = "info" | "warn" | "error";

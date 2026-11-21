@@ -8,7 +8,7 @@ import {
   verdictFrom,
   type DecisionsClient,
   type ScreenInput,
-} from "#decisions";
+} from "@-/ai.leonsilicon.services.feed-common";
 import { EMAIL_PROMPT } from "#screen";
 
 const input = (

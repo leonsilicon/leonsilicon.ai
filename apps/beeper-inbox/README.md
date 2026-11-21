@@ -42,6 +42,10 @@ It fetches Pickle at the revision in [`@assets/pickle.json`](@assets/pickle.json
 
 3. First install only: register the server with `POST /api/mcp/servers {"name":"beeper-inbox","command":"node","args":["/opt/data/beeper-inbox/app/beeper-inbox.mjs","mcp"]}`. Hermes picks it up on its next turn.
 
+## Beeper Feed
+
+[Beeper Feed](../../packages/ai/leonsilicon/services/beeper-feed/README.md) runs in the inbox daemon. Render its settings with `vpx _env-file beeper-feed` and install them as `/opt/data/beeper-inbox/beeper-feed/env` (mode 600), then install the release or restart the daemon. Check `status.extensions["beeper-feed"]` for the latest pass, pending work and Slack deliveries. Removing the settings file and restarting pauses copying.
+
 ## Sign-in (once per device)
 
 1. Create the device with Pickle's Beeper login: `startBeeperLogin`, then the email request, then `sendBeeperLoginCode`, then `loginWithMatrixToken({ type: "org.matrix.login.jwt", initialDeviceDisplayName: "Hermes Cloud inbox (Pickle)" })`. Pickle's own `sendBeeperLoginEmail` throws on Beeper's empty 204 answer at the pinned revision, so send that request yourself. The code goes to Leon's email; Captain Claude can read it with its read-only Gmail (`google_api.py gmail search 'from:beeper.com newer_than:1h'`). Beeper also accepts `m.login.password`.

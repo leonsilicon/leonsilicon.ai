@@ -1,4 +1,4 @@
-import { DEFAULT_THRESHOLDS } from "#decisions";
+import { DEFAULT_THRESHOLDS } from "@-/ai.leonsilicon.services.feed-common";
 import type { FeedConfig, FeedWake } from "#feed";
 import type { GmailCredentials } from "#gmail";
 

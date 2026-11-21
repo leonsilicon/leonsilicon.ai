@@ -22,13 +22,14 @@ Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also 
 
 ## On Hermes Cloud
 
-Services that run on Hermes Cloud's own machine, as local MCP servers with no public address.
+Services that run on Hermes Cloud's own machine without a public address.
 
-| What                                                                | State                                                                                                          |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [Orca device](apps/orca-device/README.md)                           | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge                     |
-| [Beeper inbox](apps/beeper-inbox/README.md)                         | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop            |
-| [Grok relay](packages/ai/leonsilicon/services/grok-relay/README.md) | Live since 2026-11-21: Hermes messages Leon's Grok bots through the Beeper inbox. It replaced the mini's relay |
+| What                                                                  | State                                                                                                          |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [Orca device](apps/orca-device/README.md)                             | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge                     |
+| [Beeper inbox](apps/beeper-inbox/README.md)                           | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop            |
+| [Grok relay](packages/ai/leonsilicon/services/grok-relay/README.md)   | Live since 2026-11-21: Hermes messages Leon's Grok bots through the Beeper inbox. It replaced the mini's relay |
+| [Beeper Feed](packages/ai/leonsilicon/services/beeper-feed/README.md) | One-way mirror from Beeper to the per-platform Slack feeds.                                                    |
 
 ## Also here
 

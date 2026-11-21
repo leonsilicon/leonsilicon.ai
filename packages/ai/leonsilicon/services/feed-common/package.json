@@ -1,0 +1,16 @@
+{
+  "name": "@-/ai.leonsilicon.services.feed-common",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#decisions": "./decisions.ts",
+    "#format": "./format.ts",
+    "#slack": "./slack.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.npmjs.openai": "workspace:*"
+  }
+}

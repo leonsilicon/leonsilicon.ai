@@ -1,0 +1,17 @@
+{
+  "name": "@-/ai.leonsilicon.services.beeper-feed",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#extension": "./extension.ts",
+    "#feed": "./feed.ts",
+    "#format": "./format.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+    "@-/ai.leonsilicon.services.feed-common": "workspace:*"
+  }
+}

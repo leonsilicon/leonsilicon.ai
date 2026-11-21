@@ -79,7 +79,7 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `grok-bot-roster` Worker     | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
 | Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                              |
 | Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
-| Grok relay (Hermes Cloud)    | Part of the Beeper inbox release above                                                                                                          |
+| Grok relay and Beeper Feed   | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations          | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
 The Worker tasks typecheck and build `www/` before deploying, and every command that writes config needs Infisical access. The retired Mac mini Orca bridge keeps its deploy script for reference.

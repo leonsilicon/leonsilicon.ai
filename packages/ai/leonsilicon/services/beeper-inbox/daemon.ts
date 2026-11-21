@@ -33,7 +33,7 @@ export interface DaemonOptions {
   pickle?: () => Promise<PickleRuntime>;
   baseFetch?: typeof fetch;
   bridgeStatusWaitMs?: number;
-  /** More tools served by this daemon (the Grok relay), each reached with `mcp <name>`. */
+  /** Services hosted by this daemon. */
   extensions?: readonly DaemonExtension[];
   /** Tests: don't install signal handlers or exit the process. */
   embedded?: boolean;
@@ -194,7 +194,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
         case "extension": {
           const name = typeof input.extension === "string" ? input.extension : "";
           const extension = extensions.get(name);
-          if (!extension)
+          if (!extension?.callTool)
             throw Object.assign(new Error(`this daemon has no extension "${name}"`), {
               code: "bad_method",
             });

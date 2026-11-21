@@ -81,7 +81,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack-as-leon",
     "slack22linear",
   ]);
-  assert.deepEqual(affected("packages/ai/leonsilicon/services/gmail-feed/decisions.ts"), [
+  assert.deepEqual(affected("packages/ai/leonsilicon/services/feed-common/decisions.ts"), [
     "gmail-feed",
   ]);
   // Things that don't run on Cloudflare: the mini, Hermes, docs and tests.

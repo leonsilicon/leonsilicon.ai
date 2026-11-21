@@ -5,7 +5,7 @@ import {
   StdioServerTransport,
 } from "@-/com.npmjs.modelcontextprotocol__sdk";
 import { ensureDaemon, type DaemonLauncher } from "#client";
-import type { DaemonExtension } from "#extension";
+import type { McpExtension } from "#extension";
 import { VERSION } from "#inbox";
 import { callIpc, IpcError } from "#ipc";
 import { ensureDirectories, inboxPaths } from "#paths";
@@ -23,7 +23,7 @@ import { INSTRUCTIONS, TOOLS } from "#tools";
 export async function runMcpServer(
   launcher: DaemonLauncher,
   env: NodeJS.ProcessEnv = process.env,
-  extension?: DaemonExtension,
+  extension?: McpExtension,
 ): Promise<void> {
   const paths = inboxPaths(env);
   ensureDirectories(paths);

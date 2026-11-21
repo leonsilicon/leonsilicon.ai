@@ -34,6 +34,7 @@
         "_build-beeper-inbox": "./_build-beeper-inbox.ts",
       },
       "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-feed": "workspace:*",
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
         "@-/ai.leonsilicon.services.grok-relay": "workspace:*",
       },
@@ -173,6 +174,13 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/beeper-feed": {
+      "name": "@-/ai.leonsilicon.services.beeper-feed",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/beeper-inbox": {
       "name": "@-/ai.leonsilicon.services.beeper-inbox",
       "version": "0.1.0",
@@ -187,10 +195,17 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/feed-common": {
+      "name": "@-/ai.leonsilicon.services.feed-common",
+      "dependencies": {
+        "@-/com.npmjs.openai": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/gmail-feed": {
       "name": "@-/ai.leonsilicon.services.gmail-feed",
       "version": "1.0.0",
       "dependencies": {
+        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
       },
     },
@@ -376,9 +391,13 @@
 
     "@-/ai.leonsilicon.services.autolinear": ["@-/ai.leonsilicon.services.autolinear@workspace:packages/ai/leonsilicon/services/autolinear"],
 
+    "@-/ai.leonsilicon.services.beeper-feed": ["@-/ai.leonsilicon.services.beeper-feed@workspace:packages/ai/leonsilicon/services/beeper-feed"],
+
     "@-/ai.leonsilicon.services.beeper-inbox": ["@-/ai.leonsilicon.services.beeper-inbox@workspace:packages/ai/leonsilicon/services/beeper-inbox"],
 
     "@-/ai.leonsilicon.services.dailylinear": ["@-/ai.leonsilicon.services.dailylinear@workspace:packages/ai/leonsilicon/services/dailylinear"],
+
+    "@-/ai.leonsilicon.services.feed-common": ["@-/ai.leonsilicon.services.feed-common@workspace:packages/ai/leonsilicon/services/feed-common"],
 
     "@-/ai.leonsilicon.services.gmail-feed": ["@-/ai.leonsilicon.services.gmail-feed@workspace:packages/ai/leonsilicon/services/gmail-feed"],
 

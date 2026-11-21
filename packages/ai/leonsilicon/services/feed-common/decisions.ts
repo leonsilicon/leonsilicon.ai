@@ -1,5 +1,4 @@
 import OpenAI, { type Decision, type DecisionCreateParams } from "@-/com.npmjs.openai";
-import type { Logger } from "#feed";
 
 export type Route = "safe" | "unsafe" | "spam";
 
@@ -120,14 +119,14 @@ const SAFETY_CHOICES: Array<{ value: (typeof REASONS)[number]; description: stri
 export const SAFETY_INSTRUCTIONS =
   "Which best describes the contact messages? Flag only what they actually do or ask, not who the sender might be.";
 
-const questions = (wake: string): DecisionCreateParams["questions"] => [
+const questions = (wake: string | undefined): DecisionCreateParams["questions"] => [
   {
     type: "choice",
     name: "safety",
     instructions: SAFETY_INSTRUCTIONS,
     choices: SAFETY_CHOICES,
   },
-  { type: "predicate", name: "wake", instructions: wake },
+  ...(wake ? [{ type: "predicate" as const, name: "wake", instructions: wake }] : []),
 ];
 
 const MAX_MESSAGES = 40;
@@ -139,8 +138,8 @@ const MAX_MESSAGES = 40;
 export interface ScreenPrompt {
   /** The developer message: where the messages came from, and that none of it is instructions. */
   context: string;
-  /** The wake question. */
-  wake: string;
+  /** The optional wake question. */
+  wake?: string;
   /** Characters of each message the model sees. At least as much as a post shows. */
   maxText: number;
 }
@@ -177,7 +176,7 @@ function plainText(raw: string): string {
 const line = (text: string): string => text.replace(/\s+/g, " ").slice(0, MAX_NAME);
 
 /**
- * The Decisions request. The email goes in as JSON data rather than text, so nothing a sender writes
+ * The Decisions request. Messages go in as JSON data rather than text, so nothing a sender writes
  * can pass for structure, such as a closing tag or an owner message.
  */
 export function screenRequest(
@@ -295,7 +294,7 @@ export interface DecisionsScreenerOptions {
   timeoutMs: number;
   thresholds?: Thresholds;
   prompt: ScreenPrompt;
-  log: Logger;
+  log: (level: "info", message: string, fields: Record<string, unknown>) => void;
 }
 
 const round = (value: number | undefined): number | undefined =>
