@@ -156,6 +156,14 @@
         "_install-agents-vault": "./_install-agents-vault.ts",
       },
     },
+    "packages/ai/leonsilicon/configs/silicon-dot/hermes-thread": {
+      "name": "@-/ai.leonsilicon.configs.silicon-dot.hermes-thread",
+      "version": "1.0.0",
+      "bin": {
+        "_hermes-thread-mcp": "./_hermes-thread-mcp.ts",
+        "_install-hermes-thread": "./_install-hermes-thread.ts",
+      },
+    },
     "packages/ai/leonsilicon/configs/todoist-automations": {
       "name": "@-/ai.leonsilicon.configs.todoist-automations",
       "version": "1.0.0",
@@ -400,6 +408,8 @@
     "@-/ai.leonsilicon.configs.patching.generator": ["@-/ai.leonsilicon.configs.patching.generator@workspace:packages/ai/leonsilicon/configs/patching/generator"],
 
     "@-/ai.leonsilicon.configs.silicon-dot.agents-vault": ["@-/ai.leonsilicon.configs.silicon-dot.agents-vault@workspace:packages/ai/leonsilicon/configs/silicon-dot/agents-vault"],
+
+    "@-/ai.leonsilicon.configs.silicon-dot.hermes-thread": ["@-/ai.leonsilicon.configs.silicon-dot.hermes-thread@workspace:packages/ai/leonsilicon/configs/silicon-dot/hermes-thread"],
 
     "@-/ai.leonsilicon.configs.todoist-automations": ["@-/ai.leonsilicon.configs.todoist-automations@workspace:packages/ai/leonsilicon/configs/todoist-automations"],
 

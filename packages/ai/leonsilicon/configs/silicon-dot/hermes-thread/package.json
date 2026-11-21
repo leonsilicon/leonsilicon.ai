@@ -1,0 +1,17 @@
+{
+  "name": "@-/ai.leonsilicon.configs.silicon-dot.hermes-thread",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lets Silicon Dot's Codex sessions talk to Hermes in a task's Slack thread, through slack-puppet's agent tools and a local stdio MCP proxy.",
+  "bin": {
+    "_hermes-thread-mcp": "./_hermes-thread-mcp.ts",
+    "_install-hermes-thread": "./_install-hermes-thread.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#hermes-thread": "./hermes-thread.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  }
+}
