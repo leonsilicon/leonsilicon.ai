@@ -52,6 +52,10 @@ test("formatTitle writes metadata back and round-trips through parseTitle", () =
     event: "Deal: under $50, unlimited",
     stop: "2026-12-01",
   });
+  const textMeta = { event: "null", "note: text": "first line\nwith `backticks`" };
+  const inline = formatTitle("Check the deal", textMeta);
+  assert.doesNotMatch(inline, /\n/);
+  assert.deepEqual(parseTitle(inline), { name: "Check the deal", meta: textMeta });
 });
 
 test("metaInstant reads bare dates as Toronto midnight and RFC 3339 times as given", () => {
@@ -133,14 +137,17 @@ test("the topic carries status styling, priority, title, metadata and link withi
       url,
       2,
     ),
-    'Awaiting Listener · linear:v1 started #e8b510 p2 {"event":"Café \\u00b7 deal","stop":"2026-12-01"} · https://linear.app/x/issue/LEON-205 · Café · Confirm the deal',
+    "Awaiting Listener · linear:v1 started #e8b510 p2 · https://linear.app/x/issue/LEON-205 · Café · Confirm the deal `{event: Café · deal, stop: 2026-12-01}`",
   );
-  const long = channelTopic({ name: "🍁".repeat(250), meta: {} }, state, url, 1);
+  const scheduled = { ...state, name: "Awaiting Date", type: "unstarted" };
+  const schedule = { start: "2026-12-01T09:00:00-05:00" };
+  const long = channelTopic({ name: "🍁".repeat(250), meta: schedule }, scheduled, url, 1);
   assert.ok(long.length <= 250);
   assert.ok(long.isWellFormed());
   assert.ok(long.includes(url));
   assert.ok(long.includes("#e8b510 p1"));
-  assert.ok(long.endsWith("…"));
+  assert.ok(parseTitle(long).name.endsWith("…"));
+  assert.deepEqual(parseTitle(long).meta, schedule);
   assert.ok(
     channelTopic(
       { name: "Confirm the deal", meta: { event: "x".repeat(400) } },

@@ -38,15 +38,21 @@ export function parseTitle(title: string): ParsedTitle {
   return { name: title.slice(0, match.index).trim(), meta };
 }
 
-const NEEDS_QUOTES = /[,:{}[\]#"'`&*!|>%@]|^\s|\s$|^$/;
+const NEEDS_QUOTES = /[,:{}[\]#"'`&*!|>%@]|\p{Cc}|\p{Zl}|\p{Zp}|^\s|\s$|^$/u;
+
+function flowString(value: string): string {
+  if (!NEEDS_QUOTES.test(value) && parseYaml(value) === value) return value;
+  return JSON.stringify(value).replace(
+    /[`\u007F-\u009F\u2028\u2029]/gu,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
 
 /** Writes the metadata back as a flow mapping, quoting values that YAML would misread. */
 export function formatTitle(name: string, meta: TitleMeta): string {
   const entries = Object.entries(meta);
   if (entries.length === 0) return name;
-  const body = entries
-    .map(([key, value]) => `${key}: ${NEEDS_QUOTES.test(value) ? JSON.stringify(value) : value}`)
-    .join(", ");
+  const body = entries.map(([key, value]) => `${flowString(key)}: ${flowString(value)}`).join(", ");
   return `${name} \`{${body}}\``;
 }
 
@@ -263,25 +269,23 @@ export function channelTopic(
     Number.isInteger(priority) && priority >= 0 && priority <= 4 ? ` p${priority}` : "";
   const workflow = `linear:v1 ${state.type} ${color}${priorityToken}`;
   const prefix = [state.name, workflow, url, ""].join(TOPIC_SEPARATOR);
-  const available = TOPIC_MAX - prefix.length;
-  if (available <= 0) return state.name;
+  const space = TOPIC_MAX - prefix.length;
+  if (space <= 0) return state.name;
 
-  const title = name.replace(/\s+/g, " ") || "Untitled issue";
+  // Keep the YAML mapping intact, shortening the title if needed to make room.
+  const metadata = formatTitle("", meta);
+  const suffix = metadata.length < space ? metadata : "";
+  const available = space - suffix.length;
+  let title = name.replace(/\s+/g, " ") || "Untitled issue";
   if (title.length > available) {
     const head = title
       .slice(0, available - 1)
       .replace(/[\uD800-\uDBFF]$/u, "")
       .trimEnd();
-    return `${prefix}${head}…`;
+    title = `${head}…`;
   }
 
-  // Keep complete metadata whenever it fits alongside the title and issue URL.
-  const metadata = JSON.stringify(meta).replaceAll("·", "\\u00b7");
-  const details =
-    metadata !== "{}" && metadata.length + 1 <= available - title.length
-      ? `${workflow} ${metadata}`
-      : workflow;
-  return [state.name, details, url, title].join(TOPIC_SEPARATOR);
+  return `${prefix}${title}${suffix}`;
 }
 
 /** Adds the project's icon and color without cutting the existing Slack summary. */

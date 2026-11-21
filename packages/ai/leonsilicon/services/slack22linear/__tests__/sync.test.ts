@@ -636,7 +636,7 @@ test("status moves post a message, mention the right party and move the section"
   assert.equal(slack.posts.at(-1)!.text, "*Awaiting Leon* → *Awaiting Listener*");
   assert.equal(
     channel.topic,
-    'Awaiting Listener · linear:v1 started #f2c94c p0 {"event":"Rogers unlimited BYOD deal","stop":"2026-12-01"} · https://linear.app/leonsilicon/issue/LEON-205 · switch to rogers',
+    "Awaiting Listener · linear:v1 started #f2c94c p0 · https://linear.app/leonsilicon/issue/LEON-205 · switch to rogers `{event: Rogers unlimited BYOD deal, stop: 2026-12-01}`",
   );
   assert.equal(
     channel.name,
@@ -1182,29 +1182,29 @@ test("the daily tick sets lost timers, repairs drift and creates #feed-linear", 
 
 test("the daily tick upgrades old topics and refreshes status colors and priorities without posting", async () => {
   const { linear, slack, sync, store } = setup();
-  const issue = linear.addIssue(381, "Cancel club Fongo Works phone service", "Awaiting Leon");
+  const issue = linear.addIssue(381, "File taxes `{start: 2026-12-01}`", "Awaiting Date");
+  issue.priority = 2;
   await sync.run("backfill", {});
   const rec = store.issue(issue.id)!;
   const channel = slack.channels.find(({ id }) => id === rec.channelId)!;
-  channel.topic = `Awaiting Leon · linear:v1 started #f2c94c · ${issue.url} · Cancel club Fongo Works phone service`;
+  channel.topic = `Awaiting Date · linear:v1 unstarted #5e6ad2 p2 {"start":"2026-12-01"} · ${issue.url} · File taxes`;
   store.putIssue({ ...rec, topic: channel.topic });
 
-  issue.priority = 2;
   await sync.run("tick", {});
   assert.equal(
     channel.topic,
-    `Awaiting Leon · linear:v1 started #f2c94c p2 · ${issue.url} · Cancel club Fongo Works phone service`,
+    `Awaiting Date · linear:v1 unstarted #5e6ad2 p2 · ${issue.url} · ${issue.title}`,
   );
 
   issue.state = { ...issue.state, color: "#123456" };
   await sync.run("tick", {});
-  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p2 · /);
+  assert.match(channel.topic, /^Awaiting Date · linear:v1 unstarted #123456 p2 · /);
   issue.priority = 4;
   await sync.run("linear", issueHook(issue.id));
-  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p4 · /);
+  assert.match(channel.topic, /^Awaiting Date · linear:v1 unstarted #123456 p4 · /);
   issue.priority = 0;
   await sync.run("tick", {});
-  assert.match(channel.topic, /^Awaiting Leon · linear:v1 started #123456 p0 · /);
+  assert.match(channel.topic, /^Awaiting Date · linear:v1 unstarted #123456 p0 · /);
   assert.equal(slack.posts.filter((post) => post.channel === channel.id).length, 0);
   const topicWrites = slack.calls.filter(
     ({ method }) => method === "conversations.setTopic",

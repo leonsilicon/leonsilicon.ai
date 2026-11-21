@@ -36,10 +36,10 @@ Keeps one Slack channel per Linear issue, and one per Linear project. Leon works
 slack22linear writes issue metadata to the Slack channel topic. The Slack bridge exposes it as the Matrix room topic that [Leon for Zami](https://github.com/leonsilicon/zami-plugin-leon) reads. The topic starts with the status name for older plugin versions and uses this format for compact issue rows:
 
 ```text
-Awaiting Leon · linear:v1 started #f2c94c p2 · https://linear.app/leonsilicon/issue/LEON-381 · Cancel club Fongo Works phone service
+Awaiting Date · linear:v1 unstarted #5e6ad2 p2 · https://linear.app/leonsilicon/issue/LEON-381 · File taxes `{start: 2026-12-01}`
 ```
 
-The workflow field carries the Linear state type and hex color (`-` when unavailable), followed by `p0` through `p4` for no priority, urgent, high, medium, and low. When it fits, the field also includes the title's metadata as a JSON object after the priority, with literal middle dots escaped. The title comes last and may contain middle dots. Slack limits topics to 250 characters, so long titles are shortened and oversized optional metadata stays in Linear. The daily tick rewrites old topics for open issues and picks up workflow color and priority changes without posting a status message.
+The workflow field carries the Linear state type and hex color (`-` when unavailable), followed by `p0` through `p4` for no priority, urgent, high, medium, and low. The title comes last and may contain middle dots. Its metadata ends the topic as a backticked YAML flow mapping, just as in Linear. Long titles are shortened to make room for the complete mapping within [Slack's 250-character limit](https://docs.slack.dev/reference/methods/conversations.setTopic/). A mapping that cannot fit stays in Linear. The daily tick rewrites old topics for open issues and picks up workflow color and priority changes without posting a status message.
 
 ## Title metadata
 
