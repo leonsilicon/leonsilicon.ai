@@ -16,6 +16,7 @@ export {
   metaInstant,
   parseTitle,
   projectChannelName,
+  projectDay,
   slackToLinear,
   withDay,
   zonedIso,
@@ -31,6 +32,7 @@ export type {
   LinearState,
   LinearTeam,
   NewIssue,
+  NewProject,
   ProjectChannelSettings,
 } from "#linear";
 export { botClient, Sidebar, SlackError, tolerate } from "#slack";

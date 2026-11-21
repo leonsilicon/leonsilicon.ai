@@ -19,7 +19,6 @@ import {
   ANSWER_SETTLE_MS,
   autolinearIssueId,
   PROJECT_GRACE_MS,
-  STARRED,
   Sync,
   type Adoption,
 } from "#sync";
@@ -1312,33 +1311,29 @@ test("tick gives open projects channels and archives the ones that closed or van
 
 /** 17:30 Toronto on 2026-11-19. */
 const NOV_19_EVENING = Date.UTC(2026, 10, 19, 22, 30);
-/** 05:00 Toronto on 2026-11-20, when Hermes makes the day's project. */
-const NOV_20_MORNING = Date.UTC(2026, 10, 20, 10, 0);
 
-test("a day's project channel is renamed project-YYYY-MM-DD and starred, out of Projects", async () => {
-  const { linear, slack, sync, store } = setup(NOV_19_EVENING);
-  const general = slack.addLeonChannel("general");
-  slack.stars.add(general.id);
-  const university = linear.addProject("University");
-  await sync.run("linear", projectHook(university.id));
-  // Linear's own app made the channel after the project's name.
-  const channel = slack.addLinearChannel("project-20261119");
-  const day = linear.addProject("20261119");
+test("a day's project is left to dailylinear: no channel request, no section, no star", async () => {
+  const { linear, slack, sync, store, clock } = setup(NOV_19_EVENING);
+  const day = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
+  await sync.run("linear", projectHook(day.id));
+  clock.now += PROJECT_GRACE_MS;
+  await sync.run("project", { id: day.id });
+  await sync.run("tick", {});
+  assert.equal(linear.channelRequests.length, 0, "dailylinear asks for the day's channel");
+  assert.equal(day.slackChannelId, null);
+
+  // Once dailylinear's channel exists, the sync only makes sure Leon and Hermes are in it.
+  const channel = slack.addLinearChannel("project-2026-11-19", []);
   day.slackChannelId = channel.id;
+  slack.stars.add(channel.id);
   await sync.run("linear", projectHook(day.id));
-
+  assert.deepEqual([...channel.members].sort(), [LINEAR_BOT, LEON, HERMES].sort());
+  assert.equal(store.project(day.id)!.channelId, channel.id);
+  assert.equal(slack.sectionOf(channel.id), null, "not filed under Projects");
+  assert.ok(slack.stars.has(channel.id), "dailylinear's star stays");
   assert.equal(channel.name, "project-2026-11-19");
-  assert.equal(linear.channelRequests.length, 1, "only University's channel was requested");
-  assert.ok(slack.stars.has(channel.id));
-  assert.equal(slack.sectionOf(channel.id), null, "not under Projects as well");
-  assert.equal(store.project(day.id)!.section, STARRED);
-  assert.equal(slack.sectionOf(university.slackChannelId!), "Projects");
-  assert.ok(!slack.stars.has(university.slackChannelId!));
-  assert.ok(slack.stars.has(general.id), "a channel Leon starred himself stays starred");
 
-  // Settled: another webhook or tick changes nothing.
   const before = slack.calls.length;
-  await sync.run("linear", projectHook(day.id));
   await sync.run("tick", {});
   assert.ok(
     !slack.calls
@@ -1346,90 +1341,20 @@ test("a day's project channel is renamed project-YYYY-MM-DD and starred, out of 
       .some((c) =>
         /^(stars\.|conversations\.rename|users\.channelSections\.channels)/.test(c.method),
       ),
+    "settled: the tick leaves it alone",
   );
 });
 
-test("the next day's channel takes over Starred when its day comes; the old one goes under Projects", async () => {
-  const { linear, slack, sync, store, clock, drain } = setup(NOV_19_EVENING);
-  const nov19 = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
-  await sync.run("linear", projectHook(nov19.id));
-  assert.equal(
-    linear.channelRequests[0]!.name,
-    "project-2026-11-19",
-    "requested under its date name",
-  );
-  assert.ok(slack.stars.has(nov19.slackChannelId!));
-
-  // A project for tomorrow, made the evening before, waits under Projects for its day.
-  const nov20 = linear.addProject(
-    "2026-11-20",
-    "Backlog:backlog",
-    NOV_19_EVENING - PROJECT_GRACE_MS,
-  );
-  await sync.run("linear", projectHook(nov20.id));
-  assert.equal(
-    slack.channels.find((c) => c.id === nov20.slackChannelId)!.name,
-    "project-2026-11-20",
-  );
-  assert.equal(slack.sectionOf(nov20.slackChannelId!), "Projects");
-  assert.ok(slack.stars.has(nov19.slackChannelId!));
-
-  // At midnight in Toronto, the days timer swaps them.
-  const midnight = Date.UTC(2026, 10, 20, 5, 0);
-  assert.equal(store.timer("days"), midnight);
-  clock.now = midnight;
-  await drain();
-  assert.ok(slack.stars.has(nov20.slackChannelId!));
-  assert.equal(slack.sectionOf(nov20.slackChannelId!), null);
-  assert.ok(!slack.stars.has(nov19.slackChannelId!));
-  assert.equal(slack.sectionOf(nov19.slackChannelId!), "Projects");
-  assert.equal(store.project(nov19.id)!.section, "Projects");
-});
-
-test("Hermes's 05:00 project takes Starred once its channel exists, not before", async () => {
-  const { linear, slack, sync, clock } = setup(NOV_19_EVENING);
-  const nov19 = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
-  await sync.run("linear", projectHook(nov19.id));
-
-  clock.now = NOV_20_MORNING;
-  const nov20 = linear.addProject("20261120", "Backlog:backlog", NOV_20_MORNING);
-  await sync.run("linear", projectHook(nov20.id, "create"));
-  await sync.run("tick", {});
-  assert.equal(nov20.slackChannelId, null, "still in the grace period");
-  assert.ok(slack.stars.has(nov19.slackChannelId!), "yesterday's stays starred meanwhile");
-
-  clock.now += PROJECT_GRACE_MS;
-  await sync.run("project", { id: nov20.id });
-  assert.equal(
-    slack.channels.find((c) => c.id === nov20.slackChannelId)!.name,
-    "project-2026-11-20",
-  );
-  assert.deepEqual([...slack.stars], [nov20.slackChannelId]);
-  assert.equal(slack.sectionOf(nov19.slackChannelId!), "Projects");
-});
-
-test("closing the starred day's project unstars and archives its channel", async () => {
+test("closing a day's project archives its channel", async () => {
   const { linear, slack, sync } = setup(NOV_19_EVENING);
-  const day = linear.addProject("20261119", "Backlog:backlog", NOV_19_EVENING - PROJECT_GRACE_MS);
+  const channel = slack.addLinearChannel("project-2026-11-19");
+  const day = linear.addProject("20261119");
+  day.slackChannelId = channel.id;
   await sync.run("linear", projectHook(day.id));
-  const channel = slack.channels.find((c) => c.id === day.slackChannelId)!;
-  assert.ok(slack.stars.has(channel.id));
 
   day.status = { name: "Completed", type: "completed" };
   await sync.run("linear", projectHook(day.id));
   assert.equal(channel.archived, true);
-  assert.ok(!slack.stars.has(channel.id));
-});
-
-test("a day's channel keeps its name when another channel already has the date name", async () => {
-  const { linear, slack, sync } = setup(NOV_19_EVENING);
-  slack.addLeonChannel("project-2026-11-19");
-  const channel = slack.addLinearChannel("project-20261119");
-  const day = linear.addProject("20261119");
-  day.slackChannelId = channel.id;
-  await sync.run("linear", projectHook(day.id));
-  assert.equal(channel.name, "project-20261119");
-  assert.ok(slack.stars.has(channel.id), "still starred");
 });
 
 test("loadConfig needs both Slack user IDs, which have no built-in defaults", () => {

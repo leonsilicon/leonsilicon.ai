@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dailylinear",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  // A Custom Domain per hostname; Cloudflare issues its certificate.
+  "routes": [{ "pattern": "dailylinear.leonsilicon.ai", "custom_domain": true }],
+  "durable_objects": {
+    // One instance (`daily`): it runs one day at a time and wakes itself at midnight in Toronto.
+    "bindings": [{ "name": "DAILY", "class_name": "DailyObject" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DailyObject"] }],
+  // The safety net, hourly: a run does only what's missing, and sets the midnight alarm again should
+  // it have been lost. The day itself starts on the Durable Object's alarm.
+  "triggers": { "crons": ["0 * * * *"] },
+  // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
+  // @-/com.leonsilicon.www.
+  "assets": {
+    "directory": "../../dist/www",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none",
+  },
+  // No vars here: every var and secret comes from the root .env.schema (#dailylinear, values in
+  // Infisical), uploaded by `varlock-wrangler deploy`, which replaces whatever the Worker had.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

@@ -12,6 +12,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
   assert.deepEqual(apps, [
     "autolinear",
     "cronometer",
+    "dailylinear",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -32,14 +33,19 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/autolinear/intake.ts"), [
     "autolinear",
   ]);
-  // autolinear builds on linear-slack-sync's Linear client and helpers, so both go.
+  assert.deepEqual(affected("packages/com/leonsilicon/ai/services/dailylinear/daily.ts"), [
+    "dailylinear",
+  ]);
+  // autolinear and dailylinear build on linear-slack-sync's Linear client and helpers, so all go.
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/linear-slack-sync/sync.ts"), [
     "autolinear",
+    "dailylinear",
     "linear-slack-sync",
   ]);
-  // Both import slack-as-leon's session client.
+  // They all import slack-as-leon's session client.
   assert.deepEqual(affected("packages/com/leonsilicon/ai/services/slack-as-leon/slack.ts"), [
     "autolinear",
+    "dailylinear",
     "linear-slack-sync",
     "slack-as-leon",
   ]);
@@ -47,6 +53,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("www/ai/leonsilicon/cronometer/index.html"), [
     "autolinear",
     "cronometer",
+    "dailylinear",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -54,6 +61,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("bun.lock"), [
     "autolinear",
     "cronometer",
+    "dailylinear",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",
@@ -61,6 +69,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   assert.deepEqual(affected("packages/com/leonsilicon/www/page.ts"), [
     "autolinear",
     "cronometer",
+    "dailylinear",
     "gmail-feed",
     "linear-slack-sync",
     "slack-as-leon",

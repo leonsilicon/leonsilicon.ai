@@ -1,7 +1,6 @@
 import { CLIENT_MSG_ID_PREFIX } from "@-/com.leonsilicon.ai.services.slack-as-leon";
 import type { SyncConfig } from "#config";
 import {
-  addDays,
   channelName,
   channelNumber,
   channelTopic,
@@ -205,17 +204,8 @@ export const PROJECT_GRACE_MS = 5 * 60_000;
 /** How long to wait before asking Linear again for a channel that never appeared. */
 const PROJECT_RETRY_MS = 30 * 60_000;
 
-/**
- * The `section` a project record holds while its channel is in Leon's Starred section: the channel
- * of the latest day's project (see `projectDay`). Slack's Starred isn't a custom section, so this
- * stands in for its name.
- */
-export const STARRED = "Starred";
-
 /** The timer of an issue: when its next start, stop or due time comes. */
 const issueTimer = (issueId: string) => `timer:${issueId}`;
-/** The timer that looks at the day projects again at the next midnight. */
-const DAYS_TIMER = "days";
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
 /**
@@ -283,10 +273,6 @@ export class Sync {
       if (event.type === "reaction_added") await this.onSlackReaction(event as SlackReactionEvent);
       else await this.onSlackMessage(event as SlackMessageEvent);
     } else if (kind === "timer") await this.onTimer((payload as { id: string }).id);
-    else if (kind === "days")
-      await this.#settleDays(
-        await this.#linear.openProjects(this.#c.teamKey, this.#c.closedProjectTypes),
-      );
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "tick") await this.tick();
@@ -486,6 +472,10 @@ export class Sync {
    * updates there and syncs their threads, then files it in the projects section with Leon and
    * Hermes in it. A closed project's channel is archived; reopening unarchives it. Linear names,
    * renames, topics and populates the channel itself.
+   *
+   * A day's project (named after a date, see `projectDay`) belongs to dailylinear, which makes it,
+   * asks for its `project-YYYY-MM-DD` channel and keeps the day's channel in Starred. Here it only
+   * gets Leon and Hermes in its channel, and has the channel archived when it closes.
    */
   async syncProject(project: LinearProject): Promise<ProjectRecord | null> {
     const prev = this.#store.project(project.id);
@@ -505,7 +495,9 @@ export class Sync {
       return this.#store.project(project.id);
     }
 
-    const channelId = project.slackChannelId ?? (await this.#requestProjectChannel(project, prev));
+    const day = projectDay(project.name) !== null;
+    const channelId =
+      project.slackChannelId ?? (day ? null : await this.#requestProjectChannel(project, prev));
     if (!channelId) return prev;
     const same = prev?.channelId === channelId;
     const rec: ProjectRecord = {
@@ -527,102 +519,13 @@ export class Sync {
       ]);
     }
     if (!same || prev.archived) await this.#joinProject(channelId);
-    const day = projectDay(project.name) !== null;
     const section = this.#c.projectSection;
-    // A day's project is filed by #settleDays, which stars the latest day's channel.
+    // dailylinear files a day's channel: in Starred on its day, under Projects after.
     if (!day && rec.section !== section && (await this.#place(channelId, section)))
       rec.section = section;
     this.#store.putProject(rec);
     if (!same) this.#log("project_channel", { project: project.name, channel: channelId });
-    if (!day) return rec;
-    await this.#settleDays(
-      await this.#linear.openProjects(this.#c.teamKey, this.#c.closedProjectTypes),
-    );
-    return this.#store.project(project.id);
-  }
-
-  /**
-   * Keeps the channels of day projects (a project named after a date, like Hermes's daily `20261119`)
-   * named `project-YYYY-MM-DD`, and keeps the latest one whose day has come (in `timeZone`) in Leon's
-   * Starred section, out of every custom section. The day's channel is starred once it exists, and
-   * the one before it goes back under Projects then, so Starred is never left without a day.
-   * Channels Leon stars himself are never touched: only a channel this starred is unstarred.
-   */
-  async #settleDays(projects: LinearProject[]): Promise<void> {
-    const today = localDay(this.#now(), this.#c.timeZone);
-    const days = projects.flatMap((project) => {
-      const day = projectDay(project.name);
-      return day && project.slackChannelId ? [{ project, day }] : [];
-    });
-    const current =
-      days
-        .filter((d) => d.day <= today)
-        .sort((a, b) => b.day.localeCompare(a.day) || b.project.createdAt - a.project.createdAt)[0]
-        ?.project.id ?? null;
-    for (const { project } of days) {
-      const rec = this.#store.project(project.id);
-      // Not settled by syncProject yet; it comes back here once it is.
-      if (!rec?.channelId || rec.archived || rec.channelId !== project.slackChannelId) continue;
-      await this.#nameDay(rec.channelId, project.name);
-      const want = project.id === current ? STARRED : this.#c.projectSection;
-      if (rec.section === want) continue;
-      const done =
-        want === STARRED
-          ? await this.#star(rec.channelId)
-          : (rec.section !== STARRED || (await this.#unstar(rec.channelId))) &&
-            (await this.#place(rec.channelId, want));
-      if (!done) continue;
-      this.#store.putProject({ ...rec, section: want });
-      this.#log(want === STARRED ? "starred_day" : "unstarred_day", {
-        project: project.name,
-        channel: rec.channelId,
-      });
-    }
-    // The latest day can change at midnight, when a day project made ahead of time comes due.
-    const midnight = metaInstant(addDays(today, 1), this.#c.timeZone)!.getTime();
-    this.#store.setTimer(DAYS_TIMER, "days", {}, midnight, this.#now());
-  }
-
-  /**
-   * Renames a day project's channel to `project-YYYY-MM-DD`. Linear's app names it after the
-   * project (`project-20261119`); Linear keeps the connection by ID, so a rename doesn't break it.
-   * A name some other channel holds is left alone, and so is a rename Slack refuses.
-   */
-  async #nameDay(channelId: string, projectName: string): Promise<void> {
-    if (!this.#session) return;
-    const settings = await this.#channelSettings();
-    if (!settings) return;
-    const want = projectChannelName(settings.prefix, projectName, this.#c.channelNameMax);
-    const channels = await this.#listChannels();
-    const self = channels.find((c) => c.id === channelId);
-    if (!self || self.name === want) return;
-    if (channels.some((c) => c.id !== channelId && c.name === want)) {
-      this.#log("day_name_taken", { channel: channelId, name: want });
-      return;
-    }
-    try {
-      await this.#session("conversations.rename", { channel: channelId, name: want });
-    } catch (error) {
-      if (!(error instanceof SlackError)) throw error;
-      this.#log("day_rename_failed", { channel: channelId, name: want, error: error.code });
-      return;
-    }
-    this.#log("renamed_day", { from: self.name, to: want });
-    self.name = want;
-  }
-
-  /** Stars a channel in Leon's sidebar and takes it out of custom sections. False without a session. */
-  async #star(channelId: string): Promise<boolean> {
-    if (!this.#session) return false;
-    await tolerate(this.#session("stars.add", { channel: channelId }), ["already_starred"]);
-    await this.#unplace(channelId);
-    return true;
-  }
-
-  async #unstar(channelId: string): Promise<boolean> {
-    if (!this.#session) return false;
-    await tolerate(this.#session("stars.remove", { channel: channelId }), ["not_starred"]);
-    return true;
+    return rec;
   }
 
   async #channelSettings(): Promise<ProjectChannelSettings | null> {
@@ -634,7 +537,6 @@ export class Sync {
   /** Takes a closed or deleted project's channel out of the sidebar and archives it. */
   async #closeProject(rec: ProjectRecord): Promise<void> {
     if (rec.channelId && !rec.archived) {
-      if (rec.section === STARRED) await this.#unstar(rec.channelId);
       await this.#unplace(rec.channelId);
       await this.#archive(rec.channelId);
       this.#log("archived_project_channel", { project: rec.name, channel: rec.channelId });
@@ -1262,8 +1164,6 @@ export class Sync {
       if (project) await this.syncProject(project);
       else await this.#closeProject(rec);
     }
-    // Also sets the midnight timer, should it have been lost.
-    await this.#settleDays(projects);
   }
 
   /**

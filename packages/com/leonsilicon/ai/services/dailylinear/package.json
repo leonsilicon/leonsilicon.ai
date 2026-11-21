@@ -1,0 +1,17 @@
+{
+  "name": "@-/com.leonsilicon.ai.services.dailylinear",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Makes each day's Linear project at midnight, with its project-YYYY-MM-DD Slack channel starred in Leon's sidebar.",
+  "type": "module",
+  "imports": {
+    "#config": "./config.ts",
+    "#daily": "./daily.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*"
+  }
+}

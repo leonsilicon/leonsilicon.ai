@@ -64,6 +64,7 @@ export default defineConfig({
             "autolinear",
             "beeper-inbox",
             "beeper-watch",
+            "dailylinear",
             "gmail-feed",
             "grok-relay",
             "linear-slack-sync",
@@ -104,6 +105,12 @@ export default defineConfig({
         // or newer), then varlock-wrangler deploys and uploads the #cronometer items, as for the others.
         command:
           "vp build && cd apps/cronometer && uv run pywrangler sync && varlock-wrangler deploy -c wrangler.jsonc",
+      },
+      "deploy:dailylinear": {
+        cache: false,
+        // Like deploy:slack-as-leon: varlock-wrangler uploads the #dailylinear items.
+        command:
+          "tsc --noEmit && vp build && cd apps/dailylinear && varlock-wrangler deploy -c wrangler.jsonc",
       },
       "deploy:gmail-feed": {
         cache: false,

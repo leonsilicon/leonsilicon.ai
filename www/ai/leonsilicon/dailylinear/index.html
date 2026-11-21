@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>dailylinear · dailylinear.leonsilicon.ai</title>
+  </head>
+  <body>
+    <main>
+      <p class="host">dailylinear.leonsilicon.ai</p>
+      <h1>dailylinear</h1>
+      <p>
+        Makes Leon's Linear project for each day at midnight in Toronto, with its
+        <code>#project-YYYY-MM-DD</code> Slack channel, and keeps the day's channel starred in his
+        sidebar. Past days' projects are marked done and their channels archived. It runs on its
+        own; this page only shows whether today's is ready.
+      </p>
+      <dl>
+        <dt>Status</dt>
+        <dd data-health>Checking…</dd>
+      </dl>
+    </main>
+    <script type="module">
+      import { mountServicePage } from "@-/com.leonsilicon.www/client";
+
+      void mountServicePage();
+    </script>
+  </body>
+</html>

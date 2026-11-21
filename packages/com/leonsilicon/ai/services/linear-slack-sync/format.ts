@@ -203,7 +203,7 @@ export function channelName(prefix: string, number: number, name: string, max: n
 
 /**
  * The day a project is for, as `YYYY-MM-DD`, when its whole name is a calendar date: `20261119` (the
- * name Hermes's 05:00 Toronto job gives each day's project) or `2026-11-19`. Null for any other name.
+ * name dailylinear gives each day's project) or `2026-11-19`. Null for any other name.
  */
 export function projectDay(name: string): string | null {
   const match = /^(\d{4})(-?)(\d{2})\2(\d{2})$/.exec(name.trim());

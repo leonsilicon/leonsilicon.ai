@@ -55,6 +55,15 @@
         "@-/com.leonsilicon.www": "workspace:*",
       },
     },
+    "apps/dailylinear": {
+      "name": "@-apps/dailylinear",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.dailylinear": "workspace:*",
+        "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
+        "@-/com.leonsilicon.ai.services.slack-as-leon": "workspace:*",
+        "@-/com.leonsilicon.www": "workspace:*",
+      },
+    },
     "apps/gmail-feed": {
       "name": "@-apps/gmail-feed",
       "dependencies": {
@@ -171,6 +180,13 @@
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
         "@-/com.npmjs.slack__web-api": "workspace:*",
+      },
+    },
+    "packages/com/leonsilicon/ai/services/dailylinear": {
+      "name": "@-/com.leonsilicon.ai.services.dailylinear",
+      "version": "1.0.0",
+      "dependencies": {
+        "@-/com.leonsilicon.ai.services.linear-slack-sync": "workspace:*",
       },
     },
     "packages/com/leonsilicon/ai/services/gmail-feed": {
@@ -336,6 +352,8 @@
 
     "@-/com.leonsilicon.ai.services.beeper-watch": ["@-/com.leonsilicon.ai.services.beeper-watch@workspace:packages/com/leonsilicon/ai/services/beeper-watch"],
 
+    "@-/com.leonsilicon.ai.services.dailylinear": ["@-/com.leonsilicon.ai.services.dailylinear@workspace:packages/com/leonsilicon/ai/services/dailylinear"],
+
     "@-/com.leonsilicon.ai.services.gmail-feed": ["@-/com.leonsilicon.ai.services.gmail-feed@workspace:packages/com/leonsilicon/ai/services/gmail-feed"],
 
     "@-/com.leonsilicon.ai.services.grok-relay": ["@-/com.leonsilicon.ai.services.grok-relay@workspace:packages/com/leonsilicon/ai/services/grok-relay"],
@@ -387,6 +405,8 @@
     "@-apps/beeper-watch": ["@-apps/beeper-watch@workspace:apps/beeper-watch"],
 
     "@-apps/cronometer": ["@-apps/cronometer@workspace:apps/cronometer"],
+
+    "@-apps/dailylinear": ["@-apps/dailylinear@workspace:apps/dailylinear"],
 
     "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
 

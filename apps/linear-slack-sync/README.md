@@ -1,6 +1,6 @@
 # @-apps/linear-slack-sync
 
-Runs [linear-slack-sync](../../packages/com/leonsilicon/ai/services/linear-slack-sync/README.md) as a Cloudflare Worker (since 2026-11-18). It keeps one Slack channel per Linear issue in team LEON, files each channel in Leon's sidebar section named exactly after its status, and mirrors comments both ways. Since 2026-11-19 it also gives every open project a channel connected through Linear's own Slack app, filed under Projects, and keeps the channel of the day's project (`project-YYYY-MM-DD`) in Starred. Since 2026-11-21 it also takes over the channels [autolinear](../autolinear/README.md) opens for the issues it makes from Leon's Slack messages ([autolinear](#autolinear)). It depends on no machine of Leon's.
+Runs [linear-slack-sync](../../packages/com/leonsilicon/ai/services/linear-slack-sync/README.md) as a Cloudflare Worker (since 2026-11-18). It keeps one Slack channel per Linear issue in team LEON, files each channel in Leon's sidebar section named exactly after its status, and mirrors comments both ways. Since 2026-11-19 it also gives every open project a channel connected through Linear's own Slack app, filed under Projects; the day's project and its channel (`project-YYYY-MM-DD`, in Starred) are [dailylinear](../dailylinear/README.md)'s since 2026-11-21. Since 2026-11-21 it also takes over the channels [autolinear](../autolinear/README.md) opens for the issues it makes from Leon's Slack messages ([autolinear](#autolinear)). It depends on no machine of Leon's.
 
 ```text
 Linear (webhook: Issue, Comment, Project) ──┐                       ┌──▶ Slack Web API as the Linear Sync bot (channels, posts)
@@ -10,7 +10,7 @@ cron daily ───────────────────────
                                                                      └──▶ Linear API (issues, comments, status moves, project channels)
 ```
 
-The Worker only verifies and queues. One Durable Object, `SyncObject`, drains a SQLite queue on an alarm, one job at a time. That serializes everything, so two events about one issue can't both create a channel. Failures retry with backoff (30 s, doubling); after six attempts a job moves to `dead`. Timers are delayed jobs in the same queue (an issue's next start, stop or due time, and the next midnight), so the alarm wakes the Worker when a time comes; nothing polls. The daily cron (08:00 UTC) is only a safety net ([Times](../../packages/com/leonsilicon/ai/services/linear-slack-sync/README.md#times)).
+The Worker only verifies and queues. One Durable Object, `SyncObject`, drains a SQLite queue on an alarm, one job at a time. That serializes everything, so two events about one issue can't both create a channel. Failures retry with backoff (30 s, doubling); after six attempts a job moves to `dead`. Timers are delayed jobs in the same queue (an issue's next start, stop or due time), so the alarm wakes the Worker when a time comes; nothing polls. The daily cron (08:00 UTC) is only a safety net ([Times](../../packages/com/leonsilicon/ai/services/linear-slack-sync/README.md#times)).
 
 ## Pieces
 
@@ -42,7 +42,7 @@ With `T=$(vpx varlock load --filter LINEAR_SYNC_ADMIN_TOKEN --format json | jq -
 
 - `curl -s -H "authorization: Bearer $T" https://linear-slack.leonsilicon.ai/admin/status` shows the queue with each job's attempts and last error, plus dead jobs.
 - `curl -s -X POST -H "authorization: Bearer $T" …/admin/backfill` adopts or creates channels for every open issue and archives channels of closed ones, quietly (no posts), then gives every open project its channel. Safe to rerun.
-- `curl -s -X POST -H "authorization: Bearer $T" …/admin/tick` runs the daily safety net now. `/admin/status` lists queued jobs, timers included (`timer:<issue id>@<ms>`, `days@<ms>`).
+- `curl -s -X POST -H "authorization: Bearer $T" …/admin/tick` runs the daily safety net now. `/admin/status` lists queued jobs, timers included (`timer:<issue id>@<ms>`).
 
 Other tasks:
 

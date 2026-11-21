@@ -94,6 +94,16 @@ export interface NewIssue {
   projectId?: string;
 }
 
+/** A project to create: `id` is a UUID chosen by the caller, dates are `YYYY-MM-DD`. */
+export interface NewProject {
+  id: string;
+  name: string;
+  teamIds: string[];
+  statusId: string;
+  startDate: string;
+  targetDate: string;
+}
+
 /** A team's ID and statuses, which creating an issue needs. */
 export interface LinearTeam {
   id: string;
@@ -359,6 +369,51 @@ export class LinearClient implements LinearApi {
     );
     const node = data.teams.nodes[0];
     return node ? { id: node.id, states: node.states.nodes } : null;
+  }
+
+  /** The team's projects with one of these exact names, archived, closed and trashed ones included. */
+  async projectsNamed(teamKey: string, names: string[]): Promise<LinearProject[]> {
+    const data = await this.gql<{ projects: { nodes: ProjectNode[] } }>(
+      `query($team: String!, $names: [String!]) {
+        projects(first: 50, includeArchived: true, filter: {
+          accessibleTeams: { some: { key: { eq: $team } } }, name: { in: $names } }) {
+          nodes { ${PROJECT_FIELDS} } } }`,
+      { team: teamKey, names },
+    );
+    return data.projects.nodes.map(toProject);
+  }
+
+  /** The workspace's project statuses (Backlog, Planned, In Progress…), each with its type. */
+  async projectStatuses(): Promise<LinearState[]> {
+    const data = await this.gql<{ projectStatuses: { nodes: LinearState[] } }>(
+      `{ projectStatuses { nodes { id name type } } }`,
+    );
+    return data.projectStatuses.nodes;
+  }
+
+  /**
+   * Creates a project with the given ID, so a retry reuses it: Linear refuses a second project with
+   * the same ID. Dates are `YYYY-MM-DD`.
+   */
+  async createProject(input: NewProject): Promise<LinearProject> {
+    const data = await this.gql<{
+      projectCreate: { success: boolean; project: ProjectNode | null };
+    }>(
+      `mutation($input: ProjectCreateInput!) { projectCreate(input: $input) { success project { ${PROJECT_FIELDS} } } }`,
+      { input },
+    );
+    if (!data.projectCreate.success || !data.projectCreate.project)
+      throw new LinearError("projectCreate failed");
+    return toProject(data.projectCreate.project);
+  }
+
+  /** Changes a project's status (`statusId`, one of `projectStatuses`). */
+  async updateProject(id: string, input: { statusId: string }): Promise<void> {
+    const data = await this.gql<{ projectUpdate: { success: boolean } }>(
+      `mutation($id: String!, $input: ProjectUpdateInput!) { projectUpdate(id: $id, input: $input) { success } }`,
+      { id, input },
+    );
+    if (!data.projectUpdate.success) throw new LinearError("projectUpdate failed");
   }
 
   async createIssue(input: NewIssue) {
