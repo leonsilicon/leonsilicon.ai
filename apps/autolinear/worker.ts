@@ -8,8 +8,13 @@ import type {
   Progress,
   SlackMessageEvent,
 } from "@-/ai.leonsilicon.services.autolinear";
-import { LinearClient, verifySlack } from "@-/ai.leonsilicon.services.slack22linear";
-import type { Adoption } from "@-/ai.leonsilicon.services.slack22linear";
+import {
+  commandUsage,
+  LinearClient,
+  parseCommand,
+  verifySlack,
+} from "@-/ai.leonsilicon.services.slack22linear";
+import type { Adoption, CommandJob } from "@-/ai.leonsilicon.services.slack22linear";
 import { sessionClient } from "@-/ai.leonsilicon.services.slack-as-leon";
 import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
@@ -37,7 +42,10 @@ interface DurableObjectState {
 interface Env {
   /** One Durable Object per message. */
   INTAKE: DurableObjectNamespace;
-  /** slack22linear's Durable Object (script linear-slack-sync), which adopts the channels. */
+  /**
+   * slack22linear's Durable Object (script linear-slack-sync), which adopts the channels and carries
+   * out Leon's `/autolinear` commands.
+   */
   SYNC: DurableObjectNamespace;
   /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/autolinear/index.html. */
   ASSETS: Assets;
@@ -45,7 +53,8 @@ interface Env {
   AUTOLINEAR_TOKEN: string;
   /**
    * Signing secret of the autolinear Slack app, whose user events (Leon's messages) start intakes
-   * before Hermes asks. Until it's set, /slack/events answers only Slack's URL check.
+   * before Hermes asks, and whose `/autolinear` command comes to /slack/commands. Until it's set,
+   * /slack/events answers only Slack's URL check.
    */
   AUTOLINEAR_SLACK_SIGNING_SECRET?: string;
   /** Personal API key of the Linear account issues are created as (slack22linear's). */
@@ -189,6 +198,49 @@ export default {
       const message = readMessage(body);
       if (!message) return json({ error: "channel, ts and user are required" }, 400);
       return startIntake(env, message);
+    }
+
+    // Leon's /autolinear: the commands Hermes gives Autolinear by mention, for the issue channel he
+    // types it in. slack22linear's queue carries it out and answers him privately.
+    if (request.method === "POST" && url.pathname === "/slack/commands") {
+      const body = await request.text();
+      if (!env.AUTOLINEAR_SLACK_SIGNING_SECRET) return json({ error: "not configured" }, 503);
+      const verified = await verifySlack(
+        env.AUTOLINEAR_SLACK_SIGNING_SECRET,
+        request.headers.get("x-slack-request-timestamp"),
+        request.headers.get("x-slack-signature"),
+        body,
+        Date.now(),
+      );
+      if (!verified) return json({ error: "bad signature" }, 401);
+      const form = new URLSearchParams(body);
+      const privately = (text: string) => json({ response_type: "ephemeral", text });
+      const config = loadConfig(env as Record<string, string | undefined>);
+      if (form.get("user_id") !== config.leonUserId)
+        return privately("Only Leon gives me commands this way.");
+      const text = form.get("text") ?? "";
+      const parsed = parseCommand(text);
+      if (!parsed.ok || parsed.command.verb === "help")
+        return privately(
+          `${parsed.ok ? "In an issue's channel:" : `I couldn't do that: ${parsed.error}.`}\n${commandUsage("/autolinear")}`,
+        );
+      const trigger = form.get("trigger_id") || String(Date.now());
+      const job: CommandJob = {
+        channel: form.get("channel_id") ?? "",
+        ts: `slash-${trigger}`,
+        text,
+        by: "leon",
+        responseUrl: form.get("response_url") ?? undefined,
+      };
+      const queued = await env.SYNC.get(env.SYNC.idFromName("sync")).fetch(
+        new Request("https://sync/enqueue", {
+          method: "POST",
+          body: JSON.stringify({ id: `command:${job.ts}`, kind: "command", payload: job }),
+        }),
+      );
+      log("slash_command", { channel: job.channel, text, status: queued.status });
+      // The outcome comes from the queue, through the response URL.
+      return queued.ok ? new Response(null, { status: 200 }) : privately("I couldn't queue that.");
     }
 
     // The autolinear Slack app's user events: every message in Leon's DMs and public channels. One

@@ -16,9 +16,12 @@ live Slack adapter:
 - ``_build_message_event``: runs only after every gate (auth, channel, mention, bot) has accepted a
   message, so it sees exactly the messages Hermes answers. It waits for the request started early,
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
-  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there. Both new and
-  existing issue channels get the same handoff rule: post the reply that mentions Leon and let
-  slack22linear move the issue to Awaiting Leon from that message.
+  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there.
+
+Every turn in an issue channel, new or existing, whoever started it, gets Autolinear's rule in its
+channel prompt (Leon's rule, 2026-11-23): end the turn with one line that starts with Autolinear's
+mention and says what to do with the channel (``move done``, ``move leon``, ``stay``…). Nothing
+moves on Hermes's answer otherwise, and Autolinear reminds Hermes when a turn ends without one.
 
 The copy's own event carries slack-as-leon's marker, so ``slack-as-leon-guard`` drops it and Hermes
 doesn't answer the message twice. That plugin must be enabled too.
@@ -52,6 +55,9 @@ USER_ENV = "AUTOLINEAR_USER_ID"  # Leon's Slack user ID
 URL_ENV = "AUTOLINEAR_URL"
 PREFIX_ENV = "AUTOLINEAR_CHANNEL_PREFIX"
 SKIP_ENV = "AUTOLINEAR_SKIP_CHANNELS"
+#: Autolinear's bot user, whose mention starts Hermes's command line. Without it, the prompt asks for a
+#: plain "@Autolinear", which Autolinear reads too.
+BOT_ENV = "AUTOLINEAR_BOT_USER_ID"
 
 DEFAULT_URL = "https://autolinear.leonsilicon.ai/intake"
 DEFAULT_PREFIX = "leon"
@@ -70,14 +76,28 @@ _THREAD_KEYS = (
     "latest_reply", "replies", "subscribed", "last_read", "edited", "_slack_changed_event_ts",
 )
 _MENTION = re.compile(r"<@([UW][A-Z0-9]+)")
-_HANDOFF_PROMPT = (
-    "Slack22Linear owns the handoff to Awaiting Leon in this issue channel. "
-    "When Leon needs or would want to see something, post the complete reply here with "
-    "a real Slack @mention of Leon. Keep that mention in the Slack reply so Slack22Linear "
-    "moves the issue after the reply is posted. Omit the status field from Linear updates "
-    "that save notes, drafts, or approval details for this handoff. Slack22Linear also "
-    "handles completion for replies that don't need a mention."
-)
+
+
+def _handoff_prompt() -> str:
+    """Autolinear's rule for a turn in an issue channel, with its mention spelled out: Hermes's Slack
+    adapter shows every mention it reads as a plain @Name, so the raw token has to come from here."""
+    bot = os.environ.get(BOT_ENV, "").strip()
+    mention = f"<@{bot}>" if bot else "@Autolinear"
+    return (
+        "Autolinear (Leon's rule, November 23, 2026): this is a Linear issue's channel, and every "
+        "turn you finish here must end with one line of its own that tells Autolinear what to do "
+        f"with the channel. Start that line with {mention}, written exactly so, then one of: "
+        "`move done` (nothing is left for anyone, even after a thanks), "
+        "`move leon` (Leon needs to see, decide or do something; Autolinear pings him), "
+        "`move others who=\"<who>\"` (waiting on someone else), "
+        "`move listener event=\"<what>\" stop=YYYY-MM-DD` (waiting for something to happen), "
+        "`move date start=<RFC 3339 time or YYYY-MM-DD>` (work starts later), "
+        "`move hermes` (you are still working on it) or "
+        "`stay` (leave the status as it is). "
+        "Only that line moves the issue: mentioning Leon moves nothing, and you don't set this "
+        "status in Linear yourself. When you forget, Autolinear reminds you here; answer it with "
+        "the line. When it says a command didn't work, send a corrected line."
+    )
 
 
 def _settings() -> Optional[dict[str, Any]]:
@@ -239,7 +259,8 @@ def _note(result: dict) -> str:
 
 
 def _add_handoff_prompt(msg_event) -> None:
-    msg_event.channel_prompt = "\n\n".join(filter(None, (msg_event.channel_prompt, _HANDOFF_PROMPT)))
+    msg_event.channel_prompt = "\n\n".join(
+        filter(None, (msg_event.channel_prompt, _handoff_prompt())))
 
 
 def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
@@ -319,6 +340,15 @@ def wire(native, adapter) -> None:
             logger.warning("autolinear: could not start early", exc_info=True)
         return accepted
 
+    async def build_in_place(settings, event, *args, **kwargs):
+        """The turn where the message is; one in an issue channel gets Autolinear's rule, whoever
+        started it (Leon, a bot's ping, Autolinear's reminder)."""
+        msg_event = await build(event, *args, **kwargs)
+        if (settings is not None and msg_event is not None and not kwargs.get("is_command_text")
+                and settings["issue_channel"].match(msg_event.source.chat_name or "")):
+            _add_handoff_prompt(msg_event)
+        return msg_event
+
     @functools.wraps(build)
     async def build_in_issue_channel(event, *args, **kwargs):
         settings = _settings()
@@ -326,7 +356,7 @@ def wire(native, adapter) -> None:
                 or kwargs.get("user_id") != settings["user"] or kwargs.get("is_command_text")
                 or event.get("_hermes_reaction") or event.get("_hermes_force_process")
                 or _is_marked(event)):
-            return await build(event, *args, **kwargs)
+            return await build_in_place(settings, event, *args, **kwargs)
         try:
             target = await _move(adapter, settings, event, kwargs)
         except Exception:
@@ -335,11 +365,7 @@ def wire(native, adapter) -> None:
                 kwargs.get("channel_id"), kwargs.get("ts"), exc_info=True)
             target = None
         if target is None:
-            msg_event = await build(event, *args, **kwargs)
-            if msg_event is not None and settings["issue_channel"].match(
-                    msg_event.source.chat_name or ""):
-                _add_handoff_prompt(msg_event)
-            return msg_event
+            return await build_in_place(settings, event, *args, **kwargs)
         moved, moved_kwargs = target
         try:
             msg_event = await build(moved, *args, **moved_kwargs)

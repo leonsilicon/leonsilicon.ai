@@ -1,4 +1,6 @@
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
+import { AWAITING_PREFIX, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
+import type { AutolinearCommand } from "#command";
 import type { SyncConfig } from "#config";
 import {
   channelName,
@@ -27,7 +29,7 @@ import type {
   ProjectChannelSettings,
 } from "#linear";
 import { Sidebar, SlackError, tolerate } from "#slack";
-import type { SlackCall } from "#slack";
+import type { SlackCall, SlackParams, SlackResponse } from "#slack";
 import type { IssueRecord, ProjectRecord, Store } from "#store";
 
 export interface LinearWebhook {
@@ -99,12 +101,31 @@ interface SlackMessage {
   text?: string;
 }
 
-/** Hermes finished a turn on Leon's message (`Sync.onAnswered`). */
+/** Hermes finished a turn on a message in an issue channel (`Sync.onAnswered`). */
 interface Answer {
   channel: string;
+  /** The message Hermes took up. */
   ts: string;
   /** Hermes reacted ❌: the turn failed. */
   failed: boolean;
+}
+
+/** A command for Autolinear (`Sync.onCommand`): from Hermes's message, or Leon's `/autolinear`. */
+export interface CommandJob {
+  channel: string;
+  /** Hermes's message's ts, or `slash-<trigger id>` for Leon's slash command. */
+  ts: string;
+  /** Hermes's whole message, or Leon's words after `/autolinear`. */
+  text: string;
+  by: "hermes" | "leon";
+  /** Where Leon's slash command is answered (Slack's `response_url`, ephemeral). */
+  responseUrl?: string;
+}
+
+/** What a command came to: told back to Leon, or to Hermes when it didn't work. */
+interface Outcome {
+  ok: boolean;
+  text: string;
 }
 
 /** Extras for a live status post. */
@@ -131,6 +152,25 @@ export interface SyncDeps {
   log?: (event: string, fields?: Record<string, unknown>) => void;
   /** The bot's own Slack user ID, when the caller already knows it; else `auth.test` finds it. */
   botUserId?: string;
+  /**
+   * Autolinear's bot (Leon's rule, 2026-11-23): it reminds Hermes to say what to do with an issue
+   * channel and confirms Hermes's commands. Without it, nothing is posted for commands.
+   */
+  autolinear?: SlackCall | null;
+  /** Answers Leon's `/autolinear` at Slack's `response_url`. Tests pass a fake. */
+  respond?: (url: string, text: string) => Promise<void>;
+}
+
+/** Answers a slash command, visible only to whoever typed it. */
+async function respondAt(url: string, text: string): Promise<void> {
+  if (!url.startsWith("https://hooks.slack.com/")) throw new Error("not a Slack response URL");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ response_type: "ephemeral", text }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`Slack's response URL answered ${response.status}`);
 }
 
 interface ChannelInfo {
@@ -172,16 +212,19 @@ export const isAutolinearIssue = (issueId: string) =>
 export const ADOPT_WAIT_MS = 2 * 60_000;
 
 /**
- * How long after Hermes's ✅ its answer is judged: Hermes reacts right after its last post, and
- * that post (and a ping to Leon in it) can reach the queue after the reaction does.
+ * How long after Hermes's ✅ (or ❌) its turn is checked for a command to Autolinear: Hermes reacts
+ * right after its last post, and that post can reach the queue after the reaction does.
  */
 export const ANSWER_SETTLE_MS = 10_000;
 
+/** How long after Hermes last posted or edited a message its command is read and carried out. */
+export const COMMAND_SETTLE_MS = 3000;
+
 /**
- * How far Linear's clock may run ahead of the Worker's: a status change dated up to this long after
- * the 👀 move was recorded is still that move.
+ * How many times Autolinear asks Hermes for a command (a reminder, or why a command didn't work)
+ * since Leon last wrote or a command last worked, before it tells Leon instead.
  */
-const ACK_SKEW_MS = 2000;
+export const MAX_REMINDERS = 2;
 
 /** A Slack message ts as milliseconds. */
 const slackTsMs = (ts: string) => Math.round(Number(ts) * 1000);
@@ -222,10 +265,15 @@ const issueTimer = (issueId: string) => `timer:${issueId}`;
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
 /**
- * Recorded once a ping to Leon has been acted on, so edits of the message or comment that carried
- * it don't act again: `ping:<channel>:<ts>` for Hermes's Slack posts, `ping:comment:<id>` for Linear.
+ * Autolinear's records, per channel and message (a prefix with `ts` left out): `said` when Hermes's
+ * message (or Leon's slash command) gave a command, so the turn said what to do; `done` once the
+ * command was read, so it acts once; `worked` when it moved or kept the status; `asked` for each
+ * time Autolinear asked Hermes for one.
  */
-const pingKey = (...parts: string[]) => `ping:${parts.join(":")}`;
+const saidKey = (channel: string, ts = "") => `said:${channel}:${ts}`;
+const doneKey = (channel: string, ts = "") => `done:${channel}:${ts}`;
+const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
+const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
 /** A notice for a due time (not a bare day) this late says "Overdue". */
 const LATE_MS = 3600_000;
 
@@ -251,6 +299,8 @@ export class Sync {
   readonly #now: () => number;
   readonly #log: (event: string, fields?: Record<string, unknown>) => void;
   readonly #sleep: (ms: number) => Promise<void>;
+  readonly #autolinear: SlackCall | null;
+  readonly #respond: (url: string, text: string) => Promise<void>;
   #botUserId: string | null = null;
   #channels: ChannelInfo[] | null = null;
   #projectChannels: ProjectChannelSettings | null | undefined;
@@ -269,6 +319,8 @@ export class Sync {
     this.#sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.#log = deps.log ?? (() => {});
     this.#botUserId = deps.botUserId ?? null;
+    this.#autolinear = deps.autolinear ?? null;
+    this.#respond = deps.respond ?? respondAt;
   }
 
   async run(kind: string, payload: unknown): Promise<void> {
@@ -295,6 +347,7 @@ export class Sync {
     } else if (kind === "timer") await this.onTimer((payload as { id: string }).id);
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
+    else if (kind === "command") await this.onCommand(payload as CommandJob);
     else if (kind === "tick") {
       await this.tick();
       await this.#publishProjectVisibility();
@@ -347,10 +400,6 @@ export class Sync {
         this.#bot("chat.update", { channel: known.channelId, ts: known.slackTs, text }),
         ["message_not_found", "cant_update_message", "channel_not_found", ...ARCHIVED],
       );
-      const key = pingKey("comment", id);
-      if (!mentions(text, this.#c.leonUserId) || this.#store.fired(key)) return;
-      const issue = await this.#openIssueIn(known.channelId);
-      if (issue) await this.#handToLeon(issue, key, comment.authorName);
       return;
     }
     const issue = await this.#linear.issue(comment.issueId);
@@ -378,9 +427,6 @@ export class Sync {
       rootCommentId: parent ? parent.rootCommentId : id,
       origin: "linear",
     });
-    // A comment that pings Leon (an agent asking him something) hands him the issue.
-    if (mentions(text, this.#c.leonUserId))
-      await this.#handToLeon(issue, pingKey("comment", id), comment.authorName);
   }
 
   /**
@@ -759,7 +805,7 @@ export class Sync {
     if (event.type !== "message") return;
     if (event.subtype === "message_changed") {
       const edited = event.message;
-      // Hermes streams some replies by editing them, so its ping can first show up in an edit.
+      // Hermes can stream a reply by editing it, so its command can first show up in an edit.
       if (edited?.user === this.#c.hermesUserId)
         return this.#onHermesMessage(event.channel, edited.ts, edited.text ?? "");
       if (!edited || edited.bot_id || !edited.user) return;
@@ -774,7 +820,7 @@ export class Sync {
     if (!event.user) return;
     if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
       return;
-    // Hermes's posts aren't mirrored, but one that pings Leon hands him the issue.
+    // Hermes's posts aren't mirrored, but one can carry a command for Autolinear.
     if (event.user === this.#c.hermesUserId)
       return this.#onHermesMessage(event.channel, event.ts, event.text ?? "");
     if (event.bot_id) return;
@@ -812,30 +858,27 @@ export class Sync {
   }
 
   /**
-   * Hermes reacts to Leon's message in an issue channel when it takes it up (👀), and once it has
-   * finished answering it (✅, or ❌ when its turn failed).
+   * Hermes reacts to each message it takes up: 👀 when it starts, ✅ when its turn is over, ❌ when
+   * the turn failed.
    *
-   * - 👀 moves the issue to Awaiting Hermes at once (`onHermesAck`; Leon's rule, 2026-11-19, which
-   *   he asked for again on 2026-11-21).
-   * - ✅ and ❌ move nothing then: the status is decided by `onAnswered` a few seconds later, once
-   *   Hermes's last posts (and a ping to Leon in them) have come in.
+   * - 👀 on Leon's message in an issue channel moves the issue to Awaiting Hermes at once
+   *   (`onHermesAck`; Leon's rule, 2026-11-19, which he asked for again on 2026-11-21).
+   * - ✅ or ❌ on any message in an issue channel (Leon's, a bot's ping, Autolinear's reminder) ends
+   *   a turn, after which Hermes owes Autolinear a command. `onAnswered` checks a few seconds later,
+   *   once Hermes's last posts are in. The answer itself moves nothing (Leon's rule, 2026-11-23).
    */
   async onSlackReaction(event: SlackReactionEvent): Promise<void> {
     const { hermesAckReaction, hermesAnsweredReaction, hermesFailedReaction } = this.#c;
-    const ack = event.reaction === hermesAckReaction;
-    if (
-      !ack &&
-      event.reaction !== hermesAnsweredReaction &&
-      event.reaction !== hermesFailedReaction
-    )
-      return;
-    if (event.user !== this.#c.hermesUserId || event.item_user !== this.#c.leonUserId) return;
+    const ended =
+      event.reaction === hermesAnsweredReaction || event.reaction === hermesFailedReaction;
+    if (event.reaction !== hermesAckReaction && !ended) return;
+    if (event.user !== this.#c.hermesUserId) return;
     const { channel, ts } = event.item;
     if (event.item.type !== "message" || !channel || !ts) return;
     const rec = this.#store.issueByChannel(channel);
     if (!rec || rec.archived) return;
-    if (ack) {
-      await this.onHermesAck(rec);
+    if (!ended) {
+      if (event.item_user === this.#c.leonUserId) await this.onHermesAck(rec);
       return;
     }
     const now = this.#now();
@@ -853,7 +896,7 @@ export class Sync {
    * Hermes took up Leon's message (👀): the issue moves to Awaiting Hermes without pinging Hermes,
    * which is already on it, so the sidebar shows at once that Hermes has it. The channel's section
    * changes first, alongside the status, since that's what Leon watches. The status it had before
-   * is kept (`acks`), and `onAnswered` judges Hermes's answer as if the issue had stayed there.
+   * is kept (`acks`), and title keys stay, so Hermes can put the issue back with a command.
    */
   async onHermesAck(rec: IssueRecord): Promise<void> {
     const issue = await this.#openIssueIn(rec.channelId);
@@ -882,100 +925,234 @@ export class Sync {
   }
 
   /**
-   * Hermes has answered Leon's message (Leon's rule, 2026-11-21):
-   *
-   * - If it pinged him since (the ping rule has already moved the issue to Awaiting Leon), or the
-   *   status changed since he wrote (Hermes or someone set what the issue waits on), or he has
-   *   written again (its answer decides), nothing moves.
-   * - Otherwise an issue in `answerClosesStates` (Awaiting Init, Awaiting Leon) is done: an answer
-   *   he doesn't need to see, such as one to his "thanks". Any other status stands.
-   * - A failed turn (❌) goes to Awaiting Leon, mentioning him, so he sees it.
-   *
-   * Hermes's own 👀 move to Awaiting Hermes doesn't count as a change: the status before it decides,
-   * and one that stands is put back.
+   * Hermes's turn in an issue channel is over. Leon's rule (2026-11-23): every turn ends with Hermes
+   * telling Autolinear what to do with the channel, in a line that starts with Autolinear's mention
+   * (`onCommand`), and nothing moves on what Hermes answered. A turn that ended without a command, or
+   * failed, gets a reminder from Autolinear, which mentions Hermes and so starts another turn. A turn
+   * on a message Leon has written after is skipped: Hermes's turn on his newer message counts.
    */
   async onAnswered(answer: Answer): Promise<void> {
     const issue = await this.#openIssueIn(answer.channel);
     if (!issue) return;
-    const status = issue.state.name;
-    if (answer.failed) {
-      this.#store.dropAck(issue.id);
-      if (status === this.#c.leonPingState || this.#c.mentionLeonStates.includes(status)) return;
-      await this.#moveNow(issue, this.#c.leonPingState, {
-        note: `(Hermes's turn on Leon's message failed)`,
-      });
-      this.#log("hermes_failed", { issue: issue.identifier, from: status });
-      return;
-    }
-    const wrote = slackTsMs(answer.ts);
-    const pinged = this.#store.firedSince("ping:", wrote).some(({ key }) => {
-      if (key.startsWith(`ping:${answer.channel}:`)) return true;
-      const comment = key.startsWith("ping:comment:")
-        ? this.#store.comment(key.slice("ping:comment:".length))
-        : null;
-      return comment?.issueId === issue.id;
-    });
-    // Leon wrote again: Hermes's answer to that decides, with the same 👀 record.
     if (this.#store.spokeAfter(answer.channel, answer.ts)) return;
+    if (this.#store.firedSince(saidKey(answer.channel), slackTsMs(answer.ts)).length) return;
+    const status = issue.state.name;
     const ack = this.#store.ack(issue.id);
-    this.#store.dropAck(issue.id);
-    if (pinged) return;
-    const changed = await this.#linear.lastStatusChange(issue.id);
-    // The status before Hermes's 👀, when the issue is still where the 👀 put it, unchanged since.
-    const ackedFrom =
-      ack?.at !== null &&
-      ack?.at !== undefined &&
-      status === this.#c.hermesAckState &&
-      (changed === null || changed <= ack.at + ACK_SKEW_MS)
-        ? ack.fromState
-        : null;
-    const acked = ackedFrom !== null;
-    if (!acked && changed !== null && changed > wrote) return;
-    const from = ackedFrom ?? status;
-    if (this.#c.answerClosesStates.includes(from)) {
-      await this.#moveNow(issue, this.#c.answeredState, {
-        note: "(Hermes answered Leon's message without pinging him)",
-      });
-      this.#log("answered_unpinged", { issue: issue.identifier, from });
-    } else if (acked && from !== status) {
-      await this.#moveNow(issue, from, {
-        note: "(Hermes answered Leon's message)",
-        quietHermes: true,
-        quietLeon: true,
-      });
-      this.#log("answered_restored", { issue: issue.identifier, to: from });
-    }
+    const before =
+      ack && status === this.#c.hermesAckState && ack.fromState !== status
+        ? ` Before your :${this.#c.hermesAckReaction}: it was *${ack.fromState}*.`
+        : "";
+    const opening = answer.failed
+      ? "Your turn here failed, so I still don't know"
+      : "Your turn here is over, but you haven't told me";
+    await this.#askHermes(
+      issue,
+      answer.channel,
+      `${opening} what to do with ${issue.identifier}, which is *${status}*.${before} Answer with a line of its own that starts with my mention:\n${commandUsage("@Autolinear")}`,
+    );
+    this.#log("autolinear_reminded", { issue: issue.identifier, failed: answer.failed });
   }
 
   /**
-   * Hermes mentioning Leon in an issue channel means it needs something from him (Leon's rule,
-   * 2026-11-19: Hermes pings him whenever it does), so the issue moves to Awaiting Leon, unless it
-   * already waits on him (a status that mentions him). The channel follows at once, without
-   * mentioning Leon again; Hermes's message already did. Each message acts once: a later edit of
-   * it (Hermes streams some replies that way) doesn't pull the issue back after Leon moves it on.
+   * Hermes's message in an issue channel, new or edited. A line that starts with Autolinear's mention
+   * is a command: the turn has said what to do from the moment the line shows up, and the command is
+   * read and carried out (`onCommand`) once Hermes hasn't edited the message for a few seconds.
+   * Mentioning Leon moves nothing, here or in a Linear comment (Leon's rule, 2026-11-23: issues move
+   * only by explicit commands).
    */
   async #onHermesMessage(channelId: string, ts: string, text: string): Promise<void> {
-    if (!mentions(text, this.#c.leonUserId)) return;
-    const key = pingKey(channelId, ts);
-    if (this.#store.fired(key)) return;
-    const issue = await this.#openIssueIn(channelId);
-    if (issue) await this.#handToLeon(issue, key, "Hermes");
+    if (commandLine(text, this.#c.autolinearUserId) === null) return;
+    const rec = this.#store.issueByChannel(channelId);
+    if (!rec || rec.archived) return;
+    const now = this.#now();
+    this.#store.markFired(saidKey(channelId, ts), now);
+    if (this.#store.fired(doneKey(channelId, ts))) return;
+    const job: CommandJob = { channel: channelId, ts, text, by: "hermes" };
+    this.#store.setTimer(
+      `command:${channelId}:${ts}`,
+      "command",
+      job,
+      now + COMMAND_SETTLE_MS,
+      now,
+    );
   }
 
   /**
-   * Leon was pinged about an open issue, by Hermes in its channel or by anyone in a Linear comment:
-   * the issue moves to Awaiting Leon unless it already waits on him, and the post doesn't mention
-   * him again. `key` names the message or comment, which acts once.
+   * A command for Autolinear (Leon's rule, 2026-11-23; `#command`): from the last line of Hermes's
+   * message that starts with Autolinear's mention, or from Leon's `/autolinear`. `move` goes through
+   * at once, title keys and all, and the channel follows; `stay` keeps the status. Autolinear marks
+   * Hermes's message ✅ once it's done, and when a command doesn't work, says why, mentioning Hermes,
+   * so it tries again. Leon's slash command gets its answer privately. Each message acts once.
    */
-  async #handToLeon(issue: LinearIssue, key: string, who: string): Promise<void> {
-    if (this.#store.fired(key)) return;
-    const { leonPingState, mentionLeonStates } = this.#c;
-    const from = issue.state.name;
-    if (from !== leonPingState && !mentionLeonStates.includes(from)) {
-      await this.#moveNow(issue, leonPingState, { note: `(${who} pinged Leon)`, quietLeon: true });
-      this.#log("leon_pinged", { issue: issue.identifier, from, by: who });
+  async onCommand(job: CommandJob): Promise<void> {
+    const done = doneKey(job.channel, job.ts);
+    if (this.#store.fired(done)) return;
+    const words = job.by === "leon" ? job.text : commandLine(job.text, this.#c.autolinearUserId);
+    const issue = await this.#openIssueIn(job.channel);
+    if (job.by === "leon") this.#store.markFired(saidKey(job.channel, job.ts), this.#now());
+    if (words !== null && (issue || job.by === "leon")) {
+      const outcome = issue
+        ? await this.#command(issue, words, job)
+        : { ok: false, text: "This isn't the channel of an open issue." };
+      if (job.by === "leon") {
+        if (job.responseUrl) await this.#respond(job.responseUrl, outcome.text);
+      } else if (!outcome.ok) await this.#askHermes(issue!, job.channel, outcome.text, job.ts);
+      else if (this.#autolinear)
+        await tolerate(
+          this.#autolinearCall("reactions.add", {
+            channel: job.channel,
+            timestamp: job.ts,
+            name: this.#c.hermesAnsweredReaction,
+          }),
+          ["already_reacted", "message_not_found", ...ARCHIVED],
+        );
+      if (outcome.ok && issue) {
+        this.#store.markFired(workedKey(job.channel, job.ts), this.#now());
+        this.#store.dropAck(issue.id);
+      }
     }
-    this.#store.markFired(key, this.#now());
+    this.#store.markFired(done, this.#now());
+  }
+
+  /** Reads and carries out a command's words for an issue. */
+  async #command(issue: LinearIssue, words: string, job: CommandJob): Promise<Outcome> {
+    const lead = job.by === "leon" ? "/autolinear" : "@Autolinear";
+    const parsed = parseCommand(words);
+    if (!parsed.ok)
+      return { ok: false, text: `I couldn't do that: ${parsed.error}.\n${commandUsage(lead)}` };
+    const { command } = parsed;
+    if (command.verb === "help")
+      return {
+        ok: false,
+        text: `Tell me what to do with ${issue.identifier}, which is *${issue.state.name}*:\n${commandUsage(lead)}`,
+      };
+    if (command.verb === "stay")
+      return { ok: true, text: `${issue.identifier} stays *${issue.state.name}*.` };
+    return this.#commandMove(issue, command, job);
+  }
+
+  /**
+   * `move <status> [keys]`: the status, with the keys it needs (`start` for Awaiting Date, `event`
+   * and `stop` for Awaiting Listener, `who` for Awaiting Others, whose title starts with
+   * `[AWAITING: <who>]`), from the command or already in the title. Keys of other statuses leave
+   * the title. The status post names who gave the command and doesn't ping them, nor Leon when
+   * Hermes's message already did.
+   */
+  async #commandMove(
+    issue: LinearIssue,
+    command: Extract<AutolinearCommand, { verb: "move" }>,
+    job: CommandJob,
+  ): Promise<Outcome> {
+    const fail = (why: string) => ({ ok: false, text: `I couldn't do that: ${why}.` });
+    const names = [...(await this.#stateIds()).keys()];
+    const to = matchStatus(command.status, names);
+    if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
+    const { name, meta } = parseTitle(issue.title);
+    const { who, ...keys } = command.keys;
+    let base = name.replace(AWAITING_PREFIX, "");
+    if (to === this.#c.othersState) {
+      const waitingOn = who ?? AWAITING_PREFIX.exec(name)?.[1]?.trim();
+      if (!waitingOn) return fail(`*${to}* needs \`who=…\`, whoever it waits on`);
+      base = `[AWAITING: ${waitingOn}] ${base}`;
+    } else if (who) return fail(`\`who\` goes with *${this.#c.othersState}* only`);
+    for (const status of [this.#c.dateState, this.#c.listenerState]) {
+      if (status === to) continue;
+      for (const key of this.#statusKeys(status)) {
+        if (key in keys) return fail(`\`${key}\` goes with *${status}* only`);
+        delete meta[key];
+      }
+    }
+    for (const [key, value] of Object.entries(keys))
+      if (key !== "event" && !metaInstant(value, this.#c.timeZone))
+        return fail(`\`${key}=${value}\` isn't a day (YYYY-MM-DD) or an RFC 3339 time`);
+    Object.assign(meta, keys);
+    const missing = this.#statusKeys(to).filter((key) => !meta[key]);
+    if (missing.length)
+      return fail(`*${to}* needs ${missing.map((k) => `\`${k}=…\``).join(" and ")}`);
+    const title = formatTitle(base, meta);
+    const update: IssueUpdate = {};
+    if (to !== issue.state.name) update.stateId = await this.#stateId(to);
+    if (title !== issue.title) update.title = title;
+    if (!Object.keys(update).length)
+      return { ok: true, text: `${issue.identifier} is already *${to}*.` };
+    await this.#linear.updateIssue(issue.id, update);
+    const moved = await this.#linear.issue(issue.id);
+    const by = job.by === "leon" ? "Leon" : "Hermes";
+    if (moved)
+      await this.syncIssue(moved, "live", {
+        note: `(${by} told Autolinear)`,
+        quietHermes: job.by === "hermes",
+        quietLeon: job.by === "leon" || mentions(job.text, this.#c.leonUserId),
+      });
+    this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
+    return { ok: true, text: `${issue.identifier} is now *${to}*.` };
+  }
+
+  /**
+   * Autolinear asks Hermes for a command, mentioning it, so the answer starts a turn: a reminder,
+   * or why a command didn't work (in a thread under Hermes's message, `threadTs`). After
+   * `MAX_REMINDERS` since Leon last wrote or a command last worked, it tells Leon once instead and
+   * stops asking, so Hermes and Autolinear can't keep each other going.
+   */
+  async #askHermes(
+    issue: LinearIssue,
+    channel: string,
+    text: string,
+    threadTs?: string,
+  ): Promise<void> {
+    if (!this.#autolinear || !this.#c.autolinearUserId) {
+      this.#log("autolinear_unconfigured", { issue: issue.identifier });
+      return;
+    }
+    const spoke = this.#store.lastSpoke(channel);
+    const since = Math.max(
+      spoke ? slackTsMs(spoke) : 0,
+      this.#store.firedSince(workedKey(channel), 0).at(-1)?.at ?? 0,
+    );
+    const now = this.#now();
+    if (this.#store.firedSince(askedKey(channel), since).length >= MAX_REMINDERS) {
+      const key = `gave-up:${channel}:${since}`;
+      if (this.#store.fired(key)) return;
+      await this.#autolinearCall("chat.postMessage", {
+        channel,
+        text: `<@${this.#c.leonUserId}> Hermes still hasn't told me what to do with ${issue.identifier} after ${MAX_REMINDERS} reminders, so it stays *${issue.state.name}*.`,
+        unfurl_links: false,
+      });
+      this.#store.markFired(key, now);
+      this.#log("autolinear_gave_up", { issue: issue.identifier });
+      return;
+    }
+    const posted = await this.#autolinearCall("chat.postMessage", {
+      channel,
+      text: `<@${this.#c.hermesUserId}> ${text}`,
+      thread_ts: threadTs,
+      unfurl_links: false,
+    });
+    this.#store.markFired(askedKey(channel, posted.ts as string), now);
+  }
+
+  /**
+   * Autolinear's bot, in an issue channel. A private channel it isn't in answers as if it didn't
+   * exist, so Leon's session invites it and the call is made again.
+   */
+  async #autolinearCall(method: string, params: SlackParams): Promise<SlackResponse> {
+    const bot = this.#autolinear!;
+    try {
+      return await bot(method, params);
+    } catch (error) {
+      const outside =
+        error instanceof SlackError &&
+        (error.code === "not_in_channel" || error.code === "channel_not_found");
+      if (!outside || !this.#session || !this.#c.autolinearUserId) throw error;
+      await tolerate(
+        this.#session("conversations.invite", {
+          channel: params.channel,
+          users: this.#c.autolinearUserId,
+        }),
+        ["already_in_channel"],
+      );
+      return bot(method, params);
+    }
   }
 
   /** The open issue whose channel this is, read fresh from Linear. Null for any other channel. */
@@ -985,16 +1162,6 @@ export class Sync {
     const issue = await this.#linear.issue(rec.issueId);
     if (!issue || this.#c.closedStateTypes.includes(issue.state.type)) return null;
     return issue;
-  }
-
-  /**
-   * Moves an issue for something said in Slack and brings its channel along at once, posting the
-   * move as `post` shapes it. Linear's webhook for the move then finds nothing left to do.
-   */
-  async #moveNow(issue: LinearIssue, to: string, post: StatusPost): Promise<void> {
-    await this.#move(issue, to);
-    const moved = await this.#linear.issue(issue.id);
-    if (moved) await this.syncIssue(moved, "live", post);
   }
 
   // ── autolinear's issues ────────────────────────────────────────────────────
@@ -1012,7 +1179,7 @@ export class Sync {
     const session = this.#session;
     if (!session) throw new Error("adopting a channel needs Leon's session to invite the bot");
     // Invited before the channel is recorded: from then on, any job may post in it.
-    const users = [await this.#botUser(), this.#c.hermesUserId];
+    const users = [await this.#botUser(), ...this.#helpers()];
     try {
       await session("conversations.invite", { channel: a.channelId, users: users.join(",") });
     } catch (error) {
@@ -1400,11 +1567,16 @@ export class Sync {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  async #stateId(name: string): Promise<string> {
+  /** The team's Linear statuses, name to ID, read once per drain. */
+  async #stateIds(): Promise<Map<string, string>> {
     this.#states ??= new Map(
       (await this.#linear.states(this.#c.teamKey)).map((s) => [s.name, s.id]),
     );
-    const id = this.#states.get(name);
+    return this.#states;
+  }
+
+  async #stateId(name: string): Promise<string> {
+    const id = (await this.#stateIds()).get(name);
     if (!id) throw new Error(`no Linear status named ${name}`);
     return id;
   }
@@ -1561,7 +1733,7 @@ export class Sync {
         if (error instanceof SlackError && error.code === "name_taken") continue;
         throw error;
       }
-      for (const user of [this.#c.leonUserId, this.#c.hermesUserId])
+      for (const user of [this.#c.leonUserId, ...this.#helpers()])
         await tolerate(this.#bot("conversations.invite", { channel: id, users: user }), [
           "already_in_channel",
           "cant_invite_self",
@@ -1574,7 +1746,12 @@ export class Sync {
     throw new Error(`no free channel name for ${issue.identifier}`);
   }
 
-  /** Makes the bot (and Hermes) members of a channel Leon is in, using his session to invite. */
+  /** Who joins every issue channel besides Leon and the sync's bot: Hermes, and Autolinear's bot. */
+  #helpers(): string[] {
+    return [this.#c.hermesUserId, ...(this.#c.autolinearUserId ? [this.#c.autolinearUserId] : [])];
+  }
+
+  /** Makes the bot, Hermes and Autolinear members of a channel Leon is in, invited by his session. */
   async #join(channelId: string): Promise<void> {
     if (!this.#session) {
       await tolerate(this.#bot("conversations.join", { channel: channelId }), [
@@ -1583,7 +1760,7 @@ export class Sync {
       ]);
       return;
     }
-    for (const user of [await this.#botUser(), this.#c.hermesUserId])
+    for (const user of [await this.#botUser(), ...this.#helpers()])
       await tolerate(this.#session("conversations.invite", { channel: channelId, users: user }), [
         "already_in_channel",
         "cant_invite_self",

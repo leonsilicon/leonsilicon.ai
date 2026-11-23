@@ -1,3 +1,12 @@
+export {
+  AWAITING_PREFIX,
+  COMMAND_KEYS,
+  commandLine,
+  commandUsage,
+  matchStatus,
+  parseCommand,
+} from "#command";
+export type { AutolinearCommand, ParsedCommand } from "#command";
 export { DEFAULT_SECTION_ORDER, loadConfig } from "#config";
 export type { SyncConfig } from "#config";
 export {
@@ -53,14 +62,17 @@ export {
   ANSWER_SETTLE_MS,
   AUTOLINEAR_ID_PREFIX,
   autolinearIssueId,
+  COMMAND_SETTLE_MS,
   excerptQuote,
   isAutolinearIssue,
+  MAX_REMINDERS,
   PROJECT_GRACE_MS,
   stableUuid,
   Sync,
 } from "#sync";
 export type {
   Adoption,
+  CommandJob,
   LinearWebhook,
   SlackFile,
   SlackMessageEvent,

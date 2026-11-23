@@ -17,14 +17,19 @@ import {
   ADOPT_WAIT_MS,
   ANSWER_SETTLE_MS,
   autolinearIssueId,
+  COMMAND_SETTLE_MS,
+  MAX_REMINDERS,
   PROJECT_GRACE_MS,
   Sync,
   type Adoption,
+  type CommandJob,
 } from "#sync";
 
 const LEON = "U0LEON00001";
 const HERMES = "U0HERMES001";
 const BOT = "U0SYNCBOT1";
+/** Autolinear's bot, which Hermes tells what to do with a channel. */
+const AUTO = "U0AUTOLIN01";
 /** Linear's own Slack app, which creates and owns project channels. */
 const LINEAR_BOT = "U0LINEARBOT";
 
@@ -237,6 +242,7 @@ function fakeSlack() {
     { id: "L-channels", name: "Channels", type: "channels", channelIds: [] },
   ];
   const posts: Post[] = [];
+  const reactions: { channel: string; ts: string; name: string; by: string }[] = [];
   const calls: { who: string; method: string; params: SlackParams }[] = [];
   /** Makes the next matching call fail with a Slack error, once. */
   const failures: { who: string; method: string; code: string }[] = [];
@@ -249,12 +255,12 @@ function fakeSlack() {
     return c;
   };
   const client =
-    (who: "bot" | "leon"): SlackCall =>
+    (who: "bot" | "leon" | "autolinear"): SlackCall =>
     async (method, params = {}) => {
       calls.push({ who, method, params });
       const failure = failures.findIndex((f) => f.who === who && f.method === method);
       if (failure >= 0) throw new SlackError(method, failures.splice(failure, 1)[0]!.code);
-      const me = who === "bot" ? BOT : LEON;
+      const me = who === "bot" ? BOT : who === "autolinear" ? AUTO : LEON;
       const member = (c: Channel) => {
         if (!c.members.has(me)) throw new SlackError(method, "not_in_channel");
       };
@@ -366,6 +372,24 @@ function fakeSlack() {
           if (p.user !== me) throw new SlackError(method, "cant_update_message");
           p.text = String(params.text);
           if (params.blocks) p.blocks = JSON.parse(String(params.blocks)) as unknown[];
+          return { ok: true };
+        }
+        case "reactions.add": {
+          const c = find(params.channel);
+          member(c);
+          if (c.archived) throw new SlackError(method, "is_archived");
+          const reaction = {
+            channel: c.id,
+            ts: String(params.timestamp),
+            name: String(params.name),
+          };
+          if (
+            reactions.some(
+              (r) => JSON.stringify({ ...r, by: who }) === JSON.stringify({ ...reaction, by: who }),
+            )
+          )
+            throw new SlackError(method, "already_reacted");
+          reactions.push({ ...reaction, by: who });
           return { ok: true };
         }
         case "chat.getPermalink":
@@ -531,10 +555,12 @@ function fakeSlack() {
   return {
     bot: client("bot"),
     session: client("leon"),
+    autolinear: client("autolinear"),
     channels,
     sections,
     stars,
     posts,
+    reactions,
     calls,
     sectionOf,
     order,
@@ -554,12 +580,22 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     () => clock.now,
   );
   const store = new Store(memorySql());
+  /** What Leon's `/autolinear` was told, through Slack's response URL. */
+  const responses: { url: string; text: string }[] = [];
   const sync = new Sync({
-    config: loadConfig({ SLACK_LEON_USER_ID: LEON, SLACK_HERMES_USER_ID: HERMES }),
+    config: loadConfig({
+      SLACK_LEON_USER_ID: LEON,
+      SLACK_HERMES_USER_ID: HERMES,
+      AUTOLINEAR_BOT_USER_ID: AUTO,
+    }),
     store,
     linear: linear.api,
     bot: slack.bot,
     session: slack.session,
+    autolinear: slack.autolinear,
+    respond: async (url, text) => {
+      responses.push({ url, text });
+    },
     now: () => clock.now,
     sleep: async () => {},
   });
@@ -575,7 +611,7 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     }
     throw new Error("the queue never settled");
   };
-  return { linear, slack, store, sync, clock, drain };
+  return { linear, slack, store, sync, clock, drain, responses };
 }
 
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
@@ -595,7 +631,7 @@ test("a new issue gets a private channel, an intro, a topic and its status secti
   const channel = slack.channels[0]!;
   assert.equal(channel.name, "leon-380-stop-san-francisco-optometry-email-reminders");
   assert.equal(channel.private, true);
-  assert.deepEqual([...channel.members].sort(), [BOT, HERMES, LEON].sort());
+  assert.deepEqual([...channel.members].sort(), [AUTO, BOT, HERMES, LEON].sort());
   assert.equal(
     channel.topic,
     "Awaiting Start · linear:v1 unstarted #5e6ad2 p0 · https://linear.app/leonsilicon/issue/LEON-380 · Stop San Francisco Optometry email reminders",
@@ -813,92 +849,7 @@ const hermesSays = (channel: string, text: string, overrides: Record<string, unk
   ...overrides,
 });
 
-test("Hermes pinging Leon in an issue channel moves the issue to Awaiting Leon, without a second ping", async () => {
-  const { linear, slack, sync } = setup();
-  const issue = linear.addIssue(
-    388,
-    "restore the daily destination `{event: connector live, stop: 2026-12-01, owner: Leon}`",
-    "Awaiting Listener",
-  );
-  await sync.run("linear", issueHook(issue.id, "create"));
-  const channel = slack.channels[0]!;
-
-  await sync.run("slack", hermesSays(channel.id, `<@${LEON}> please reauthorize the connector`));
-  assert.equal(issue.state.name, "Awaiting Leon");
-  assert.equal(
-    issue.title,
-    "restore the daily destination `{owner: Leon}`",
-    "the listener's keys leave with it; others stay",
-  );
-  assert.equal(
-    slack.posts.at(-1)!.text,
-    "*Awaiting Listener* → *Awaiting Leon* (Hermes pinged Leon)",
-    "Hermes's message already pinged Leon, so the move doesn't",
-  );
-  assert.equal(slack.sectionOf(channel.id), "Awaiting Leon");
-  assert.equal(linear.created.length, 0, "Hermes's post isn't mirrored to Linear");
-
-  // Linear's webhook for the move finds the channel already done.
-  const posts = slack.posts.length;
-  await sync.run("linear", issueHook(issue.id));
-  assert.equal(slack.posts.length, posts);
-
-  // Another ping while it's Awaiting Leon changes nothing.
-  const updates = linear.updates.length;
-  await sync.run("slack", hermesSays(channel.id, `<@${LEON}> reminder`, { ts: "2.2" }));
-  assert.equal(linear.updates.length, updates);
-  assert.equal(slack.posts.length, posts);
-
-  // Moved to Hermes in Linear, Hermes's next ping hands it back, from any open status.
-  issue.state = state("Awaiting Hermes");
-  await sync.run("linear", issueHook(issue.id));
-  await sync.run(
-    "slack",
-    hermesSays(channel.id, `Done on my side. <@${LEON}|leon>, can you confirm?`, {
-      ts: "3.3",
-      subtype: "thread_broadcast",
-    }),
-  );
-  assert.equal(issue.state.name, "Awaiting Leon");
-  assert.equal(
-    slack.posts.at(-1)!.text,
-    "*Awaiting Hermes* → *Awaiting Leon* (Hermes pinged Leon)",
-  );
-});
-
-test("a ping that first shows up in Hermes's edit (a streamed reply) moves the issue, once per message", async () => {
-  const { linear, slack, sync } = setup();
-  const issue = linear.addIssue(9, "x", "Awaiting Hermes");
-  await sync.run("linear", issueHook(issue.id, "create"));
-  const channel = slack.channels[0]!.id;
-  const edit = (text: string) => ({
-    type: "message",
-    subtype: "message_changed",
-    channel,
-    ts: "5.9",
-    message: { ts: "5.1", user: HERMES, bot_id: "B0HERMES01", text },
-  });
-
-  await sync.run("slack", hermesSays(channel, "Checking", { ts: "5.1" }));
-  assert.equal(issue.state.name, "Awaiting Hermes");
-  await sync.run("slack", edit(`Checking. <@${LEON}> the connector needs you.`));
-  assert.equal(issue.state.name, "Awaiting Leon");
-  assert.equal(linear.created.length, 0, "Hermes's edit isn't mirrored either");
-
-  // Leon hands it back; the stream's last edit of the same message doesn't take it again.
-  issue.state = state("Awaiting Hermes");
-  await sync.run("linear", issueHook(issue.id));
-  const updates = linear.updates.length;
-  await sync.run("slack", edit(`Checking. <@${LEON}> the connector needs you. Link: x`));
-  assert.equal(issue.state.name, "Awaiting Hermes");
-  assert.equal(linear.updates.length, updates);
-
-  // A new message pings again.
-  await sync.run("slack", hermesSays(channel, `<@${LEON}> one more thing`, { ts: "6.1" }));
-  assert.equal(issue.state.name, "Awaiting Leon");
-});
-
-test("a Linear comment that pings Leon pings him in Slack and moves the issue to Awaiting Leon", async () => {
+test("a Linear comment that pings Leon pings him in Slack and moves nothing", async () => {
   const { linear, slack, sync } = setup();
   const issue = linear.addIssue(9, "x", "Executing");
   await sync.run("linear", issueHook(issue.id, "create"));
@@ -912,61 +863,63 @@ test("a Linear comment that pings Leon pings him in Slack and moves the issue to
       authorAvatar: null,
     });
 
-  comment("c1", "Progress: drafted the email.");
+  comment("c1", `<@${LEON}> can you approve the **draft**?`);
   await sync.run("linear", commentHook("c1"));
-  assert.equal(issue.state.name, "Executing", "a comment without a ping moves nothing");
-
-  comment("c2", `<@${LEON}> can you approve the **draft**?`);
-  await sync.run("linear", commentHook("c2"));
-  assert.equal(slack.posts.at(-2)!.text, `<@${LEON}> can you approve the *draft*?`);
-  assert.equal(slack.posts.at(-1)!.text, "*Executing* → *Awaiting Leon* (Hermes pinged Leon)");
-  assert.equal(issue.state.name, "Awaiting Leon");
-
-  // Leon hands it back; editing that comment doesn't take it again, a new pinging one does.
-  issue.state = state("Executing");
-  await sync.run("linear", issueHook(issue.id));
-  comment("c2", `<@${LEON}> can you approve the draft? (typo fixed)`);
-  await sync.run("linear", commentHook("c2", "update"));
-  assert.equal(issue.state.name, "Executing");
-  comment("c1", `Progress: drafted the email. <@${LEON}> one question.`);
+  assert.equal(slack.posts.at(-1)!.text, `<@${LEON}> can you approve the *draft*?`);
+  comment("c1", `<@${LEON}> can you approve the draft? (typo fixed)`);
   await sync.run("linear", commentHook("c1", "update"));
-  assert.equal(issue.state.name, "Awaiting Leon", "an edit that adds a ping counts once");
+  assert.equal(slack.posts.at(-1)!.text, `<@${LEON}> can you approve the draft? (typo fixed)`);
+  assert.equal(issue.state.name, "Executing");
+  assert.equal(linear.updates.length, 0);
 });
 
-test("Hermes's posts without a ping, others' pings and closed or waiting issues don't move", async () => {
-  const { linear, slack, sync } = setup();
+test("Hermes's posts move nothing without a command, its pings to Leon included", async () => {
+  const { linear, slack, sync, clock, drain } = setup();
   const issue = linear.addIssue(9, "x", "Executing");
   await sync.run("linear", issueHook(issue.id, "create"));
   const channel = slack.channels[0]!.id;
   for (const event of [
     hermesSays(channel, "Working on it."),
+    hermesSays(channel, `<@${LEON}> please reauthorize the connector`),
+    hermesSays(channel, `Done on my side. <@${LEON}|leon>, can you confirm?`, {
+      ts: "3.3",
+      subtype: "thread_broadcast",
+    }),
+    {
+      type: "message",
+      subtype: "message_changed",
+      channel,
+      ts: "5.9",
+      message: { ts: "5.1", user: HERMES, bot_id: "B0HERMES01", text: `<@${LEON}> look` },
+    },
     hermesSays(channel, `<@${HERMES}> note to self`),
-    hermesSays(channel, `<@${LEON}> has joined`, { subtype: "channel_join" }),
-    hermesSays("C-unmapped", `<@${LEON}> elsewhere`),
-    { type: "message", channel, ts: "4.1", user: BOT, bot_id: "B0SYNC", text: `<@${LEON}>` },
+    hermesSays(channel, `I'll tell <@${AUTO}> later`),
+    hermesSays(channel, `<@${AUTO}> move done`, { subtype: "channel_join" }),
+    hermesSays("C-unmapped", `<@${AUTO}> move done`),
+    {
+      type: "message",
+      channel,
+      ts: "4.1",
+      user: BOT,
+      bot_id: "B0SYNC",
+      text: `<@${AUTO}> move done`,
+    },
     {
       type: "message",
       channel,
       ts: "4.2",
       user: LEON,
-      text: `<@${LEON}> as Leon`,
+      text: `<@${AUTO}> move done`,
       client_msg_id: "de1e6a7e-0000-4000-8000-000000000000",
     },
   ])
     await sync.run("slack", event);
+  clock.now += COMMAND_SETTLE_MS;
+  await drain();
   assert.equal(issue.state.name, "Executing");
   assert.equal(linear.updates.length, 0);
-
-  // Awaiting Clarification already waits on Leon, so it stays.
-  issue.state = state("Awaiting Clarification");
-  await sync.run("linear", issueHook(issue.id));
-  await sync.run("slack", hermesSays(channel, `<@${LEON}> which one?`));
-  assert.equal(issue.state.name, "Awaiting Clarification");
-
-  issue.state = state("Done");
-  await sync.run("linear", issueHook(issue.id));
-  await sync.run("slack", hermesSays(channel, `<@${LEON}> closed it`));
-  assert.equal(issue.state.name, "Done", "a closed issue stays closed");
+  assert.equal(linear.created.length, 0, "Hermes's posts aren't mirrored to Linear");
+  assert.equal(slack.reactions.length, 0);
 });
 
 test("backfill adopts existing issue channels quietly and archives closed ones", async () => {
@@ -1522,9 +1475,9 @@ test("autolinear's issue waits for its channel's hand-over instead of getting a 
   assert.ok(store.timer(`adopt-wait:${issue.id}`) === null, "a queued job, not a timer");
 
   await sync.adopt(adoption);
-  assert.deepEqual([...channel.members].sort(), [BOT, HERMES, LEON].sort());
+  assert.deepEqual([...channel.members].sort(), [AUTO, BOT, HERMES, LEON].sort());
   const invites = slack.calls.filter((c) => c.method === "conversations.invite");
-  assert.equal(invites.length, 1, "one invite for both");
+  assert.equal(invites.length, 1, "one invite for all three");
   assert.equal(store.issueByChannel(channel.id)?.issueId, issue.id);
 
   await drain();
@@ -1636,45 +1589,6 @@ async function issueChannel(t: ReturnType<typeof setup>, status = "Awaiting Init
   return { issue, channel: t.slack.channels[0]! };
 }
 
-test("an answer that pings Leon leaves the issue with him; one that doesn't (to his thanks) closes it", async () => {
-  const t = setup();
-  const { issue, channel } = await issueChannel(t);
-
-  const meal = await leonWrites(t, channel.id, "log 2 eggs and toast");
-  await hermesReacts(t, channel.id, meal, "eyes");
-  assert.equal(issue.state.name, "Awaiting Hermes", "👀 shows Hermes has it");
-  t.clock.now += 4000;
-  await hermesPosts(
-    t,
-    channel.id,
-    `<@${LEON}> Logged: 410 kcal, 22 g protein, 30 g carbs, 20 g fat.`,
-  );
-  assert.equal(issue.state.name, "Awaiting Leon", "the ping hands it to Leon");
-  await hermesReacts(t, channel.id, meal);
-  assert.equal(issue.state.name, "Awaiting Leon");
-
-  t.clock.now += 120_000;
-  const thanks = await leonWrites(t, channel.id, "thanks");
-  const posts = t.slack.posts.length;
-  await hermesReacts(t, channel.id, thanks, "eyes");
-  t.clock.now += 2000;
-  await hermesPosts(t, channel.id, "You're welcome.");
-  await hermesReacts(t, channel.id, thanks);
-  assert.equal(issue.state.name, "Done");
-  assert.equal(channel.archived, true);
-  assert.equal(
-    t.slack.posts
-      .slice(posts)
-      .filter((p) => p.user !== HERMES)
-      .map((p) => p.text)
-      .join("\n"),
-    [
-      "*Awaiting Leon* → *Awaiting Hermes* (Hermes reacted :eyes: to Leon's message)",
-      "*Awaiting Hermes* → *Done* (Hermes answered Leon's message without pinging him)",
-    ].join("\n"),
-  );
-});
-
 test("Hermes's 👀 files the channel under Awaiting Hermes at once, without pinging Hermes", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);
@@ -1706,155 +1620,309 @@ test("Hermes's 👀 files the channel under Awaiting Hermes at once, without pin
   // Linear's webhook for the move finds nothing left to do.
   await t.sync.run("linear", issueHook(issue.id));
   assert.equal(t.slack.posts.length, posts + 1);
-
-  // The first answer is overtaken by Leon's second message; the second answer, without a ping, ends it.
-  t.clock.now += 3000;
-  await hermesPosts(t, channel.id, "Tomorrow: dentist at 10.");
-  await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Hermes");
-  await hermesPosts(t, channel.id, "The day after: nothing.");
-  await hermesReacts(t, channel.id, again);
-  assert.equal(issue.state.name, "Done");
 });
 
-test("an unpinged answer puts back the status Hermes's 👀 took the issue from, title keys and all", async () => {
-  for (const [status, title] of [
-    ["Executing", "migrate the blog"],
-    ["Awaiting Others", "refund from Audible"],
-    ["Awaiting Listener", "switch to rogers `{event: Rogers BYOD deal, stop: 2026-12-01}`"],
-  ] as const) {
-    const t = setup();
-    const issue = t.linear.addIssue(427, title, status);
-    await t.sync.run("linear", issueHook(issue.id, "create"));
-    t.clock.now += 60_000;
-    const channel = t.slack.channels[0]!;
-    const message = await leonWrites(t, channel.id, "any update?");
-    const posts = t.slack.posts.length;
-    await hermesReacts(t, channel.id, message, "eyes");
-    assert.equal(issue.state.name, "Awaiting Hermes", status);
-    assert.equal(issue.title, title, "the 👀 move keeps the status's keys");
-    await hermesPosts(t, channel.id, "Still waiting on them.");
-    await hermesReacts(t, channel.id, message);
-    assert.equal(issue.state.name, status);
-    assert.equal(issue.title, title);
-    assert.equal(t.slack.sectionOf(channel.id), status);
-    const moves = t.slack.posts.slice(posts).filter((p) => p.user !== HERMES);
-    assert.deepEqual(
-      moves.map((p) => p.text),
-      [
-        `*${status}* → *Awaiting Hermes* (Hermes reacted :eyes: to Leon's message)`,
-        `*Awaiting Hermes* → *${status}* (Hermes answered Leon's message)`,
-      ],
-    );
-  }
-});
+/** Hermes's command for Autolinear, at the end of a post of its own, read once the settle time has passed. */
+async function hermesCommands(
+  t: ReturnType<typeof setup>,
+  channel: string,
+  line: string,
+  answer = "",
+) {
+  const ts = tsAt(t.clock.now);
+  const text = `${answer ? `${answer}\n\n` : ""}<@${AUTO}> ${line}`;
+  await t.sync.run("slack", hermesSays(channel, text, { ts, thread_ts: undefined }));
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  return ts;
+}
 
-test("after Hermes's 👀, a status Hermes sets, a ping, or a failed turn decides", async () => {
-  // Hermes chose what the issue waits on during its turn.
-  let t = setup();
-  let { issue, channel } = await issueChannel(t);
-  let message = await leonWrites(t, channel.id, "cancel my Fongo phone line");
-  await hermesReacts(t, channel.id, message, "eyes");
-  t.clock.now += 5000;
-  await t.linear.api.updateIssue(issue.id, { stateId: "state-Awaiting Others" });
-  await t.sync.run("linear", issueHook(issue.id));
-  await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Others");
+/** What Autolinear's bot posted, after the first `from` posts. */
+const autolinearPosts = (t: ReturnType<typeof setup>, from = 0) =>
+  t.slack.posts.slice(from).filter((p) => p.user === AUTO);
 
-  // A ping hands it to Leon, and it stays with him.
-  t = setup();
-  ({ issue, channel } = await issueChannel(t, "Executing"));
-  message = await leonWrites(t, channel.id, "which plan should I pick?");
-  await hermesReacts(t, channel.id, message, "eyes");
-  t.clock.now += 3000;
-  await hermesPosts(t, channel.id, `<@${LEON}> Plan B saves $8 a month.`);
-  await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Leon");
-
-  // A failed turn goes to Leon with a mention.
-  t = setup();
-  ({ issue, channel } = await issueChannel(t));
-  message = await leonWrites(t, channel.id, "book the dentist");
-  await hermesReacts(t, channel.id, message, "eyes");
-  await hermesReacts(t, channel.id, message, "x");
-  assert.equal(issue.state.name, "Awaiting Leon");
-  assert.equal(
-    t.slack.posts.at(-1)!.text,
-    `*Awaiting Hermes* → *Awaiting Leon* (Hermes's turn on Leon's message failed)\n<@${LEON}>`,
-  );
-});
-
-test("a new issue answered without a ping is done", async () => {
+test("Hermes's answer moves nothing; Autolinear reminds it, and its command moves the issue", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);
-  const message = await leonWrites(t, channel.id, "what's the capital of Peru?");
-  t.clock.now += 3000;
-  await hermesPosts(t, channel.id, "Lima.");
-  await hermesReacts(t, channel.id, message);
+  const thanks = await leonWrites(t, channel.id, "thanks");
+  await hermesReacts(t, channel.id, thanks, "eyes");
+  assert.equal(issue.state.name, "Awaiting Hermes", "👀 still shows Hermes has it");
+  t.clock.now += 2000;
+  await hermesPosts(t, channel.id, "You're welcome.");
+  const posts = t.slack.posts.length;
+  await hermesReacts(t, channel.id, thanks);
+  assert.equal(issue.state.name, "Awaiting Hermes", "the answer alone moves nothing");
+  assert.equal(channel.archived, false);
+  const [reminder, ...more] = autolinearPosts(t, posts);
+  assert.equal(more.length, 0);
+  assert.ok(
+    reminder!.text.startsWith(
+      `<@${HERMES}> Your turn here is over, but you haven't told me what to do with LEON-427, which is *Awaiting Hermes*. Before your :eyes: it was *Awaiting Init*. Answer with a line of its own that starts with my mention:\n`,
+    ),
+    reminder!.text,
+  );
+  assert.ok(reminder!.text.includes("• `@Autolinear move done`: nothing is left for anyone"));
+  assert.equal(reminder!.thread_ts, undefined, "at the top of the channel");
+  assert.ok(channel.members.has(AUTO), "Autolinear's bot is in the channel");
+
+  // Hermes's turn on the reminder ends with a command: the issue is done.
+  t.clock.now += 5000;
+  await hermesCommands(t, channel.id, "move done", "Nothing left here.");
   assert.equal(issue.state.name, "Done");
+  assert.equal(channel.archived, true);
+  assert.equal(
+    t.slack.posts.filter((p) => p.user === BOT).at(-1)!.text,
+    "*Awaiting Hermes* → *Done* (Hermes told Autolinear)",
+  );
+  await hermesReacts(t, channel.id, reminder!.ts);
+  assert.equal(autolinearPosts(t, posts).length, 1, "no second reminder");
 });
 
-test("an answer leaves the issue be when Hermes set its status, Leon wrote again, or it pinged in Linear", async () => {
-  // Hermes moved it during its turn, even to Awaiting Leon without a ping.
+test("a command at the end of Hermes's answer moves the issue at once, title keys and all", async () => {
+  // Waiting on a listener: the keys go in the title.
   let t = setup();
   let { issue, channel } = await issueChannel(t);
   let message = await leonWrites(t, channel.id, "switch me to rogers once the deal is back");
-  t.clock.now += 1000;
-  await t.linear.api.updateIssue(issue.id, { stateId: "state-Awaiting Leon" });
+  await hermesReacts(t, channel.id, message, "eyes");
+  t.clock.now += 3000;
+  const posts = t.slack.posts.length;
+  const command = await hermesCommands(
+    t,
+    channel.id,
+    "move listener event=“Rogers BYOD deal” stop=2026-12-01.",
+    "I'll watch for it.",
+  );
+  assert.equal(issue.state.name, "Awaiting Listener");
+  assert.equal(issue.title, "testing autolinear `{event: Rogers BYOD deal, stop: 2026-12-01}`");
+  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Listener");
+  assert.deepEqual(t.slack.reactions, [
+    { channel: channel.id, ts: command, name: "white_check_mark", by: "autolinear" },
+  ]);
   await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(autolinearPosts(t, posts).length, 0, "the turn said what to do");
 
-  // Leon wrote again before Hermes finished: the later answer decides.
+  // Back where it was before Hermes's 👀, keys kept, with `move listener` alone.
+  t.clock.now += 60_000;
+  message = await leonWrites(t, channel.id, "any update?");
+  await hermesReacts(t, channel.id, message, "eyes");
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  await hermesCommands(t, channel.id, "move listener", "Not yet.");
+  assert.equal(issue.state.name, "Awaiting Listener");
+  assert.equal(issue.title, "testing autolinear `{event: Rogers BYOD deal, stop: 2026-12-01}`");
+
+  // Leaving the listener drops its keys; Awaiting Others gets its [AWAITING: …] prefix.
+  await hermesCommands(t, channel.id, 'move "Awaiting Others" who="Rogers support"');
+  assert.equal(issue.state.name, "Awaiting Others");
+  assert.equal(issue.title, "[AWAITING: Rogers support] testing autolinear");
+  await hermesCommands(t, channel.id, "move date start=2026-12-01T09:00:00-05:00");
+  assert.equal(issue.state.name, "Awaiting Date");
+  assert.equal(issue.title, 'testing autolinear `{start: "2026-12-01T09:00:00-05:00"}`');
+
+  // `move leon` mentions Leon, unless Hermes's message already did.
   t = setup();
   ({ issue, channel } = await issueChannel(t));
-  message = await leonWrites(t, channel.id, "thanks");
-  t.clock.now += 1000;
-  await leonWrites(t, channel.id, "oh and one more thing");
-  await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Init");
-
-  // A ping in a Linear comment counts like one in Slack, even when it changes no status.
-  t = setup();
-  ({ issue, channel } = await issueChannel(t, "Awaiting Leon"));
-  message = await leonWrites(t, channel.id, "did it go through?");
-  t.clock.now += 1000;
-  t.linear.comments.set("c-ping", {
-    id: "c-ping",
-    body: `<@${LEON}> it bounced, can you re-enter the card?`,
-    issueId: issue.id,
-    parentId: null,
-    authorName: "Hermes",
-    authorAvatar: null,
-  });
-  await t.sync.run("linear", commentHook("c-ping"));
-  await hermesReacts(t, channel.id, message);
-  assert.equal(issue.state.name, "Awaiting Leon");
-
-  // Statuses Hermes owns stand: work in progress, waiting on others, on a listener, on a date.
-  for (const status of ["Executing", "Awaiting Others", "Awaiting Listener", "Awaiting Hermes"]) {
-    t = setup();
-    ({ issue, channel } = await issueChannel(t, status));
-    message = await leonWrites(t, channel.id, "any update?");
-    t.clock.now += 1000;
-    await hermesPosts(t, channel.id, "Still waiting on Rogers.");
-    await hermesReacts(t, channel.id, message);
-    assert.equal(issue.state.name, status);
-  }
-});
-
-test("a failed turn goes to Leon with a mention", async () => {
-  const t = setup();
-  const { issue, channel } = await issueChannel(t);
-  const message = await leonWrites(t, channel.id, "book the dentist");
-  await hermesReacts(t, channel.id, message, "x");
+  await hermesCommands(t, channel.id, "move leon", "Plan B saves $8 a month.");
   assert.equal(issue.state.name, "Awaiting Leon");
   assert.equal(
     t.slack.posts.at(-1)!.text,
-    `*Awaiting Init* → *Awaiting Leon* (Hermes's turn on Leon's message failed)\n<@${LEON}>`,
+    `*Awaiting Init* → *Awaiting Leon* (Hermes told Autolinear)\n<@${LEON}>`,
+  );
+  t = setup();
+  ({ issue, channel } = await issueChannel(t));
+  await hermesCommands(t, channel.id, "move leon", `<@${LEON}> Plan B saves $8 a month.`);
+  assert.equal(
+    t.slack.posts.at(-1)!.text,
+    "*Awaiting Init* → *Awaiting Leon* (Hermes told Autolinear)",
   );
 });
 
-test("other reactions, other people's and other messages' reactions, and other channels move nothing", async () => {
+test("stay keeps the status, and a command in an edit is read once Hermes stops editing, once", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Executing");
+  const message = await leonWrites(t, channel.id, "how's the migration going?");
+  t.clock.now += 1000;
+  const ts = tsAt(t.clock.now);
+  const edit = (text: string) => ({
+    type: "message",
+    subtype: "message_changed",
+    channel: channel.id,
+    ts: tsAt(t.clock.now + 1),
+    message: { ts, user: HERMES, bot_id: "B0HERMES01", text },
+  });
+  await t.sync.run("slack", hermesSays(channel.id, "Halfway", { ts, thread_ts: undefined }));
+  t.clock.now += 1000;
+  await t.sync.run("slack", edit(`Halfway there.\n<@${AUTO}> st`));
+  t.clock.now += 1000;
+  await t.sync.run("slack", edit(`Halfway there.\n<@${AUTO}> stay`));
+  t.clock.now += COMMAND_SETTLE_MS - 1;
+  await t.drain();
+  assert.equal(t.slack.reactions.length, 0, "still settling after the last edit");
+  t.clock.now += 1;
+  await t.drain();
+  assert.deepEqual(t.slack.reactions, [
+    { channel: channel.id, ts, name: "white_check_mark", by: "autolinear" },
+  ]);
+  assert.equal(issue.state.name, "Executing");
+  assert.equal(autolinearPosts(t).length, 0, "the half-written command got no answer");
+
+  // A later edit of the same message doesn't act again.
+  await t.sync.run("slack", edit(`Halfway there, really.\n<@${AUTO}> move done`));
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+  await hermesReacts(t, channel.id, message);
+  assert.equal(autolinearPosts(t).length, 0);
+});
+
+test("a command that doesn't work is answered under it, and reminders stop after the limit", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const message = await leonWrites(t, channel.id, "remind me about rogers");
+  const posts = t.slack.posts.length;
+  t.clock.now += 2000;
+  const lion = await hermesCommands(t, channel.id, "move lion");
+  const [answer] = autolinearPosts(t, posts);
+  assert.equal(answer!.thread_ts, lion);
+  assert.ok(
+    answer!.text.startsWith(
+      `<@${HERMES}> I couldn't do that: no status is called "lion"; use one of Awaiting Init,`,
+    ),
+    answer!.text,
+  );
+  assert.equal(issue.state.name, "Awaiting Init");
+  // Hermes's turn on Leon's message said something to Autolinear, so it isn't reminded too.
+  await hermesReacts(t, channel.id, message);
+  assert.equal(autolinearPosts(t, posts).length, 1);
+
+  await hermesCommands(t, channel.id, "move listener event=deal");
+  assert.equal(
+    autolinearPosts(t, posts).at(-1)!.text.split("\n")[0],
+    `<@${HERMES}> I couldn't do that: *Awaiting Listener* needs \`stop=…\`.`,
+  );
+  assert.equal(autolinearPosts(t, posts).length, MAX_REMINDERS);
+
+  // The limit is reached: Leon is told, once, and Autolinear stops asking.
+  await hermesCommands(t, channel.id, "move date start=tomorrow");
+  await hermesCommands(t, channel.id, "frobnicate");
+  const told = autolinearPosts(t, posts).slice(MAX_REMINDERS);
+  assert.deepEqual(
+    told.map((p) => p.text),
+    [
+      `<@${LEON}> Hermes still hasn't told me what to do with LEON-427 after ${MAX_REMINDERS} reminders, so it stays *Awaiting Init*.`,
+    ],
+  );
+  assert.equal(issue.state.name, "Awaiting Init");
+
+  // Leon writing again starts the count over.
+  t.clock.now += 60_000;
+  const again = await leonWrites(t, channel.id, "hello?");
+  await hermesReacts(t, channel.id, again);
+  assert.ok(
+    autolinearPosts(t, posts).at(-1)!.text.startsWith(`<@${HERMES}> Your turn here is over`),
+  );
+});
+
+test("a failed turn gets a reminder too, and nothing moves", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const message = await leonWrites(t, channel.id, "book the dentist");
+  await hermesReacts(t, channel.id, message, "eyes");
+  await hermesReacts(t, channel.id, message, "x");
+  assert.equal(issue.state.name, "Awaiting Hermes");
+  assert.ok(
+    autolinearPosts(t)
+      .at(-1)!
+      .text.startsWith(
+        `<@${HERMES}> Your turn here failed, so I still don't know what to do with LEON-427`,
+      ),
+  );
+});
+
+test("a turn Leon wrote after is skipped: the turn on his newer message counts", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const first = await leonWrites(t, channel.id, "thanks");
+  t.clock.now += 1000;
+  const second = await leonWrites(t, channel.id, "oh and one more thing");
+  await hermesReacts(t, channel.id, first);
+  assert.equal(autolinearPosts(t).length, 0, "the turn on his newer message counts");
+  t.clock.now += 3000;
+  await hermesCommands(t, channel.id, "move hermes", "On it.");
+  await hermesReacts(t, channel.id, second);
+  assert.equal(autolinearPosts(t).length, 0);
+  assert.equal(issue.state.name, "Awaiting Hermes");
+});
+
+test("Hermes's turn on a bot's ping owes a command as well", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Awaiting Date");
+  // Linear Sync pings Hermes when the issue's start comes (Awaiting Start).
+  issue.state = state("Awaiting Start");
+  await t.sync.run("linear", issueHook(issue.id));
+  const ping = t.slack.posts.at(-1)!;
+  assert.ok(ping.text.includes(`<@${HERMES}>`));
+  t.clock.now += 60_000;
+  await t.sync.run(
+    "slack",
+    eyes(channel.id, {
+      reaction: "white_check_mark",
+      item_user: BOT,
+      item: { type: "message", channel: channel.id, ts: ping.ts },
+    }),
+  );
+  t.clock.now += ANSWER_SETTLE_MS;
+  await t.drain();
+  assert.ok(autolinearPosts(t).at(-1)!.text.includes("which is *Awaiting Start*."));
+});
+
+test("Leon's /autolinear moves the issue and answers him privately", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const slash = (text: string, channelId = channel.id, n = 1): CommandJob => ({
+    channel: channelId,
+    ts: `slash-${n}`,
+    text,
+    by: "leon",
+    responseUrl: `https://hooks.slack.com/commands/${n}`,
+  });
+  const message = await leonWrites(t, channel.id, "wait on rogers for me");
+  t.clock.now += 2000;
+  await t.sync.run("command", slash('move others who="Rogers"'));
+  assert.equal(issue.state.name, "Awaiting Others");
+  assert.equal(
+    t.slack.posts.at(-1)!.text,
+    "*Awaiting Init* → *Awaiting Others* (Leon told Autolinear)",
+  );
+  assert.deepEqual(t.responses, [
+    { url: "https://hooks.slack.com/commands/1", text: "LEON-427 is now *Awaiting Others*." },
+  ]);
+  // It's the turn's command: Hermes's answer after it isn't reminded.
+  t.clock.now += 2000;
+  await hermesPosts(t, channel.id, "Okay.");
+  await hermesReacts(t, channel.id, message);
+  assert.equal(autolinearPosts(t).length, 0);
+
+  await t.sync.run("command", slash("move nowhere", channel.id, 2));
+  assert.ok(
+    t.responses.at(-1)!.text.startsWith(`I couldn't do that: no status is called "nowhere"`),
+  );
+  assert.ok(!t.responses.at(-1)!.text.includes("<@"), "no one is pinged");
+  await t.sync.run("command", slash("move done", "C-unmapped", 3));
+  assert.equal(t.responses.at(-1)!.text, "This isn't the channel of an open issue.");
+  assert.equal(issue.state.name, "Awaiting Others");
+});
+
+test("Autolinear's bot is invited when it isn't in an older channel", async () => {
+  const t = setup();
+  const { channel } = await issueChannel(t);
+  channel.members.delete(AUTO);
+  const message = await leonWrites(t, channel.id, "hi");
+  await hermesReacts(t, channel.id, message);
+  assert.ok(channel.members.has(AUTO));
+  assert.equal(autolinearPosts(t).length, 1);
+});
+
+test("other reactions, other people's reactions, and other channels ask for nothing", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);
   const message = await leonWrites(t, channel.id, "hello");
@@ -1865,7 +1933,6 @@ test("other reactions, other people's and other messages' reactions, and other c
     eyes("C-unmapped", { item: { ...item, channel: "C-unmapped" } }),
     eyes(channel.id, { reaction: "tada", item }),
     eyes(channel.id, { reaction: "white_check_mark", user: LEON, item }),
-    eyes(channel.id, { reaction: "white_check_mark", item_user: BOT, item }),
     eyes(channel.id, { reaction: "white_check_mark", item: { type: "file", channel: channel.id } }),
     eyes("C-unmapped", { reaction: "white_check_mark", item: { ...item, channel: "C-unmapped" } }),
   ])
@@ -1874,4 +1941,5 @@ test("other reactions, other people's and other messages' reactions, and other c
   await t.drain();
   assert.equal(issue.state.name, "Awaiting Init");
   assert.equal(t.linear.updates.length, 0);
+  assert.equal(autolinearPosts(t).length, 0);
 });

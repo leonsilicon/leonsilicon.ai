@@ -126,7 +126,7 @@ async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
         "[autolinear: Leon sent this in a DM with Hermes. It is now LEON-401 "
         "(https://linear.app/x/issue/LEON-401), and this is its channel, #leon-401-check-rogers")
     assert turn.text.endswith("\n\ncan you check whether Rogers billed me twice?")
-    assert turn.channel_prompt.endswith(plugin._HANDOFF_PROMPT)
+    assert turn.channel_prompt.endswith(plugin._handoff_prompt())
     assert turn.raw_message["channel"] == NEW and turn.raw_message["ts"] == COPY_TS
     assert turn.raw_message["_autolinear"] == {
         "from_channel": DM, "from_ts": ts, "issue": "LEON-401"}
@@ -170,7 +170,7 @@ async def test_other_users_and_commands_are_answered_in_place(adapter, intake, e
     assert intake.requests == []
     turn = _turn(adapter)
     assert turn.source.chat_id == event["channel"]
-    assert plugin._HANDOFF_PROMPT not in (turn.channel_prompt or "")
+    assert plugin._handoff_prompt() not in (turn.channel_prompt or "")
 
 
 @pytest.mark.asyncio
@@ -183,7 +183,27 @@ async def test_an_existing_issue_keeps_its_message_and_gets_the_handoff_rule(ada
     turn = _turn(adapter)
     assert turn.source.chat_id == ISSUE
     assert turn.text == "Show me the draft."
-    assert turn.channel_prompt == f"Keep the question brief.\n\n{plugin._HANDOFF_PROMPT}"
+    assert turn.channel_prompt == f"Keep the question brief.\n\n{plugin._handoff_prompt()}"
+
+
+@pytest.mark.asyncio
+async def test_anyones_turn_in_an_issue_channel_gets_the_rule_with_autolinears_mention(
+        adapter, intake, monkeypatch):
+    monkeypatch.setenv(plugin.BOT_ENV, "U0AUTOLIN01")
+    plugin.wire(None, adapter)
+    await adapter._handle_slack_message(
+        _message(ISSUE, "1794000000.000023", "<@U_BOT> LEON-12 is now Awaiting Start", user="U0SYNCBOT1"))
+
+    assert intake.requests == []
+    turn = _turn(adapter)
+    assert turn.source.chat_id == ISSUE
+    assert turn.channel_prompt.endswith(plugin._handoff_prompt())
+    assert "Start that line with <@U0AUTOLIN01>, written exactly so" in turn.channel_prompt
+
+
+def test_without_the_bots_id_the_rule_asks_for_a_plain_mention(monkeypatch):
+    monkeypatch.delenv(plugin.BOT_ENV, raising=False)
+    assert "Start that line with @Autolinear, written exactly so" in plugin._handoff_prompt()
 
 
 @pytest.mark.parametrize("answers", [

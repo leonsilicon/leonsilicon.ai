@@ -59,6 +59,13 @@
             <a href="https://linear-slack.leonsilicon.ai/">slack22linear</a> manages the channel.
             Hermes replies there, or answers in place if intake fails.
           </p>
+          <p>
+            Every turn Hermes finishes in an issue channel ends with a line for the
+            <strong>Autolinear</strong> bot, such as <code>@Autolinear move done</code>,
+            <code>@Autolinear move leon</code> or <code>@Autolinear stay</code>. Only that line
+            moves the issue. When a turn ends without one, Autolinear reminds Hermes, twice at most,
+            then tells Leon. Leon can give the same commands with <code>/autolinear</code>.
+          </p>
         </div>
       </section>
 
@@ -94,7 +101,10 @@
               <code>channels:history</code> and <code>im:history</code> user scopes. Subscribe to
               <code>message.channels</code> and <code>message.im</code> at
               <code>https://autolinear.leonsilicon.ai/slack/events</code>, or the same path on your
-              Worker.
+              Worker. Give the app a bot user with <code>chat:write</code>,
+              <code>reactions:write</code> and <code>commands</code>, and point the
+              <code>/autolinear</code> command at <code>/slack/commands</code>. slack22linear holds
+              the bot's token and user ID.
             </li>
             <li>
               <strong>Enable Hermes.</strong>

@@ -31,24 +31,20 @@ export interface SyncConfig {
   hermesAckReaction: string;
   hermesAckState: string;
   /**
-   * Hermes's reactions (Slack's names, no colons) to Leon's message once it has finished answering
-   * it (✅), or once its turn failed (❌). They decide the issue's status (`Sync.onAnswered`).
+   * Hermes's reactions (Slack's names, no colons) to the message it took up once its turn is over
+   * (✅), or once its turn failed (❌). Hermes then owes Autolinear a command (`Sync.onAnswered`).
    */
   hermesAnsweredReaction: string;
   hermesFailedReaction: string;
   /**
-   * Statuses an answer without a ping to Leon closes, as `answeredState` (Leon's rule, 2026-11-21:
-   * Hermes pings him when there's something he needs or would want to see, and otherwise the issue
-   * is done). Any other status is one Hermes or someone else chose, and stands. For an issue Hermes's
-   * 👀 moved, the status it had before counts.
+   * Autolinear's bot user (Leon's rule, 2026-11-23): Hermes ends every turn in an issue channel with
+   * a line mentioning it that says what to do with the channel (`#command`), and it reminds Hermes
+   * when a turn ends without one. Null until the bot exists: then no reminders are sent, and only a
+   * plain-text `@Autolinear` line is read as a command.
    */
-  answerClosesStates: string[];
-  answeredState: string;
-  /**
-   * When Hermes mentions Leon in an issue channel, it needs something from him, so the issue moves
-   * to this status, unless it is already in one of `mentionLeonStates`.
-   */
-  leonPingState: string;
+  autolinearUserId: string | null;
+  /** The status whose issue titles start with `[AWAITING: <who>]` (Leon's convention). */
+  othersState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
   /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
@@ -106,9 +102,8 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
     hermesAnsweredReaction: env.HERMES_ANSWERED_REACTION ?? "white_check_mark",
     hermesFailedReaction: env.HERMES_FAILED_REACTION ?? "x",
-    answerClosesStates: list(env.ANSWER_CLOSES_STATES, ["Awaiting Init", "Awaiting Leon"]),
-    answeredState: env.ANSWERED_STATE ?? "Done",
-    leonPingState: env.LEON_PING_STATE ?? "Awaiting Leon",
+    autolinearUserId: env.AUTOLINEAR_BOT_USER_ID?.trim() || null,
+    othersState: env.OTHERS_STATE ?? "Awaiting Others",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",

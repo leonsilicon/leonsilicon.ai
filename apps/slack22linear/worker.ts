@@ -1,8 +1,8 @@
 import {
   botClient,
+  commandLine,
   LinearClient,
   loadConfig,
-  mentions,
   Store,
   Sync,
   verifyLinear,
@@ -51,6 +51,8 @@ interface Env {
   /** Bot token and signing secret of the Linear Sync Slack app. */
   LINEAR_SYNC_SLACK_BOT_TOKEN: string;
   LINEAR_SYNC_SLACK_SIGNING_SECRET?: string;
+  /** Bot token of the Autolinear Slack app, which asks Hermes for commands. Optional. */
+  AUTOLINEAR_SLACK_BOT_TOKEN?: string;
   /** Leon's Slack web session, for his sidebar sections. Optional: without it, sections are skipped. */
   SLACK_SESSION_TOKEN?: string;
   SLACK_SESSION_COOKIE?: string;
@@ -85,31 +87,32 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 
 /**
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
- * that mention Leon, and Hermes's 👀, ✅ and ❌ on Leon's messages (the sync checks where).
+ * with a command for Autolinear, Hermes's 👀 on Leon's messages, and its ✅ and ❌ on any message
+ * (the sync checks where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
-      (event.reaction === config.hermesAckReaction ||
-        event.reaction === config.hermesAnsweredReaction ||
-        event.reaction === config.hermesFailedReaction) &&
       event.user === config.hermesUserId &&
-      event.item_user === config.leonUserId &&
-      (event.item as { type?: string } | undefined)?.type === "message"
+      (event.item as { type?: string } | undefined)?.type === "message" &&
+      ((event.reaction === config.hermesAckReaction && event.item_user === config.leonUserId) ||
+        event.reaction === config.hermesAnsweredReaction ||
+        event.reaction === config.hermesFailedReaction)
     );
   if (!event || event.type !== "message") return false;
   if (event.channel_type !== "channel" && event.channel_type !== "group") return false;
-  const hermesPing = (message: Record<string, unknown> | undefined) =>
-    typeof message?.text === "string" && mentions(message.text, config.leonUserId);
+  const hermesCommand = (message: Record<string, unknown> | undefined) =>
+    typeof message?.text === "string" &&
+    commandLine(message.text, config.autolinearUserId) !== null;
   if (event.subtype === "message_changed") {
-    // People's edits, and Hermes's edits that ping Leon (it streams some replies by editing).
+    // People's edits, and Hermes's edits with a command (it can stream a reply by editing it).
     const edited = event.message as Record<string, unknown> | undefined;
-    if (edited?.user === config.hermesUserId) return hermesPing(edited);
+    if (edited?.user === config.hermesUserId) return hermesCommand(edited);
     return !edited?.bot_id;
   }
   if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
     return false;
-  if (event.user === config.hermesUserId) return hermesPing(event);
+  if (event.user === config.hermesUserId) return hermesCommand(event);
   return !event.bot_id;
 }
 
@@ -243,6 +246,9 @@ export class SyncObject {
       session: this.#session(),
       log,
       botUserId: this.#botUserId,
+      autolinear: this.#env.AUTOLINEAR_SLACK_BOT_TOKEN
+        ? botClient(this.#env.AUTOLINEAR_SLACK_BOT_TOKEN)
+        : null,
     });
   }
 
@@ -299,9 +305,25 @@ export class SyncObject {
       } catch (error) {
         checks.projects = String(error);
       }
+      // Autolinear's bot asks Hermes for its commands; its user ID must be the one Hermes mentions.
+      const autolinearToken = this.#env.AUTOLINEAR_SLACK_BOT_TOKEN;
+      if (!autolinearToken) checks.autolinear = "missing";
+      else
+        try {
+          const me = (await botClient(autolinearToken)("auth.test")).user_id;
+          const config = loadConfig(this.#env as Record<string, string | undefined>);
+          checks.autolinear =
+            me === config.autolinearUserId ? "ok" : "AUTOLINEAR_BOT_USER_ID isn't its bot user";
+        } catch (error) {
+          checks.autolinear = String(error);
+        }
       const { queued, dead } = this.#store.stats();
       return json({
-        ok: checks.bot === "ok" && checks.session === "ok" && checks.projects === "ok",
+        ok:
+          checks.bot === "ok" &&
+          checks.session === "ok" &&
+          checks.projects === "ok" &&
+          checks.autolinear === "ok",
         ...checks,
         queued,
         dead: dead.length,

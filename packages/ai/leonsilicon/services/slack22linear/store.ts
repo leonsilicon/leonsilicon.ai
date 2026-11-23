@@ -46,7 +46,8 @@ export interface ProjectRecord {
 
 /**
  * Hermes's 👀 moved an issue to Awaiting Hermes: the status it had before, and when the move was
- * done (ms; null while it's under way), so its answer is judged as if the issue had stayed put.
+ * done (ms; null while it's under way). Autolinear's reminder names that status, so Hermes can put
+ * the issue back with a command.
  */
 export interface AckRecord {
   issueId: string;
@@ -329,6 +330,15 @@ export class Store {
         ts,
       ).length > 0
     );
+  }
+
+  /** The ts of the newest message a person wrote in the channel (mirrored as a comment), or null. */
+  lastSpoke(channelId: string): string | null {
+    const row = this.#sql.exec(
+      `SELECT MAX(slack_ts) AS ts FROM comments WHERE channel_id = ? AND origin = 'slack'`,
+      channelId,
+    )[0];
+    return typeof row?.ts === "string" ? row.ts : null;
   }
 
   ack(issueId: string): AckRecord | null {

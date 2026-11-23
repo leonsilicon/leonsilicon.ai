@@ -11,9 +11,9 @@ Every message Leon sends to Hermes outside an issue channel gets a new Linear is
 1. Leon writes to Hermes outside an issue channel: a DM, `#general`, a project channel, a reply under a `#feed-` post.
 2. AutoLinear's Slack app usually starts intake before Hermes receives the message. Once the message reaches Hermes and passes dedup and the bot check, the plugin calls `POST /intake` in the background to get the running or finished intake. AutoLinear creates the issue, opens its `leon-<n>-<first words>` channel, and posts a copy of the message there as Leon. Once Slack confirms the copy, AutoLinear replaces the original message with the channel link.
 3. Meanwhile Hermes reads the thread and downloads files as usual. When it builds the turn, the plugin waits for autolinear's answer and builds the turn as if Leon had written that copy: same text, files and thread history, in the new channel, with a one-line note naming the issue. Hermes's reply, its session and its 👀 → ✅ reactions all land in the issue channel. With [slack-flat-replies](../slack-flat-replies/README.md), the reply is at the top of the channel, not in a thread.
-4. Hermes's 👀 moves the issue to Awaiting Hermes. Hermes posts the complete reply and mentions Leon if he needs or would want to see it. Slack22Linear moves the issue to Awaiting Leon from that posted reply. Hermes leaves the status field unset when recording notes or drafting the handoff. Slack22Linear handles unpinged answers and failures through the completion reactions.
+4. Hermes's 👀 moves the issue to Awaiting Hermes. Hermes answers, and ends its turn with one line that starts with Autolinear's mention and says what to do with the channel: `move done`, `move leon`, `move others who="…"`, `move listener event="…" stop=…`, `move date start=…`, `move hermes` or `stay` (Leon's rule, 2026-11-23). Only that line moves the issue; slack22linear reads it ([Autolinear's commands](../../../../../ai/leonsilicon/services/slack22linear/README.md#autolinears-commands)). When a turn ends without one, Autolinear reminds Hermes there.
 
-The plugin adds the same handoff instructions to Hermes's channel prompt for Leon's follow-ups in existing issue channels.
+The plugin puts that rule, with Autolinear's exact mention, in the channel prompt of every turn in an issue channel, whoever started it: Leon's message, a bot's ping, or Autolinear's reminder. Hermes's Slack adapter shows Hermes every mention it reads as a plain `@Name`, so the prompt is where Hermes gets the raw `<@U…>` token.
 
 ## Which messages
 
@@ -33,13 +33,14 @@ The copy carries slack-as-leon's `client_msg_id` marker, so [slack-as-leon-guard
 
 In `$HERMES_HOME/.env` (the dashboard's Keys page), from the `#hermes` items of the root [`.env.schema`](../../../../../../.env.schema). Without the first two, the plugin is off.
 
-| Key                         | Value                                                                     |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `AUTOLINEAR_TOKEN`          | autolinear's `AUTOLINEAR_TOKEN`                                           |
-| `AUTOLINEAR_USER_ID`        | Leon's Slack user ID                                                      |
-| `AUTOLINEAR_URL`            | Optional; default `https://autolinear.leonsilicon.ai/intake`              |
-| `AUTOLINEAR_CHANNEL_PREFIX` | Optional; default `leon`, slack22linear's channel prefix                  |
-| `AUTOLINEAR_SKIP_CHANNELS`  | Optional; comma-separated channel IDs whose messages Hermes answers there |
+| Key                         | Value                                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTOLINEAR_TOKEN`          | autolinear's `AUTOLINEAR_TOKEN`                                                                                                                                                                                    |
+| `AUTOLINEAR_USER_ID`        | Leon's Slack user ID                                                                                                                                                                                               |
+| `AUTOLINEAR_URL`            | Optional; default `https://autolinear.leonsilicon.ai/intake`                                                                                                                                                       |
+| `AUTOLINEAR_CHANNEL_PREFIX` | Optional; default `leon`, slack22linear's channel prefix                                                                                                                                                           |
+| `AUTOLINEAR_SKIP_CHANNELS`  | Optional; comma-separated channel IDs whose messages Hermes answers there                                                                                                                                          |
+| `AUTOLINEAR_BOT_USER_ID`    | Optional; Autolinear's bot user, whose mention starts Hermes's command line. Without it, the prompt asks for a plain `@Autolinear`. Also add it to `SLACK_ALLOWED_USERS`, or Hermes ignores Autolinear's reminders |
 
 They're read on every message, so removing the token turns the plugin off once Hermes's env reloads.
 
