@@ -4,22 +4,110 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Gmail feed · gmail-feed.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Mirrors Leon’s incoming Gmail into Slack, with separate channels for flagged messages and spam."
+    />
+    <title>Gmail Feed · gmail-feed.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">gmail-feed.leonsilicon.ai</p>
-      <h1>Gmail feed</h1>
-      <p>
-        Copies every email that reaches Leon's Gmail into Slack, screened first like his Beeper
-        messages. It reads Gmail read-only and takes no requests from the internet; this page only
-        shows whether it's keeping up.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">gmail-feed.leonsilicon.ai</p>
+          <h1>Gmail Feed</h1>
+          <p class="summary">
+            Mirrors Leon’s incoming Gmail into Slack, with separate channels for flagged messages
+            and spam.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li>
+            <strong>Gmail history</strong><small>Read-only access, polled every minute</small>
+          </li>
+          <li><strong>Screening and routing</strong><small>Safety and urgency checks</small></li>
+          <li><strong>Slack feeds</strong><small>Gmail, flagged mail, or spam</small></li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            A Cloudflare Durable Object polls Gmail history and queues new messages in SQLite. Gmail
+            spam goes straight to the spam feed. Other messages go through safety and urgency checks
+            using OpenAI before the feed bot posts them.
+          </p>
+          <p>
+            Slack receives the message as plain text with a link back to Gmail. Attachments stay in
+            Gmail. Messages that pass screening can mention Hermes when they meet the configured
+            urgency threshold.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <ol>
+            <li>
+              <strong>Authorize Gmail.</strong> Enable the Gmail API in your Google Cloud project
+              and authorize an OAuth client with the <code>gmail.readonly</code> scope. Obtain a
+              refresh token for the mailbox you want to mirror.
+            </li>
+            <li>
+              <strong>Configure delivery.</strong> Install the feed bot and add it to the flagged
+              and spam channels. Set the Google OAuth credentials, Slack bot token and channel IDs,
+              OpenAI API key, Hermes user ID and admin token in the <code>#gmail-feed</code> group
+              of the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >. Set <code>GMAIL_FEED_WAKE=none</code> for a silent feed.
+            </li>
+            <li>
+              <strong>Deploy and confirm delivery.</strong> The first poll records a starting point.
+              Send a test email and check the Slack feed. Use the runbook’s authenticated backfill
+              command to import older mail.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:gmail-feed</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/gmail-feed/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

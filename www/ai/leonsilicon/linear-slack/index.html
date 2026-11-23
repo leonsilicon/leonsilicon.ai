@@ -4,22 +4,112 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
+    <meta
+      name="description"
+      content="Keeps Linear issues and Slack conversations in sync, with one Slack channel per issue."
+    />
     <title>slack22linear · linear-slack.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">linear-slack.leonsilicon.ai</p>
-      <h1>slack22linear</h1>
-      <p>
-        Keeps a Slack channel for each Linear issue and mirrors comments both ways, and gives each
-        Linear project a channel through Linear's own Slack app. Only Linear's and Slack's signed
-        webhooks reach it.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">linear-slack.leonsilicon.ai</p>
+          <h1>slack22linear</h1>
+          <p class="summary">
+            Keeps Linear issues and Slack conversations in sync, with one Slack channel per issue.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li><strong>Slack and Linear</strong><small>Signed events from both systems</small></li>
+          <li><strong>Sync queue</strong><small>Durable Object with a SQLite job queue</small></li>
+          <li>
+            <strong>Issue channels</strong><small>Comments and replies mirrored both ways</small>
+          </li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            The Worker verifies Slack Events API and Linear webhook signatures, then queues the
+            work. A Cloudflare Durable Object processes jobs one at a time, records issue-to-channel
+            and comment-to-message mappings, and retries failed work.
+          </p>
+          <p>
+            Issue channels follow Linear status in Leon’s Slack sidebar. Linear’s own Slack
+            integration creates project channels.
+            <a href="https://autolinear.leonsilicon.ai/">AutoLinear</a> can hand off a channel it
+            already created to the same sync queue.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <ol>
+            <li>
+              <strong>Connect the integrations.</strong> Install the Linear Sync Slack bot and
+              enable Linear’s official Slack integration with Project channels on. Subscribe the bot
+              to <code>message.channels</code>, <code>message.groups</code> and
+              <code>reaction_added</code> at <code>/slack/events</code>.
+            </li>
+            <li>
+              <strong>Configure credentials and routes.</strong> Set the
+              <code>#slack22linear</code> values in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >
+              for the Linear API key, webhook secret, Slack bot token, signing secret, Slack
+              session, and admin token. Point the Linear Issue, Comment, and Project webhook to
+              <code>/linear/webhook</code> on the same Worker.
+            </li>
+            <li>
+              <strong>Deploy and verify.</strong> Check <code>/healthz</code>. Create a test issue
+              and confirm its channel, then add a comment in each direction. The runbook includes an
+              authenticated backfill for existing issues.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:slack22linear</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/slack22linear/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

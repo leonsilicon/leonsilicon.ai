@@ -4,22 +4,125 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>autolinear · autolinear.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Turns eligible Slack messages to Hermes into Linear issues and gives each conversation a dedicated Slack channel."
+    />
+    <title>AutoLinear · autolinear.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">autolinear.leonsilicon.ai</p>
-      <h1>autolinear</h1>
-      <p>
-        Gives each of Leon's Slack messages its own Linear issue and Slack channel the moment he
-        sends it, and links the channel from his message, so Hermes answers him there. Only Hermes
-        calls it; this page only shows whether it's ready.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">autolinear.leonsilicon.ai</p>
+          <h1>AutoLinear</h1>
+          <p class="summary">
+            Turns eligible Slack messages to Hermes into Linear issues and gives each conversation a
+            dedicated Slack channel.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li><strong>Message to Hermes</strong><small>Slack event or Hermes plugin</small></li>
+          <li><strong>AutoLinear intake</strong><small>One Durable Object per message</small></li>
+          <li>
+            <strong>Issue and Slack channel</strong
+            ><small>Hermes continues the conversation there</small>
+          </li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            A signed Slack event can start intake as soon as Leon sends a message. The Hermes plugin
+            also calls <code>POST /intake</code> when Hermes handles it. Both paths use the same
+            message ID, so concurrent requests and retries share one result.
+          </p>
+          <p>
+            The Worker creates an issue in <strong>Awaiting Init</strong>, opens a channel and
+            copies the message there. It edits the original to link to the new channel, then
+            <a href="https://linear-slack.leonsilicon.ai/">slack22linear</a> manages the channel.
+            Hermes replies there, or answers in place if intake fails.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <ol>
+            <li>
+              <strong>Configure the Worker.</strong> Clone the repository and install its toolchain
+              with <code>vp install</code>. Use the relevant group in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >
+              to configure Infisical for your Worker. Set the <code>#autolinear</code> values for
+              Linear, the Slack session, the intake token and Slack signing secret. Deploy
+              slack22linear first so its channel handoff is available. Then deploy AutoLinear from
+              the repository root.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:autolinear</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+            <li>
+              <strong>Connect Slack.</strong> Install the AutoLinear Slack app with the
+              <code>channels:history</code> and <code>im:history</code> user scopes. Subscribe to
+              <code>message.channels</code> and <code>message.im</code> at
+              <code>https://autolinear.leonsilicon.ai/slack/events</code>, or the same path on your
+              Worker.
+            </li>
+            <li>
+              <strong>Enable Hermes.</strong>
+              <a
+                href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/com/leonsilicon/hermes/plugins/autolinear/README.md#install"
+                >Install the AutoLinear plugin</a
+              >, set <code>AUTOLINEAR_TOKEN</code> and <code>AUTOLINEAR_USER_ID</code>, and keep the
+              <a
+                href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md"
+                >Slack puppet guard</a
+              >
+              enabled. Set <code>AUTOLINEAR_URL</code> to your Worker’s <code>/intake</code> if you
+              use a different hostname. Send Hermes a test message outside an issue channel to
+              verify the setup.
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/autolinear/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

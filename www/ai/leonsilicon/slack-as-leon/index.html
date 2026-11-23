@@ -4,23 +4,96 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Moved · slack-as-leon.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Update existing Slack Puppet clients to slack-puppet.leonsilicon.ai before the old hostname retires on November 26, 2026."
+    />
+    <link rel="canonical" href="https://slack-puppet.leonsilicon.ai/" />
+    <title>Slack Puppet migration · slack-as-leon.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">slack-as-leon.leonsilicon.ai</p>
-      <h1>Moved to slack-puppet</h1>
-      <p>
-        This is now <a href="https://slack-puppet.leonsilicon.ai/">slack-puppet.leonsilicon.ai</a>.
-        The old name keeps working until 2026-11-26.
-      </p>
-      <dl>
-        <dt>Endpoint</dt>
-        <dd><code>https://slack-as-leon.leonsilicon.ai/mcp</code></dd>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">slack-as-leon.leonsilicon.ai</p>
+          <h1>Slack Puppet has moved</h1>
+          <p class="summary">
+            Update existing Slack Puppet clients to slack-puppet.leonsilicon.ai before the old
+            hostname retires on November 26, 2026.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li><strong>slack-as-leon.leonsilicon.ai</strong><small>Legacy hostname</small></li>
+          <li><strong>slack-puppet.leonsilicon.ai</strong><small>Current hostname</small></li>
+          <li><strong>Slack Puppet Worker</strong><small>Same MCP tools and credentials</small></li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            Both hostnames reach the Slack Puppet Worker during the migration. It lets Hermes post
+            as Leon and gives delegated agents access to their Slack task threads.
+          </p>
+          <p>
+            See the <a href="https://slack-puppet.leonsilicon.ai/">Slack Puppet service page</a> for
+            the tool permissions, Worker setup and health check.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <ol>
+            <li>
+              <strong>Update the MCP URL.</strong> Use the address below in each client that still
+              points to the old hostname.
+            </li>
+            <li>
+              <strong>Keep the existing credential.</strong> Use the same bearer token, reload the
+              connector and confirm that it can list its tools.
+            </li>
+          </ol>
+          <div class="snippet">
+            <code id="mcp-endpoint">https://slack-puppet.leonsilicon.ai/mcp</code>
+            <button
+              type="button"
+              aria-describedby="mcp-endpoint"
+              data-copy
+              aria-live="polite"
+              hidden
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/slack-as-leon/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

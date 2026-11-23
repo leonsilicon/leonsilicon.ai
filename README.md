@@ -8,15 +8,17 @@ Each site's entrypoint is `www/<hostname, labels reversed>/index.html`: `cronome
 
 Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker of its own. The MCP servers each check their own bearer token. Browsers get the page in `www/`.
 
-| Site                                                           | What it is                                                                          | Runs on                                              |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [`cronometer`](www/ai/leonsilicon/cronometer/index.html)       | [Cronometer](apps/cronometer/README.md)                                             | Its own Cloudflare Worker (Python), since 2026-11-21 |
-| [`slack-puppet`](www/ai/leonsilicon/slack-puppet/index.html)   | [Slack puppet: posts as Leon](apps/slack-as-leon/README.md)                         | Its own Cloudflare Worker                            |
-| [`linear-slack`](www/ai/leonsilicon/linear-slack/index.html)   | [slack22linear](apps/slack22linear/README.md) syncs Slack and Linear both ways      | Its own Cloudflare Worker                            |
-| [`autolinear`](www/ai/leonsilicon/autolinear/index.html)       | [autolinear: an issue and channel per Slack message](apps/autolinear/README.md)     | Its own Cloudflare Worker                            |
-| [`dailylinear`](www/ai/leonsilicon/dailylinear/index.html)     | [dailylinear: the day's Linear project and its channel](apps/dailylinear/README.md) | Its own Cloudflare Worker, since 2026-11-21          |
-| [`grokbot-admin`](www/ai/leonsilicon/grokbot-admin/index.html) | [Grok Bot admin: bots list and delete any bot](apps/grok-bot-roster/README.md)      | Its own Cloudflare Worker, since 2026-11-21          |
-| [`gmail-feed`](www/ai/leonsilicon/gmail-feed/index.html)       | [Gmail feed: every email into Slack](apps/gmail-feed/README.md)                     | Its own Cloudflare Worker                            |
+| Live service                                            | What it does                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------- |
+| [Cronometer MCP](https://cronometer.leonsilicon.ai/)    | Gives authorized agents access to Leon's Cronometer food diary      |
+| [Slack Puppet](https://slack-puppet.leonsilicon.ai/)    | Lets Hermes post as Leon and delegated agents reply in task threads |
+| [slack22linear](https://linear-slack.leonsilicon.ai/)   | Syncs Slack issue channels and Linear comments                      |
+| [AutoLinear](https://autolinear.leonsilicon.ai/)        | Makes a Linear issue and channel for eligible Slack messages        |
+| [DailyLinear](https://dailylinear.leonsilicon.ai/)      | Creates the day's Linear project and Slack channel                  |
+| [Grok Bot Admin](https://grokbot-admin.leonsilicon.ai/) | Lists and deletes bots through MCP                                  |
+| [Gmail Feed](https://gmail-feed.leonsilicon.ai/)        | Mirrors incoming email into Slack                                   |
+
+[Slack Puppet migration](https://slack-as-leon.leonsilicon.ai/) covers the temporary `slack-as-leon` hostname. Each live service page links its source and deployment runbook.
 
 Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also served `orca`, `grok`, `beeper` and `watch` here, and `cronometer` ran there too. What they did now runs on Hermes Cloud (below) or as a Worker, so those four names and all three pieces were removed, and the mini serves nothing public. The git history has them.
 

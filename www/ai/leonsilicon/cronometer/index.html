@@ -4,20 +4,120 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Cronometer · cronometer.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Gives authorized agents access to Leon’s Cronometer food diary, including meals, recipes, exercise, and nutrient targets."
+    />
+    <title>Cronometer MCP · cronometer.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">cronometer.leonsilicon.ai</p>
-      <h1>Cronometer</h1>
-      <p>Leon's Cronometer food diary over MCP. Private: every request needs its bearer token.</p>
-      <dl>
-        <dt>Endpoint</dt>
-        <dd><code>https://cronometer.leonsilicon.ai/mcp</code></dd>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">cronometer.leonsilicon.ai</p>
+          <h1>Cronometer MCP</h1>
+          <p class="summary">
+            Gives authorized agents access to Leon’s Cronometer food diary, including meals,
+            recipes, exercise, and nutrient targets.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li><strong>MCP client</strong><small>Streamable HTTP with a bearer token</small></li>
+          <li><strong>Python Worker</strong><small>Authentication and session reuse</small></li>
+          <li><strong>Cronometer</strong><small>Diary, food database, and account data</small></li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            A Python Worker wraps the unofficial
+            <a href="https://github.com/rollecode/cronometer-mcp">cronometer-mcp connector</a>,
+            which talks to Cronometer’s mobile API. The Worker stores the upstream session in
+            Cloudflare KV to avoid signing in for each request.
+          </p>
+          <p>
+            The tools can look up foods and read the diary, as well as add, edit, or delete entries.
+            The public health check reports Worker availability. An authenticated call to
+            <code>get_profile</code> checks the Cronometer connection.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <p>
+            To connect an authorized client, add a Streamable HTTP MCP server at this URL. Set the
+            <code>Authorization</code> header to <code>Bearer &lt;token&gt;</code> using the token
+            issued by the operator.
+          </p>
+          <div class="snippet">
+            <code id="mcp-endpoint">https://cronometer.leonsilicon.ai/mcp</code>
+            <button
+              type="button"
+              aria-describedby="mcp-endpoint"
+              data-copy
+              aria-live="polite"
+              hidden
+            >
+              Copy
+            </button>
+          </div>
+          <ol>
+            <li>
+              <strong>Configure your own deployment.</strong> Use the <code>#cronometer</code> group
+              in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >. Set your Cronometer login and <code>CRONOMETER_HTTP_TOKEN</code> in Infisical, and
+              set the public hostname and KV binding for your Worker.
+            </li>
+            <li>
+              <strong>Build and deploy.</strong> Install the repository toolchain and
+              <code>uv</code> for the Python dependencies. Run the command below from the repository
+              root, then connect your client and call <code>get_profile</code>.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:cronometer</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/cronometer/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

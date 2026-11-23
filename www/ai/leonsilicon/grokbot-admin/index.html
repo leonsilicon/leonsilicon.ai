@@ -4,21 +4,125 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Grok Bot admin · grokbot-admin.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Lets authorized Grok Bot agents list the account’s bots and clean up helpers they no longer need."
+    />
+    <title>Grok Bot Admin · grokbot-admin.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">grokbot-admin.leonsilicon.ai</p>
-      <h1>Grok Bot admin</h1>
-      <p>
-        An MCP server Leon's Grok Bot bots use to list and delete his bots, which the Grok Bot app
-        doesn't let them do. This page only shows whether its sign-in still works.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">grokbot-admin.leonsilicon.ai</p>
+          <h1>Grok Bot Admin</h1>
+          <p class="summary">
+            Lets authorized Grok Bot agents list the account’s bots and clean up helpers they no
+            longer need.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li><strong>Grok Bot</strong><small>Account-wide MCP configuration</small></li>
+          <li>
+            <strong>Grok Bot Admin</strong><small>Bearer-authenticated Cloudflare Worker</small>
+          </li>
+          <li><strong>Cursor backend</strong><small>List or delete bots from the roster</small></li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            The Worker uses a dedicated Cursor sign-in to reach Grok Bot’s backend. It keeps the
+            session in Cloudflare KV and refreshes it as expiry approaches.
+          </p>
+          <p>
+            Use <code>grok_bots_list</code> to fetch bot IDs and names.
+            <code>grok_bot_delete</code> removes a bot by numeric ID or agent ID. Deletion is
+            permanent and includes the bot’s conversations, memory, routines, and attachments.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <p>
+            Add <code>grokbot-admin</code> as a Streamable HTTP MCP server in the Grok Bot account
+            configuration. Set <code>Authorization</code> to <code>Bearer &lt;token&gt;</code> using
+            the token issued by the operator.
+          </p>
+          <div class="snippet">
+            <code id="mcp-endpoint">https://grokbot-admin.leonsilicon.ai/mcp</code>
+            <button
+              type="button"
+              aria-describedby="mcp-endpoint"
+              data-copy
+              aria-live="polite"
+              hidden
+            >
+              Copy
+            </button>
+          </div>
+          <ol>
+            <li>
+              <strong>Configure your own deployment.</strong> Set
+              <code>GROK_BOT_ROSTER_MCP_TOKEN</code> and your public origin using the
+              <code>#grok-bot-roster</code> group in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >. Set up the Worker’s <code>STATE</code> KV binding.
+            </li>
+            <li>
+              <strong>Authorize and verify.</strong> Deploy, then follow the
+              <a
+                href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/grok-bot-roster/README.md#signing-in-again"
+                >Cursor sign-in steps</a
+              >
+              to seed the KV session for your account. Check <code>/healthz</code> and use
+              <code>grok_bots_list</code> to test the connector.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:grok-bot-roster</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a
+        href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/grok-bot-roster/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

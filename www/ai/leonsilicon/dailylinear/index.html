@@ -4,23 +4,111 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>dailylinear · dailylinear.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Starts each Toronto day with a fresh Linear project and a starred Slack channel, then closes out past days."
+    />
+    <title>DailyLinear · dailylinear.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">dailylinear.leonsilicon.ai</p>
-      <h1>dailylinear</h1>
-      <p>
-        Makes Leon's Linear project for each day at midnight in Toronto, with its
-        <code>#project-YYYY-MM-DD</code> Slack channel, and keeps the day's channel starred in his
-        sidebar. Past days' projects are marked done and their channels archived. It runs on its
-        own; this page only shows whether today's is ready.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">dailylinear.leonsilicon.ai</p>
+          <h1>DailyLinear</h1>
+          <p class="summary">
+            Starts each Toronto day with a fresh Linear project and a starred Slack channel, then
+            closes out past days.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li>
+            <strong>Midnight in Toronto</strong
+            ><small>Durable Object alarm with an hourly fallback</small>
+          </li>
+          <li><strong>Linear project</strong><small>One dated project per day</small></li>
+          <li>
+            <strong>Slack channel</strong><small>Created by Linear, then starred for Leon</small>
+          </li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            A single Cloudflare Durable Object coordinates scheduled and manual runs. It finds or
+            creates the day’s Linear project, asks Linear’s Slack integration for its channel, then
+            renames it to <code>#project-YYYY-MM-DD</code>, invites Hermes and stars it for Leon.
+          </p>
+          <p>
+            The same run completes past daily projects and archives their channels. If the channel
+            is still being provisioned or a request fails, the Worker retries.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <ol>
+            <li>
+              <strong>Connect Linear and Slack.</strong> Install Linear’s Slack integration with
+              Project channels enabled. Choose the Linear team where the daily projects belong.
+            </li>
+            <li>
+              <strong>Configure the Worker.</strong> Clone the repository and install its toolchain
+              with <code>vp install</code>. Use the relevant group in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >
+              to configure Infisical for your Worker. Use the <code>#dailylinear</code> group for
+              the Linear API key and team, Slack session, Hermes user ID and admin token.
+            </li>
+            <li>
+              <strong>Verify the first run.</strong> Deploy, then wait for the schedule or call
+              <code>POST /admin/run</code> with the <code>DAILYLINEAR_ADMIN_TOKEN</code> bearer
+              token. Check for the dated project and its Slack channel.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:dailylinear</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/dailylinear/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 

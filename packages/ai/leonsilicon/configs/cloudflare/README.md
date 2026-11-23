@@ -31,7 +31,7 @@ From `@-/ai.leonsilicon.configs.cloudflare` (Worker side):
 
 From `@-/ai.leonsilicon.configs.cloudflare/client` (browser side, imported by the pages):
 
-- `mountServicePage()`: loads the shared styles and fills the page's `[data-health]` element from the service's own `/healthz`. A page without that element shows no status.
+- `mountServicePage()` loads the shared styles and fills the page's `[data-health]` element from the service's own `/healthz`. It also enables `[data-copy]` buttons in secure contexts with clipboard support. Each button copies the `code` element in the same snippet.
 
 ## Test
 

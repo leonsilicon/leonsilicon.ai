@@ -4,23 +4,129 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Slack puppet · slack-puppet.leonsilicon.ai</title>
+    <meta
+      name="description"
+      content="Lets Hermes post as Leon in Slack and gives delegated agents scoped access to their task threads."
+    />
+    <title>Slack Puppet · slack-puppet.leonsilicon.ai</title>
   </head>
   <body>
-    <main>
-      <p class="host">slack-puppet.leonsilicon.ai</p>
-      <h1>Slack puppet</h1>
-      <p>
-        A double puppet of Leon's Slack account, over MCP. Private: every request needs its bearer
-        token.
-      </p>
-      <dl>
-        <dt>Endpoint</dt>
-        <dd><code>https://slack-puppet.leonsilicon.ai/mcp</code></dd>
-        <dt>Status</dt>
-        <dd data-health>Checking…</dd>
-      </dl>
+    <header class="shell site-header">
+      <a class="brand" href="https://github.com/leonsilicon/leonsilicon.ai">Leon's AI setup</a>
+      <nav aria-label="On this page">
+        <a href="#how-it-works">How it works</a>
+        <a href="#setup">Setup</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="hero">
+        <div>
+          <p class="host">slack-puppet.leonsilicon.ai</p>
+          <h1>Slack Puppet</h1>
+          <p class="summary">
+            Lets Hermes post as Leon in Slack and gives delegated agents scoped access to their task
+            threads.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#setup">Setup guide <span aria-hidden="true">↓</span></a>
+            <span class="health"
+              >Health check <span data-health role="status">Checking…</span></span
+            >
+          </div>
+        </div>
+        <ol class="flow" role="list" aria-label="Service flow">
+          <li>
+            <strong>Hermes, Grok Bot, or Codex</strong
+            ><small>Separate credentials per client type</small>
+          </li>
+          <li><strong>Slack Puppet</strong><small>MCP tools scoped to the token</small></li>
+          <li><strong>Slack</strong><small>Posts and replies through Leon’s session</small></li>
+        </ol>
+      </div>
+
+      <section class="guide" id="how-it-works">
+        <h2>How it works</h2>
+        <div class="guide-body">
+          <p>
+            A Cloudflare Worker uses Leon’s Slack web session to send messages as his account.
+            Hermes can send messages, list bots, and read replies to its own posts. Grok Bot and
+            Codex use separate tokens with tools limited to replies in their task threads.
+          </p>
+          <p>
+            Outgoing messages carry a marker that the
+            <a
+              href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md"
+              >Hermes guard plugin</a
+            >
+            uses to recognize the Worker’s posts and avoid reply loops. Cloudflare KV tracks
+            per-client posting limits.
+          </p>
+        </div>
+      </section>
+
+      <section class="guide" id="setup">
+        <h2>Setup</h2>
+        <div class="guide-body">
+          <p>
+            Add <code>slack-puppet</code> as a Streamable HTTP MCP server. Set the
+            <code>Authorization</code> header to <code>Bearer &lt;token&gt;</code> using the
+            operator-issued token for your client type.
+          </p>
+          <div class="snippet">
+            <code id="mcp-endpoint">https://slack-puppet.leonsilicon.ai/mcp</code>
+            <button
+              type="button"
+              aria-describedby="mcp-endpoint"
+              data-copy
+              aria-live="polite"
+              hidden
+            >
+              Copy
+            </button>
+          </div>
+          <ol>
+            <li>
+              <strong>Configure your own Worker.</strong> Put an authorized Slack web session, a
+              blocked-user list, and separate MCP tokens in Infisical using the
+              <code>#slack-as-leon</code> group in the
+              <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
+                >environment schema</a
+              >. Configure the rate-limit KV binding.
+            </li>
+            <li>
+              <strong>Deploy and connect.</strong> Enable the
+              <a
+                href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md"
+                >Hermes guard plugin</a
+              >, deploy the Worker, and check <code>/healthz</code> before connecting clients. Use
+              <code>slack_bots</code> for a read-only check with the Hermes token.
+              <div class="snippet">
+                <code id="deploy-command">vpr -w deploy:slack-as-leon</code>
+                <button
+                  type="button"
+                  aria-describedby="deploy-command"
+                  data-copy
+                  aria-live="polite"
+                  hidden
+                >
+                  Copy
+                </button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
     </main>
+
+    <footer class="shell site-footer">
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/slack-as-leon/README.md"
+        >Source and runbook</a
+      >
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"
+        >Deployment workflow</a
+      >
+    </footer>
     <script type="module">
       import { mountServicePage } from "@-/ai.leonsilicon.configs.cloudflare/client";
 
