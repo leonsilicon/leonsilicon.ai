@@ -127,6 +127,15 @@ export default defineConfig({
         command:
           "tsc --noEmit && vp build && cd apps/grok-bot-roster && varlock-wrangler deploy -c wrangler.jsonc",
       },
+      "deploy:landing": {
+        cache: false,
+        command: [
+          "vp build www/ai/leonsilicon --outDir ../../../dist/landing --emptyOutDir",
+          "cp www/ai/leonsilicon/@assets/space-grotesk-OFL.txt dist/landing/assets/",
+          "cd apps/landing",
+          "wrangler deploy -c wrangler.jsonc",
+        ].join(" && "),
+      },
       "deploy:slack-as-leon": {
         cache: false,
         // varlock-wrangler uploads the #slack-as-leon items of .env.schema (values from Infisical) as

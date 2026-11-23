@@ -19,9 +19,11 @@ Worker and CLI applications use `@-apps/<folder>`. Sites use `@-apps/<reverse ho
 
 ## Sites
 
-Each site is a private workspace application with an empty `exports` map and its own dependencies. Its `index.html` is a Vite entrypoint and imports `@-/ai.leonsilicon.configs.cloudflare/client` for the shared scripts and styles. `vp build` writes `dist/www`, keeping the reverse-hostname paths and putting shared files in `dist/www/assets/`.
+Each site is a private workspace application with an empty `exports` map. Its `index.html` is a Vite entrypoint. The service pages import `@-/ai.leonsilicon.configs.cloudflare/client` for the shared scripts and styles. `vp build` writes `dist/www`, keeping the reverse-hostname paths and putting shared files in `dist/www/assets/`.
 
-A Worker serves a hostname's pages by uploading `dist/www` as its assets and calling `serveSite` from [`@-/ai.leonsilicon.configs.cloudflare`](packages/ai/leonsilicon/configs/cloudflare/README.md) before its own handler. Browsers (GET with `Accept: text/html`) get the page; every other request, MCP included, goes to the handler.
+A service Worker serves its hostname's pages by uploading `dist/www` as its assets and calling `serveSite` from [`@-/ai.leonsilicon.configs.cloudflare`](packages/ai/leonsilicon/configs/cloudflare/README.md) before its own handler. Browsers (GET with `Accept: text/html`) get the page; every other request, MCP included, goes to the handler.
+
+The apex site at `www/ai/leonsilicon/index.html` deploys as an assets-only Worker. Its deploy task builds the apex page and its assets into `dist/landing`.
 
 To add a site, create `www/<reversed host>/index.html` and its `package.json`. If the site serves a new Custom Domain on a Worker, add the route to that Worker's `wrangler.jsonc`. Tests check that every Custom Domain has a page and that the site packages have no exports or dependents.
 
@@ -68,21 +70,22 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 
 **The Workers deploy themselves.** A push to `main` runs CI's checks and then [Deploy](.github/workflows/deploy.yml), which deploys every Worker the push changed since the last successful run. The changed set is worked out by [deploy-targets](packages/ai/leonsilicon/configs/deploy-targets/README.md) from the workspace dependency graph: a Worker's app, every package it reaches, and the shared inputs (`www/`, the lockfile, root config, `.env.schema`). Docs and tests don't trigger it. A failed deploy is retried by the next push. The same workflow publishes the [Todoist Automations](packages/ai/leonsilicon/configs/todoist-automations/README.md) on every run, since the repo is their source of truth. To deploy by hand, run Actions → Deploy with `all` or a list of Workers, or run the commands below. Everything else is still deployed by hand.
 
-| What                         | Command                                                                                                                                         |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `slack-as-leon` Worker       | Automatic on push to `main`; by hand `vpr -w deploy:slack-as-leon`                                                                              |
-| `slack22linear` Worker       | Automatic on push to `main`; by hand `vpr -w deploy:slack22linear`                                                                              |
-| `autolinear` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:autolinear` (after `slack22linear` when `/adopt` changes)                                   |
-| `dailylinear` Worker         | Automatic on push to `main`; by hand `vpr -w deploy:dailylinear` (with `slack22linear` when day projects change)                                |
-| `gmail-feed` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                                 |
-| `cronometer` Worker (Python) | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
-| `grok-bot-roster` Worker     | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
-| Hermes plugins               | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                              |
-| Beeper inbox (Hermes Cloud)  | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
-| Grok relay and Beeper Feed   | Part of the Beeper inbox release above                                                                                                          |
-| Todoist Automations          | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
+| What                          | Command                                                                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leonsilicon.ai` landing page | Automatic on push to `main`; by hand `vpr -w deploy:landing`                                                                                    |
+| `slack-as-leon` Worker        | Automatic on push to `main`; by hand `vpr -w deploy:slack-as-leon`                                                                              |
+| `slack22linear` Worker        | Automatic on push to `main`; by hand `vpr -w deploy:slack22linear`                                                                              |
+| `autolinear` Worker           | Automatic on push to `main`; by hand `vpr -w deploy:autolinear` (after `slack22linear` when `/adopt` changes)                                   |
+| `dailylinear` Worker          | Automatic on push to `main`; by hand `vpr -w deploy:dailylinear` (with `slack22linear` when day projects change)                                |
+| `gmail-feed` Worker           | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                                 |
+| `cronometer` Worker (Python)  | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
+| `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
+| Hermes plugins                | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                              |
+| Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
+| Grok relay and Beeper Feed    | Part of the Beeper inbox release above                                                                                                          |
+| Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
-The Worker tasks typecheck and build `www/` before deploying, and every command that writes config needs Infisical access. The retired Mac mini Orca bridge keeps its deploy script for reference.
+The service Worker tasks build `www/` before deploying and need Infisical access for their configuration. The landing page deploy needs Cloudflare credentials. The retired Mac mini Orca bridge keeps its deploy script for reference.
 
 ## Patching
 

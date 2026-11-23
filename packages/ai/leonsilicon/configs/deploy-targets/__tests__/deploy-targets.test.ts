@@ -15,6 +15,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
+    "landing",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -27,6 +28,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
   assert.deepEqual(affected("apps/gmail-feed/worker.ts"), ["gmail-feed"]);
+  assert.deepEqual(affected("apps/landing/wrangler.jsonc"), ["landing"]);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/grok-bot-roster/roster.ts"), [
     "grok-bot-roster",
   ]);
@@ -60,6 +62,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
+    "landing",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -69,6 +72,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
+    "landing",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -78,6 +82,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "dailylinear",
     "gmail-feed",
     "grok-bot-roster",
+    "landing",
     "slack-as-leon",
     "slack22linear",
   ]);

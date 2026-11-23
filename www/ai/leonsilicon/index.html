@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c0f0c" />
+    <meta
+      name="description"
+      content="Leon Silicon’s AI setup in public. Explore the agents, automations, and services that connect his everyday tools."
+    />
+    <meta property="og:title" content="Leon Silicon · My AI stack, in public" />
+    <meta
+      property="og:description"
+      content="Explore the agents, automations, and services that connect Leon’s everyday tools."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://leonsilicon.ai/" />
+    <link rel="canonical" href="https://leonsilicon.ai/" />
+    <link rel="icon" type="image/png" href="./@assets/favicon.png" />
+    <link rel="stylesheet" href="./landing.css" />
+    <title>Leon Silicon · My AI stack, in public</title>
+  </head>
+  <body id="top">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="#top">
+          <span class="brand-icon" aria-hidden="true"></span>
+          <span>leonsilicon<span class="brand-tld">.ai</span></span>
+        </a>
+        <nav class="site-nav" aria-label="Main">
+          <a href="#services">Services</a>
+          <a href="#agent-stack">Agent stack</a>
+          <a class="nav-source" href="https://github.com/leonsilicon/leonsilicon.ai">
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell" id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="eyebrow-dot" aria-hidden="true"></span> Leon’s AI setup
+          </p>
+          <h1 id="hero-title">My AI stack,<br /><em>in public.</em></h1>
+          <p class="hero-summary">
+            The agents, automations, and services that connect the tools I use every day.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#services">
+              Explore services <span aria-hidden="true">↓</span>
+            </a>
+            <a class="button button-secondary" href="https://github.com/leonsilicon/leonsilicon.ai">
+              View source <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <img
+            src="./@assets/processor.webp"
+            width="1300"
+            height="1100"
+            alt=""
+            fetchpriority="high"
+          />
+        </div>
+      </section>
+
+      <section class="services" id="services" aria-labelledby="services-title">
+        <header class="section-heading">
+          <h2 id="services-title">Service directory<span>.</span></h2>
+          <p>What runs on leonsilicon.ai, with setup guides and live health checks.</p>
+        </header>
+        <ul class="service-grid" role="list">
+          <li>
+            <a class="service-card" href="https://autolinear.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">↳</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>AutoLinear</h3>
+              <p>Turns eligible Slack messages into Linear issues with their own channels.</p>
+              <span class="service-host">autolinear.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://linear-slack.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">⇄</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>slack22linear</h3>
+              <p>Keeps Slack issue channels and Linear comments in sync.</p>
+              <span class="service-host">linear-slack.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://dailylinear.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">◷</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>DailyLinear</h3>
+              <p>Creates the day’s Linear project and its matching Slack channel.</p>
+              <span class="service-host">dailylinear.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://slack-puppet.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">#</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>Slack Puppet</h3>
+              <p>Lets Hermes post as Leon and delegated agents reply in task threads.</p>
+              <span class="service-host">slack-puppet.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://gmail-feed.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">&#x2709;&#xfe0e;</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>Gmail Feed</h3>
+              <p>Mirrors incoming Gmail messages into Slack.</p>
+              <span class="service-host">gmail-feed.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://cronometer.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">⊕</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>Cronometer MCP</h3>
+              <p>Gives authorized agents access to Leon’s food diary.</p>
+              <span class="service-host">cronometer.leonsilicon.ai</span>
+            </a>
+          </li>
+          <li>
+            <a class="service-card" href="https://grokbot-admin.leonsilicon.ai/">
+              <span class="service-icon" aria-hidden="true">◇</span>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <h3>Grok Bot Admin</h3>
+              <p>Lets authorized agents list and delete Grok bots through MCP.</p>
+              <span class="service-host">grokbot-admin.leonsilicon.ai</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="agent-stack" id="agent-stack" aria-labelledby="agent-title">
+        <div class="agent-intro">
+          <p class="eyebrow">Hermes Cloud</p>
+          <h2 id="agent-title">Agent stack<span>.</span></h2>
+          <p>Tools Hermes uses to reach my Macs, messaging apps, and other agents.</p>
+        </div>
+        <ul class="agent-links" role="list">
+          <li>
+            <a href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/apps/orca-device">
+              <strong>Orca device</strong>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <span>Connects Hermes to Orca on my Macs.</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/apps/beeper-inbox">
+              <strong>Beeper inbox</strong>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <span>Reads and sends Beeper chats over Matrix.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/packages/ai/leonsilicon/services/grok-relay"
+            >
+              <strong>Grok relay</strong>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <span>Messages Grok bots through the Beeper inbox.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/packages/ai/leonsilicon/services/beeper-feed"
+            >
+              <strong>Beeper Feed</strong>
+              <span class="card-arrow" aria-hidden="true">↗</span>
+              <span>Mirrors Beeper messages to Slack feeds.</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <a class="brand" href="#top">
+          <span class="brand-icon" aria-hidden="true"></span>
+          <span>leonsilicon<span class="brand-tld">.ai</span></span>
+        </a>
+        <a class="footer-source" href="https://github.com/leonsilicon/leonsilicon.ai">
+          Source on GitHub <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </footer>
+  </body>
+</html>

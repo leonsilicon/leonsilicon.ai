@@ -107,7 +107,7 @@ test("every Worker Custom Domain has a page in www/", () => {
 });
 
 test("sites are private entrypoints with no exports or package dependents", () => {
-  const pages = globSync("www/ai/leonsilicon/*/index.html", { cwd: root });
+  const pages = globSync("www/**/index.html", { cwd: root, exclude: ["**/node_modules/**"] });
   assert.ok(pages.length > 0);
   const siteNames = new Set<string>();
   for (const page of pages) {

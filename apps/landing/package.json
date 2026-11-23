@@ -1,0 +1,6 @@
+{
+  "name": "@-apps/landing",
+  "private": true,
+  "type": "module",
+  "exports": {}
+}

@@ -1,6 +1,7 @@
 name: Deploy
 
-# Deploys the Cloudflare Workers (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, slack-as-leon / slack-puppet, slack22linear) whose code
+# Deploys the Cloudflare Workers (autolinear, cronometer, dailylinear, gmail-feed,
+# grok-bot-roster, landing, slack-as-leon / slack-puppet, slack22linear) whose code
 # changed since the last successful run on main, and publishes the Todoist Automations on every run. CI
 # calls this after its checks pass on a push to main; it can also be run by hand (Actions → Deploy → Run
 # workflow) for all or chosen Workers. What runs on Hermes Cloud is deployed by hand
@@ -17,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, slack-as-leon, slack22linear)"
+        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, landing, slack-as-leon, slack22linear)"
         required: true
         default: all
 
@@ -99,7 +100,7 @@ jobs:
       # The cronometer Worker is Python: pywrangler gathers its packages with uv (0.13.4 or newer).
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         if: matrix.worker == 'cronometer'
-      # Typechecks, builds www/ and deploys; the varlock ones also upload the Worker's vars and secrets.
+      # Builds the site assets and deploys. Service tasks that use varlock also upload vars and secrets.
       - run: vpr -w "deploy:$WORKER"
 
   # The repo is the Todoist Automations' source of truth. Every run publishes each manifest in

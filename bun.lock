@@ -65,6 +65,9 @@
         "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*",
       },
     },
+    "apps/landing": {
+      "name": "@-apps/landing",
+    },
     "apps/orca-bridge": {
       "name": "@-apps/orca-bridge",
       "bin": {
@@ -307,6 +310,9 @@
         "zod": "catalog:",
       },
     },
+    "www/ai/leonsilicon": {
+      "name": "@-apps/ai.leonsilicon",
+    },
     "www/ai/leonsilicon/autolinear": {
       "name": "@-apps/ai.leonsilicon.autolinear",
       "dependencies": {
@@ -437,6 +443,8 @@
 
     "@-/com.npmjs.zod": ["@-/com.npmjs.zod@workspace:packages/com/npmjs/zod"],
 
+    "@-apps/ai.leonsilicon": ["@-apps/ai.leonsilicon@workspace:www/ai/leonsilicon"],
+
     "@-apps/ai.leonsilicon.autolinear": ["@-apps/ai.leonsilicon.autolinear@workspace:www/ai/leonsilicon/autolinear"],
 
     "@-apps/ai.leonsilicon.cronometer": ["@-apps/ai.leonsilicon.cronometer@workspace:www/ai/leonsilicon/cronometer"],
@@ -464,6 +472,8 @@
     "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
 
     "@-apps/grok-bot-roster": ["@-apps/grok-bot-roster@workspace:apps/grok-bot-roster"],
+
+    "@-apps/landing": ["@-apps/landing@workspace:apps/landing"],
 
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
 

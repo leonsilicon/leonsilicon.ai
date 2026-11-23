@@ -4,6 +4,8 @@ Leon's AI setup, in public: what runs on `leonsilicon.ai` and its subdomains, th
 
 Each site's entrypoint is `www/<hostname, labels reversed>/index.html`: `cronometer.leonsilicon.ai` is [`www/ai/leonsilicon/cronometer/index.html`](www/ai/leonsilicon/cronometer/index.html).
 
+[leonsilicon.ai](https://leonsilicon.ai/) is the public directory for the services and the Hermes Cloud tools.
+
 ## `*.leonsilicon.ai`
 
 Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker of its own. The MCP servers each check their own bearer token. Browsers get the page in `www/`.
