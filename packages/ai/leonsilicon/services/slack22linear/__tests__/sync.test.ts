@@ -1360,7 +1360,8 @@ test("closing a project archives its channel; reopening unarchives it; deleting 
 });
 
 test("project visibility syncs existing archives, completed projects, and reopened channels", async () => {
-  const { linear, slack, sync } = setup();
+  const { linear, slack, store, sync } = setup();
+  assert.equal(store.projectVisibility(), null);
   const archived = slack.addLinearChannel("project-manually-archived");
   archived.archived = true;
   const unrelated = slack.addLeonChannel("general-old");
@@ -1370,22 +1371,14 @@ test("project visibility syncs existing archives, completed projects, and reopen
   project.slackChannelId = completed.id;
 
   await sync.run("project-visibility", {});
-  const statusRoom = slack.channels.find(({ name }) => name === "zami-project-visibility")!;
-  assert.equal(statusRoom.private, true);
-  assert.deepEqual([...statusRoom.members].sort(), [BOT, LEON].sort());
-  const messages = () =>
-    slack.posts.filter(({ channel }) => channel === statusRoom.id).map(({ text }) => text);
-  assert.deepEqual(messages(), [
-    `zami-projects:v1 ${[archived.id, completed.id].sort().join(" ")}`,
-  ]);
+  assert.deepEqual(store.projectVisibility(), [archived.id, completed.id].sort());
   assert.equal(completed.archived, false, "The snapshot reads Linear even before Slack archives");
-  await sync.run("project-visibility", {});
-  assert.equal(messages().length, 1, "An unchanged snapshot is posted once");
+  assert.equal(slack.posts.length, 0);
 
   archived.archived = false;
   project.status = { name: "Started", type: "started" };
   await sync.run("linear", projectHook(project.id));
-  assert.equal(messages().at(-1), "zami-projects:v1");
+  assert.deepEqual(store.projectVisibility(), []);
 });
 
 test("projects of other teams, and closed projects without a channel, are left alone", async () => {

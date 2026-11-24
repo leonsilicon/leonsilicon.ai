@@ -739,21 +739,32 @@ export class Inbox {
   }
 
   async publishLinearIssue(roomId: string, record: Record<string, unknown>): Promise<void> {
+    const room = encodeURIComponent(roomIdOf(roomId));
+    await this.#publishAccountData(
+      `/rooms/${room}/account_data/ai.leonsilicon.linear.issue`,
+      record,
+    );
+  }
+
+  async publishProjectVisibility(record: Record<string, unknown>): Promise<void> {
+    await this.#publishAccountData(
+      "/account_data/ai.leonsilicon.linear.project_visibility",
+      record,
+    );
+  }
+
+  async #publishAccountData(suffix: string, record: Record<string, unknown>): Promise<void> {
     const { account } = this.#ready();
     const user = encodeURIComponent(account.userId);
-    const room = encodeURIComponent(roomIdOf(roomId));
-    const path = `/_matrix/client/v3/user/${user}/rooms/${room}/account_data/ai.leonsilicon.linear.issue`;
+    const path = `/_matrix/client/v3/user/${user}${suffix}`;
     const saved = await this.#matrix(path, { method: "PUT", data: record, timeoutMs: 15_000 });
     if (saved.status !== 200)
-      throw new InboxError(
-        "unavailable",
-        `Linear issue account data write failed: HTTP ${saved.status}`,
-      );
+      throw new InboxError("unavailable", `Matrix account data write failed: HTTP ${saved.status}`);
     const readback = await this.#matrix(path, { timeoutMs: 15_000 });
     if (readback.status !== 200 || !isDeepStrictEqual(readback.body, record))
       throw new InboxError(
         "unavailable",
-        `Linear issue account data readback failed: HTTP ${readback.status}`,
+        `Matrix account data readback failed: HTTP ${readback.status}`,
       );
   }
 

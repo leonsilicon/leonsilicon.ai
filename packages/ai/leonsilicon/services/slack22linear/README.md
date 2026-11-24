@@ -127,7 +127,7 @@ Linear's public schema has no way to give an existing project such a channel wit
 - A taken name gets `-2`, `-3`… A channel that still hasn't appeared is requested again after 30 minutes, not before.
 - The sync's own bot doesn't join project channels. Leon's session joins him and invites Hermes, and archives and unarchives.
 - slack22linear appends `[linear-project:v1 #e99b51]` to the channel topic for Zami, with the project icon identifier after the color when set. It preserves the Slack summary and only appends metadata that fits the topic limit. Project webhooks and the daily tick refresh it, including for open day projects.
-- Zami reads a list of closed project channel IDs from the private `#zami-project-visibility` channel. The sync creates it in Leon's Slack session and invites its bot, which posts a new list when IDs change. The list combines Slack archives with archived, completed, and canceled Linear projects. Project webhooks, the daily tick, backfills, and received Slack archive events refresh it.
+- The Beeper inbox publishes closed project channel IDs as Matrix account data for Zami. The list combines Slack archives with archived, completed, and canceled Linear projects. Project webhooks, the daily tick, backfills, and Slack archive events refresh it.
 - Messages in a project channel aren't mirrored by this sync: Linear syncs its own threads.
 
 ## Day projects

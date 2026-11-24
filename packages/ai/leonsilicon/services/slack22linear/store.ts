@@ -83,6 +83,8 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS projects (
     project_id TEXT PRIMARY KEY, name TEXT NOT NULL, status_name TEXT NOT NULL, channel_id TEXT,
     section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS project_visibility (
+    id INTEGER PRIMARY KEY CHECK (id = 1), closed_channel_ids TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER, thread_ts TEXT)`,
 ];
@@ -187,6 +189,20 @@ export class Store {
       channelId,
     )[0];
     return row ? toProject(row) : null;
+  }
+
+  projectVisibility(): string[] | null {
+    const row = this.#sql.exec(`SELECT closed_channel_ids FROM project_visibility WHERE id = 1`)[0];
+    return row ? (JSON.parse(row.closed_channel_ids as string) as string[]) : null;
+  }
+
+  saveProjectVisibility(closedChannelIds: string[]): void {
+    this.#sql.exec(
+      `INSERT INTO project_visibility (id, closed_channel_ids) VALUES (1, ?)
+       ON CONFLICT (id) DO UPDATE SET closed_channel_ids = excluded.closed_channel_ids
+       WHERE project_visibility.closed_channel_ids != excluded.closed_channel_ids`,
+      JSON.stringify(closedChannelIds),
+    );
   }
 
   allProjects(): ProjectRecord[] {

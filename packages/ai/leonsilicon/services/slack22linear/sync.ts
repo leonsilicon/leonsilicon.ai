@@ -199,11 +199,7 @@ interface ChannelInfo {
   id: string;
   name: string;
   archived: boolean;
-  private?: boolean;
 }
-
-const PROJECT_VISIBILITY_CHANNEL = "zami-project-visibility";
-const PROJECT_VISIBILITY_PREFIX = "zami-projects:v1";
 
 /** A UUID derived from a string, so retries of the same Slack message reuse one Linear comment ID. */
 export async function stableUuid(seed: string): Promise<string> {
@@ -360,14 +356,14 @@ export class Sync {
         try {
           await this.onLinearProject(hook);
         } finally {
-          await this.#publishProjectVisibility();
+          await this.#refreshProjectVisibility();
         }
       }
     } else if (kind === "project") {
       // A delayed look at a new project, once Linear has had time to make its channel.
       const project = await this.#linear.project((payload as { id: string }).id);
       if (project && project.teamKeys.includes(this.#c.teamKey)) await this.syncProject(project);
-      await this.#publishProjectVisibility();
+      await this.#refreshProjectVisibility();
     } else if (kind === "slack") {
       const event = payload as SlackMessageEvent | SlackReactionEvent;
       if (event.type === "reaction_added") await this.onSlackReaction(event as SlackReactionEvent);
@@ -379,11 +375,11 @@ export class Sync {
     else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
     else if (kind === "tick") {
       await this.tick();
-      await this.#publishProjectVisibility();
+      await this.#refreshProjectVisibility();
     } else if (kind === "backfill") {
       await this.backfill();
-      await this.#publishProjectVisibility();
-    } else if (kind === "project-visibility") await this.#publishProjectVisibility();
+      await this.#refreshProjectVisibility();
+    } else if (kind === "project-visibility") await this.#refreshProjectVisibility();
     else this.#log("unknown_job", { kind });
   }
 
@@ -678,11 +674,9 @@ export class Sync {
     return this.#projectChannels;
   }
 
-  /** Publish closed channels together so archives stay visible to the plugin even when
-   * their own topics are frozen. The destination is a private channel for Leon and the bot. */
-  async #publishProjectVisibility(): Promise<void> {
-    const session = this.#session;
-    if (!session) return;
+  /** Keep the closed Slack and Linear project channels available to the Matrix publisher. */
+  async #refreshProjectVisibility(): Promise<void> {
+    if (!this.#session) return;
     this.#channels = null;
     const channels = await this.#listChannels();
     const closed = new Set(
@@ -698,45 +692,7 @@ export class Sync {
     for (const { archived, channelId } of this.#store.allProjects()) {
       if (archived && channelId) closed.add(channelId);
     }
-    const text = [PROJECT_VISIBILITY_PREFIX, ...[...closed].sort()].join(" ");
-    if (text.length > 40_000)
-      throw new Error("Slack project visibility snapshot exceeds the message limit");
-
-    const existing = channels.find(({ name }) => name === PROJECT_VISIBILITY_CHANNEL);
-    if (existing && !existing.private)
-      throw new Error(`Expected #${PROJECT_VISIBILITY_CHANNEL} to be private`);
-    if (existing?.archived)
-      await tolerate(session("conversations.unarchive", { channel: existing.id }), [
-        "not_archived",
-      ]);
-    const channel =
-      existing?.id ??
-      (
-        (
-          await session("conversations.create", {
-            name: PROJECT_VISIBILITY_CHANNEL,
-            is_private: true,
-          })
-        ).channel as { id: string }
-      ).id;
-    const botUser = await this.#botUser();
-    let history;
-    try {
-      history = await this.#bot("conversations.history", { channel, limit: 1 });
-    } catch (error) {
-      if (
-        !(error instanceof SlackError) ||
-        !["not_in_channel", "channel_not_found"].includes(error.code)
-      )
-        throw error;
-      await tolerate(session("conversations.invite", { channel, users: botUser }), [
-        "already_in_channel",
-      ]);
-      history = await this.#bot("conversations.history", { channel, limit: 1 });
-    }
-    const latest = (history.messages as SlackMessage[] | undefined)?.[0];
-    if (latest?.text === text && latest.user === botUser) return;
-    await this.#bot("chat.postMessage", { channel, text, mrkdwn: false });
+    this.#store.saveProjectVisibility([...closed].sort());
   }
 
   /** Takes a closed or deleted project's channel out of the sidebar and archives it. */
@@ -1759,9 +1715,8 @@ export class Sync {
         id: string;
         name: string;
         is_archived: boolean;
-        is_private?: boolean;
       }[])
-        out.push({ id: c.id, name: c.name, archived: c.is_archived, private: c.is_private });
+        out.push({ id: c.id, name: c.name, archived: c.is_archived });
       cursor = (page.response_metadata as { next_cursor?: string } | undefined)?.next_cursor ?? "";
     } while (cursor);
     this.#channels = out;

@@ -9,6 +9,7 @@ const DIRECTORY_REFRESH_MS = 60_000;
 
 interface Snapshot {
   teamId: string;
+  closedProjectChannelIds?: unknown;
   records: Array<Record<string, unknown> & { channelId: string; identifier: string }>;
 }
 
@@ -67,6 +68,7 @@ export function linearIssueMetadataExtension(): DaemonExtension {
       let lastSuccess: string | null = null;
       let unmatched = 0;
       const published = new Map<string, string>();
+      let publishedProjectVisibility: string | null = null;
 
       async function publish() {
         const response = await fetch(SYNC_URL, {
@@ -74,7 +76,7 @@ export function linearIssueMetadataExtension(): DaemonExtension {
           signal: AbortSignal.timeout(15_000),
         });
         if (!response.ok) throw new Error(`snapshot request: HTTP ${response.status}`);
-        const { teamId, records } = (await response.json()) as Snapshot;
+        const { teamId, records, closedProjectChannelIds } = (await response.json()) as Snapshot;
         if (!/^T[A-Z0-9]+$/.test(teamId) || !Array.isArray(records))
           throw new Error("invalid Linear issue snapshot");
         if (Date.now() >= nextDirectoryRefresh) {
@@ -118,6 +120,21 @@ export function linearIssueMetadataExtension(): DaemonExtension {
             }),
           );
         }
+        if (closedProjectChannelIds != null && !stopped) {
+          if (
+            !Array.isArray(closedProjectChannelIds) ||
+            !closedProjectChannelIds.every(
+              (id) => typeof id === "string" && /^[CG][A-Z0-9]+$/.test(id),
+            )
+          )
+            throw new Error("invalid project visibility snapshot");
+          const visibility = { version: 1, teamId, closedChannelIds: closedProjectChannelIds };
+          const signature = JSON.stringify(visibility);
+          if (publishedProjectVisibility !== signature) {
+            await context.publishProjectVisibility(visibility);
+            publishedProjectVisibility = signature;
+          }
+        }
         if (failed) throw new Error(`${failed} room writes failed`);
         lastSuccess = new Date().toISOString();
       }
@@ -141,6 +158,7 @@ export function linearIssueMetadataExtension(): DaemonExtension {
           running: !stopped,
           lastSuccess,
           published: published.size,
+          projectVisibilityPublished: publishedProjectVisibility !== null,
           unmatched,
           failure,
         }),

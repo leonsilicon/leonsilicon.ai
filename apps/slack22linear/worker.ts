@@ -310,7 +310,9 @@ export class SyncObject {
           return json({ error: "Slack workspace unavailable" }, 503);
         this.#teamId = team_id;
       }
-      const body = `{"teamId":${JSON.stringify(this.#teamId)},"records":${this.#issueMetadata.snapshot()}}`;
+      const closedProjectChannelIds = this.#store.projectVisibility();
+      const header = JSON.stringify({ teamId: this.#teamId, closedProjectChannelIds }).slice(0, -1);
+      const body = `${header},"records":${this.#issueMetadata.snapshot()}}`;
       return new Response(body, {
         headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
