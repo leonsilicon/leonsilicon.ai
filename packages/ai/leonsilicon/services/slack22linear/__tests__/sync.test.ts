@@ -43,8 +43,7 @@ const STATES: LinearIssue["state"][] = [
   "Executing:started",
   "Awaiting Hermes:started",
   "Awaiting Leon:started",
-  "Awaiting Others:started",
-  "Awaiting Listener:started",
+  "Awaiting Trigger:started",
   "Done:completed",
   "Canceled:canceled",
 ].map((s) => {
@@ -676,10 +675,10 @@ test("status moves post a message, mention the right party and move the section"
   assert.equal(slack.sectionOf(channel.id), "Awaiting Leon");
   assert.deepEqual(slack.order(), ["Awaiting Leon"], "the emptied Executing section is removed");
 
-  issue.state = state("Awaiting Listener");
+  issue.state = state("Awaiting Trigger");
   issue.title = "switch to rogers `{event: Rogers unlimited BYOD deal, stop: 2026-12-01}`";
   await sync.run("linear", issueHook(issue.id));
-  assert.equal(slack.posts.at(-1)!.text, "*Awaiting Leon* → *Awaiting Listener*");
+  assert.equal(slack.posts.at(-1)!.text, "*Awaiting Leon* → *Awaiting Trigger*");
   assert.equal(channel.topic, "Notes from Slack");
   assert.equal(
     channel.name,
@@ -689,7 +688,7 @@ test("status moves post a message, mention the right party and move the section"
 
   issue.state = state("Done");
   await sync.run("linear", issueHook(issue.id));
-  assert.equal(slack.posts.at(-1)!.text, "*Awaiting Listener* → *Done*");
+  assert.equal(slack.posts.at(-1)!.text, "*Awaiting Trigger* → *Done*");
   assert.equal(channel.topic, "Notes from Slack");
   assert.equal(channel.archived, true);
   assert.equal(slack.sectionOf(channel.id), null);
@@ -719,7 +718,7 @@ test("title edits keep the original channel and a new follow-up gets its own cha
   const followUp = linear.addIssue(
     56,
     "Follow up on Wispr support ticket 281896",
-    "Awaiting Others",
+    "Awaiting Trigger",
   );
   await sync.run("linear", issueHook(followUp.id, "create"));
 
@@ -738,14 +737,14 @@ test("sections are created in the configured order", async () => {
     [1, "Executing"],
     [2, "Awaiting Date"],
     [3, "Awaiting Leon"],
-    [4, "Awaiting Others"],
+    [4, "Awaiting Trigger"],
   ] as const) {
     linear.addIssue(n, `task ${n}`, s);
     await sync.run("linear", issueHook(`issue-${n}`, "create"));
   }
   assert.deepEqual(slack.order(), [
     "Awaiting Leon",
-    "Awaiting Others",
+    "Awaiting Trigger",
     "Executing",
     "Awaiting Date",
   ]);
@@ -1015,7 +1014,7 @@ test("an expired listener goes back to Leon with a comment, on its timer", async
   const listener = linear.addIssue(
     205,
     "switch to rogers `{event: Rogers deal, stop: 2026-12-01T09:00:00-05:00}`",
-    "Awaiting Listener",
+    "Awaiting Trigger",
   );
   await sync.run("linear", issueHook(listener.id, "create"));
   assert.equal(store.timer(`timer:${listener.id}`), Date.UTC(2026, 11, 1, 14, 0));
@@ -1806,35 +1805,41 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   const command = await hermesCommands(
     t,
     channel.id,
-    "move listener event=“Rogers BYOD deal” stop=2026-12-01.",
+    "move trigger event=“Rogers BYOD deal” stop=2026-12-01.",
     "I'll watch for it.",
   );
   assert.equal(t.slack.posts.length, posts);
-  assert.equal(issue.state.name, "Awaiting Listener");
+  assert.equal(issue.state.name, "Awaiting Trigger");
   assert.equal(issue.title, "testing autolinear");
   assert.deepEqual(issueWorkflow(issue), { event: "Rogers BYOD deal", stop: "2026-12-01" });
-  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Listener");
+  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Trigger");
+  assert.equal(t.store.timer(`timer:${issue.id}`), DEC_1);
   assert.deepEqual(autolinearReactions(t, command), []);
   await hermesReacts(t, channel.id, message);
   assert.equal(autolinearPosts(t, posts).length, 0, "the turn said what to do");
 
-  // Back where it was before Hermes's 👀, keys kept, with `move listener` alone.
+  // Back where it was before Hermes's 👀, keys kept, with `move trigger` alone.
   t.clock.now += 60_000;
   message = await leonWrites(t, channel.id, "any update?");
   await hermesReacts(t, channel.id, message, "eyes");
   assert.equal(issue.state.name, "Executing");
-  await hermesCommands(t, channel.id, "move listener", "Not yet.");
-  assert.equal(issue.state.name, "Awaiting Listener");
+  await hermesCommands(t, channel.id, "move trigger", "Not yet.");
+  assert.equal(issue.state.name, "Awaiting Trigger");
   assert.deepEqual(issueWorkflow(issue), { event: "Rogers BYOD deal", stop: "2026-12-01" });
 
   // Changing who is responsible keeps the task's identity.
-  await hermesCommands(t, channel.id, 'move "Awaiting Others" who="Rogers support"');
-  assert.equal(issue.state.name, "Awaiting Others");
+  await hermesCommands(t, channel.id, 'move "Awaiting Trigger" who="Rogers support"');
+  assert.equal(issue.state.name, "Awaiting Trigger");
   assert.deepEqual(issueWorkflow(issue), { who: "Rogers support" });
-  const sameStatus = await hermesCommands(t, channel.id, 'move others who="Rogers billing"');
+  assert.equal(t.store.timer(`timer:${issue.id}`), null);
+  const sameStatus = await hermesCommands(t, channel.id, 'move trigger who="Rogers billing"');
   assert.deepEqual(autolinearReactions(t, sameStatus), []);
   assert.deepEqual(issueWorkflow(issue), { who: "Rogers billing" });
   assert.deepEqual(JSON.parse(t.issueMetadata.snapshot())[0].meta, { who: "Rogers billing" });
+
+  await hermesCommands(t, channel.id, 'move trigger event="Rogers deal" stop=2026-12-01');
+  assert.deepEqual(issueWorkflow(issue), { event: "Rogers deal", stop: "2026-12-01" });
+  assert.equal(t.store.timer(`timer:${issue.id}`), DEC_1);
 
   await hermesCommands(t, channel.id, "move date start=2026-12-01T09:00:00-05:00");
   assert.equal(issue.state.name, "Awaiting Date");
@@ -1850,6 +1855,31 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   assert.equal(issue.state.name, "Awaiting Leon");
   assert.equal(t.slack.posts.length, priorPosts);
   assert.deepEqual(autolinearReactions(t, handoff), []);
+});
+
+test("older wait commands also move to Awaiting Trigger", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  await hermesCommands(t, channel.id, 'move others who="Rogers support"');
+  assert.equal(issue.state.name, "Awaiting Trigger");
+  assert.deepEqual(issueWorkflow(issue), { who: "Rogers support" });
+  await hermesCommands(t, channel.id, 'move "Awaiting Listener" event=deal stop=2026-12-01');
+  assert.equal(issue.state.name, "Awaiting Trigger");
+  assert.deepEqual(issueWorkflow(issue), { event: "deal", stop: "2026-12-01" });
+});
+
+test("a trigger command requires an external response or a complete timed event", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  await hermesCommands(t, channel.id, "move trigger");
+  assert.match(autolinearPosts(t).at(-1)!.text, /needs `who=…` or both `event=…` and `stop=…`/);
+  await hermesCommands(t, channel.id, "move trigger who=Rogers event=deal stop=2026-12-01");
+  assert.match(
+    autolinearPosts(t).at(-1)!.text,
+    /accepts either `who=…` or both `event=…` and `stop=…`/,
+  );
+  assert.equal(issue.state.name, "Awaiting Init");
+  assert.deepEqual(issueWorkflow(issue), {});
 });
 
 test("stay keeps the status, and a command in an edit is read once Hermes stops editing, once", async () => {
@@ -1908,10 +1938,10 @@ test("a command that doesn't work is answered under it, and reminders stop after
   await hermesReacts(t, channel.id, message);
   assert.equal(autolinearPosts(t, posts).length, 1);
 
-  await hermesCommands(t, channel.id, "move listener event=deal");
+  await hermesCommands(t, channel.id, "move trigger event=deal");
   assert.equal(
     autolinearPosts(t, posts).at(-1)!.text.split("\n")[0],
-    `<@${HERMES}> I couldn't do that: *Awaiting Listener* needs \`stop=…\`.`,
+    `<@${HERMES}> I couldn't do that: *Awaiting Trigger* needs \`stop=…\`.`,
   );
   assert.equal(autolinearPosts(t, posts).length, MAX_REMINDERS);
 
@@ -2047,14 +2077,14 @@ test("Leon's /autolinear moves the issue and answers him privately", async () =>
   });
   const message = await leonWrites(t, channel.id, "wait on rogers for me");
   t.clock.now += 2000;
-  await t.sync.run("command", slash('move others who="Rogers"'));
-  assert.equal(issue.state.name, "Awaiting Others");
+  await t.sync.run("command", slash('move trigger who="Rogers"'));
+  assert.equal(issue.state.name, "Awaiting Trigger");
   assert.equal(
     t.slack.posts.at(-1)!.text,
-    "*Awaiting Init* → *Awaiting Others* (Leon told Autolinear)",
+    "*Awaiting Init* → *Awaiting Trigger* (Leon told Autolinear)",
   );
   assert.deepEqual(t.responses, [
-    { url: "https://hooks.slack.com/commands/1", text: "LEON-427 is now *Awaiting Others*." },
+    { url: "https://hooks.slack.com/commands/1", text: "LEON-427 is now *Awaiting Trigger*." },
   ]);
   // It's the turn's command: Hermes's answer after it isn't reminded.
   t.clock.now += 2000;
@@ -2069,7 +2099,7 @@ test("Leon's /autolinear moves the issue and answers him privately", async () =>
   assert.ok(!t.responses.at(-1)!.text.includes("<@"), "no one is pinged");
   await t.sync.run("command", slash("move done", "C-unmapped", 3));
   assert.equal(t.responses.at(-1)!.text, "This isn't the channel of an open issue.");
-  assert.equal(issue.state.name, "Awaiting Others");
+  assert.equal(issue.state.name, "Awaiting Trigger");
 });
 
 test("Autolinear's bot is invited when it isn't in an older channel", async () => {

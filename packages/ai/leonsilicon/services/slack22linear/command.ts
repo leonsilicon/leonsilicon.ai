@@ -11,7 +11,7 @@
  * ```
  *
  * `<status>` is a Linear status available to Autolinear, with or without "Awaiting": `done`,
- * `leon`, `"Awaiting Others"`. Values with spaces are double-quoted.
+ * `leon`, `"Awaiting Trigger"`. Values with spaces are double-quoted.
  */
 
 export type AutolinearCommand =
@@ -30,8 +30,8 @@ export function commandUsage(lead: string): string {
   return [
     `\`${lead} move done\`: nothing is left for anyone`,
     `\`${lead} move leon\`: Leon needs to see or do something`,
-    `\`${lead} move others who="Apple App Review"\`: waiting on someone else`,
-    `\`${lead} move listener event="Rogers BYOD deal" stop=2026-12-01\`: waiting for something to happen`,
+    `\`${lead} move trigger who="Apple App Review"\`: waiting on someone else`,
+    `\`${lead} move trigger event="Rogers BYOD deal" stop=2026-12-01\`: waiting for an event until a stop date`,
     `\`${lead} move date start=2026-12-01T09:00:00-05:00\`: work starts later`,
     `\`${lead} move executing\`: work is already underway`,
     `\`${lead} stay\`: leave the status as it is`,
@@ -146,5 +146,5 @@ export function matchStatus(name: string, statuses: string[]): string | null {
   );
 }
 
-/** Awaiting Others' prefix in titles created before workflow details moved to the description. */
+/** The `who` prefix in titles created before workflow details moved to the description. */
 export const AWAITING_PREFIX = /^\s*\[AWAITING:\s*([^\]]*)\]\s*/i;

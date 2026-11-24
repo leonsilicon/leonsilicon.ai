@@ -21,9 +21,9 @@ export interface SyncConfig {
   /** The status whose issues wait for a `start` date, and where they go when it arrives. */
   dateState: string;
   dateTarget: string;
-  /** The status whose issues wait on a listener, and where they go once its `stop` passes. */
-  listenerState: string;
-  listenerExpiredTarget: string;
+  /** The status for an external response or event, and where a timed wait goes when `stop` passes. */
+  triggerState: string;
+  triggerExpiredTarget: string;
   /**
    * Hermes's reaction (Slack's name, no colons) to Leon's message when it takes it up (👀). The
    * issue moves to `hermesAckState` at once, so the sidebar shows Hermes has it (`Sync.onHermesAck`).
@@ -43,8 +43,6 @@ export interface SyncConfig {
    * plain-text `@Autolinear` line is read as a command.
    */
   autolinearUserId: string | null;
-  /** The status whose issues are waiting on someone else and have a `who` value. */
-  othersState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;
   /** The public channel where issues coming due are announced, created when missing: `feed-linear`. */
@@ -66,8 +64,7 @@ const list = (value: string | undefined, fallback: string[]) =>
 export const DEFAULT_SECTION_ORDER = [
   "Awaiting Leon",
   "Awaiting Clarification",
-  "Awaiting Others",
-  "Awaiting Listener",
+  "Awaiting Trigger",
   "Awaiting Hermes",
   "Awaiting Init",
   "Awaiting Start",
@@ -96,14 +93,14 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     closedStateTypes: list(env.CLOSED_STATE_TYPES, ["completed", "canceled", "duplicate"]),
     dateState: env.DATE_STATE ?? "Awaiting Date",
     dateTarget: env.DATE_TARGET ?? "Awaiting Start",
-    listenerState: env.LISTENER_STATE ?? "Awaiting Listener",
-    listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
+    triggerState: env.TRIGGER_STATE ?? "Awaiting Trigger",
+    triggerExpiredTarget:
+      env.TRIGGER_EXPIRED_TARGET ?? env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
     hermesAckState: env.HERMES_ACK_STATE ?? "Executing",
     hermesAnsweredReaction: env.HERMES_ANSWERED_REACTION ?? "white_check_mark",
     hermesFailedReaction: env.HERMES_FAILED_REACTION ?? "x",
     autolinearUserId: env.AUTOLINEAR_BOT_USER_ID?.trim() || null,
-    othersState: env.OTHERS_STATE ?? "Awaiting Others",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",

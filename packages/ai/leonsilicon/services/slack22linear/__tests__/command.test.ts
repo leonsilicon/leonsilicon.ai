@@ -27,17 +27,17 @@ test("move takes a status, then keys, with quotes for spaces", () => {
     ok: true,
     command: { verb: "move", status: "done", keys: {} },
   });
-  assert.deepEqual(parseCommand('move "Awaiting Others" who="Apple App Review".'), {
+  assert.deepEqual(parseCommand('move "Awaiting Trigger" who="Apple App Review".'), {
     ok: true,
-    command: { verb: "move", status: "Awaiting Others", keys: { who: "Apple App Review" } },
+    command: { verb: "move", status: "Awaiting Trigger", keys: { who: "Apple App Review" } },
   });
   assert.deepEqual(
-    parseCommand("MOVE awaiting listener event=“Rogers &amp; Fido” STOP=2026-12-01"),
+    parseCommand("MOVE awaiting trigger event=“Rogers &amp; Fido” STOP=2026-12-01"),
     {
       ok: true,
       command: {
         verb: "move",
-        status: "awaiting listener",
+        status: "awaiting trigger",
         keys: { event: "Rogers & Fido", stop: "2026-12-01" },
       },
     },
@@ -53,12 +53,12 @@ test("a command that doesn't read says why", () => {
     ["move", "`move` needs a status, such as `move done`"],
     ["move who=x", "`move` needs a status, such as `move done`"],
     [
-      "move others colour=red",
+      "move trigger colour=red",
       "`colour` isn't a key I know; use `who`, `start`, `event`, `stop`, `due`",
     ],
-    ["move others who=", "`who` has no value"],
+    ["move trigger who=", "`who` has no value"],
     ["move start=2026-12-01 date", "the status goes before the keys, not `date`"],
-    ['move others who="Apple', "a quote isn't closed"],
+    ['move trigger who="Apple', "a quote isn't closed"],
     ["stay put", "`stay` takes nothing after it"],
   ])
     assert.deepEqual(parseCommand(words!), { ok: false, error }, words);

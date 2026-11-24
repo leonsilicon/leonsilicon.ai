@@ -256,8 +256,7 @@ const STATUS_REACTIONS = new Map([
   ["Awaiting Start", "checkered_flag"],
   ["Awaiting Hermes", "robot_face"],
   ["Awaiting Leon", "bust_in_silhouette"],
-  ["Awaiting Others", "busts_in_silhouette"],
-  ["Awaiting Listener", "bell"],
+  ["Awaiting Trigger", "bell"],
   ["Executing", "gear"],
   ["Done", "white_check_mark"],
   ["Canceled", "x"],
@@ -1011,9 +1010,8 @@ export class Sync {
   }
 
   /**
-   * `move <status> [keys]`: the status, with the keys it needs (`start` for Awaiting Date, `event`
-   * and `stop` for Awaiting Listener, `who` for Awaiting Others), from the command or already
-   * on the issue. Keys of other statuses are cleared.
+   * Moves an issue with workflow details from the command or already on the issue. Awaiting
+   * Trigger accepts a person or a timed event. Switching waits clears the previous wait's details.
    */
   async #commandMove(
     issue: LinearIssue,
@@ -1024,12 +1022,16 @@ export class Sync {
     const names = [...(await this.#stateIds()).keys()].filter(
       (name) => name.toLowerCase() !== AWAITING_HERMES.toLowerCase(),
     );
-    const to = matchStatus(command.status, names);
+    // Older Hermes prompts and already queued commands may still use the old status names.
+    const status = matchStatus(command.status, ["Awaiting Others", "Awaiting Listener"])
+      ? this.#c.triggerState
+      : command.status;
+    const to = matchStatus(status, names);
     if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
     const previous = issueWorkflow(issue);
     const meta = { ...previous };
     const { keys } = command;
-    for (const status of [this.#c.dateState, this.#c.listenerState, this.#c.othersState]) {
+    for (const status of [this.#c.dateState, this.#c.triggerState]) {
       if (status === to) continue;
       for (const key of this.#statusKeys(status)) {
         if (key in keys) return fail(`\`${key}\` goes with *${status}* only`);
@@ -1040,7 +1042,21 @@ export class Sync {
       if (key !== "event" && key !== "who" && !metaInstant(value, this.#c.timeZone))
         return fail(`\`${key}=${value}\` isn't a day (YYYY-MM-DD) or an RFC 3339 time`);
     Object.assign(meta, keys);
-    const missing = this.#statusKeys(to).filter((key) => !meta[key]);
+    let required = to === this.#c.dateState ? ["start"] : [];
+    if (to === this.#c.triggerState) {
+      const timed = keys.event || keys.stop;
+      const either = `\`who=…\` or both \`event=…\` and \`stop=…\``;
+      if (keys.who && timed) return fail(`*${to}* accepts either ${either}`);
+      if (keys.who) {
+        delete meta.event;
+        delete meta.stop;
+      } else if (timed) delete meta.who;
+      if (!meta.who) {
+        if (!meta.event && !meta.stop) return fail(`*${to}* needs ${either}`);
+        required = ["event", "stop"];
+      }
+    }
+    const missing = required.filter((key) => !meta[key]);
     if (missing.length)
       return fail(`*${to}* needs ${missing.map((k) => `\`${k}=…\``).join(" and ")}`);
     const update: IssueUpdate = {};
@@ -1278,7 +1294,7 @@ export class Sync {
 
   /**
    * Moves an Awaiting Date issue whose `start` has come to its target status, sends an Awaiting
-   * Listener issue whose `stop` has passed back to Leon, and announces an issue whose due time has
+   * Trigger issue whose `stop` has passed back to Leon, and announces an issue whose due time has
    * come in the feed channel, once. Then sets the issue's timer for whatever is left.
    */
   async #runTimes(issue: LinearIssue): Promise<void> {
@@ -1294,15 +1310,15 @@ export class Sync {
       await this.#move(issue, this.#c.dateTarget);
       this.#log("start_date_reached", { issue: issue.identifier });
       moved = true;
-    } else if (issue.state.name === this.#c.listenerState && come(meta.stop)) {
+    } else if (issue.state.name === this.#c.triggerState && come(meta.stop)) {
       const { event, stop } = meta;
-      await this.#move(issue, this.#c.listenerExpiredTarget);
+      await this.#move(issue, this.#c.triggerExpiredTarget);
       await this.#linear.createComment({
         id: await stableUuid(`listener-expired:${issue.id}:${stop}`),
         issueId: issue.id,
-        body: `**slack22linear:** the listener's stop date (${stop}) passed before it fired${event ? `; it was waiting for: ${event}` : ""}. Extend it or cancel the issue.`,
+        body: `**slack22linear:** the trigger's stop date (${stop}) passed${event ? ` while waiting for: ${event}` : ""}. Extend the wait or cancel the issue.`,
       });
-      this.#log("listener_expired", { issue: issue.identifier });
+      this.#log("trigger_expired", { issue: issue.identifier });
       moved = true;
     }
     const due = this.#due(issue);
@@ -1316,7 +1332,7 @@ export class Sync {
 
   /**
    * Sets the issue's timer for the earliest of its times still to act on: the `start` of an Awaiting
-   * Date issue, the `stop` of an Awaiting Listener one, and a due time not yet announced. A time
+   * Date issue, the `stop` of an Awaiting Trigger issue, and a due time not yet announced. A time
    * already past goes off at once. A closed issue has no timer.
    */
   #planTimer(issue: LinearIssue): void {
@@ -1328,7 +1344,7 @@ export class Sync {
         if (at) times.push(at.getTime());
       };
       if (issue.state.name === this.#c.dateState) add(meta.start);
-      if (issue.state.name === this.#c.listenerState) add(meta.stop);
+      if (issue.state.name === this.#c.triggerState) add(meta.stop);
       const due = this.#due(issue);
       if (due && !this.#store.fired(dueKey(issue.id, due.at))) times.push(due.at);
     }
@@ -1562,8 +1578,7 @@ export class Sync {
   /** Workflow details that belong to a status. */
   #statusKeys(status: string): string[] {
     if (status === this.#c.dateState) return ["start"];
-    if (status === this.#c.listenerState) return ["event", "stop"];
-    if (status === this.#c.othersState) return ["who"];
+    if (status === this.#c.triggerState) return ["who", "event", "stop"];
     return [];
   }
 
@@ -1575,7 +1590,7 @@ export class Sync {
     const meta = issueWorkflow(issue);
     const stale = keepKeys
       ? []
-      : [this.#c.dateState, this.#c.listenerState, this.#c.othersState]
+      : [this.#c.dateState, this.#c.triggerState]
           .filter((status) => status !== to)
           .flatMap((status) => this.#statusKeys(status))
           .filter((key) => key in meta);

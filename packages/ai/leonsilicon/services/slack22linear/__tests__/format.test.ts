@@ -125,7 +125,7 @@ test("channel names use the prefix and number, cut at a word", () => {
 test("the topic carries status styling, priority, title, metadata and link within Slack's limit", () => {
   const state = {
     id: "state-listener",
-    name: "Awaiting Listener",
+    name: "Awaiting Trigger",
     type: "started",
     color: "#E8B510",
   };
@@ -137,7 +137,7 @@ test("the topic carries status styling, priority, title, metadata and link withi
       url,
       2,
     ),
-    "Awaiting Listener · linear:v1 started #e8b510 p2 · https://linear.app/x/issue/LEON-205 · Café · Confirm the deal `{event: Café · deal, stop: 2026-12-01}`",
+    "Awaiting Trigger · linear:v1 started #e8b510 p2 · https://linear.app/x/issue/LEON-205 · Café · Confirm the deal `{event: Café · deal, stop: 2026-12-01}`",
   );
   const scheduled = { ...state, name: "Awaiting Date", type: "unstarted" };
   const schedule = { start: "2026-12-01T09:00:00-05:00" };
