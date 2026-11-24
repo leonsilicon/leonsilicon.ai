@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from gateway.config import PlatformConfig
-from gateway.platforms.event import MessageType, ProcessingOutcome
+from gateway.platforms.event import MessageType
 from plugins.platforms.slack.adapter import SlackAdapter
 
 _HERE = pathlib.Path(__file__).resolve().parents[1]
@@ -32,6 +32,9 @@ flat_replies = _load("slack_flat_replies", _HERE.parent / "slack-flat-replies" /
 LEON, HERMES = "U0LEON00001", "U0HERMES001"
 DM, GENERAL, ISSUE, NEW = "D0LEONDM01", "C0GENERAL1", "C0ISSUE001", "C0NEWISSUE"
 COPY_TS = "1794000000.000900"
+DOT = "!silicon-dot:beeper.local"
+SESSION_URL = "https://chatgpt.com/c/00000000-0000-4000-8000-000000000001"
+LINK_TEXT = f"<{SESSION_URL}|Open Codex session>"
 CHANNELS = {
     DM: {"id": DM, "is_im": True, "user": LEON},
     GENERAL: {"id": GENERAL, "name": "general"},
@@ -89,7 +92,37 @@ def adapter(monkeypatch):
     a._app.client.reactions_remove = AsyncMock()
     a._bot_user_id = "U_BOT"
     a._running = True
-    a.handle_message = AsyncMock()
+    a.model_handler = a.handle_message = AsyncMock()
+    a._download_slack_file = AsyncMock(return_value=None)
+    a.delegate = AsyncMock(wraps=plugin._delegate)
+    monkeypatch.setattr(plugin, "_delegate", a.delegate)
+    monkeypatch.delenv(plugin.DOT_ROOM_ENV, raising=False)
+    marker = None
+
+    async def beeper(*args, payload):
+        nonlocal marker
+        if args == ("tool", "list_conversations"):
+            return {"conversations": [{"name": "Silicon Dot", "room_id": DOT}]}
+        if args == ("tool", "send_message"):
+            match = payload["idempotency_key"].removeprefix("autolinear:")
+            marker = f"SESSION_LINK {match} "
+            return {"status": "sent", "event_id": "$handoff"}
+        if args == ("journal",) and "after" not in payload:
+            return {"head": 200}
+        if args == ("journal",) and payload["after"] == 100:
+            return {"cursor": 105, "entries": [
+                {"text": f"{marker}{SESSION_URL}", "isMe": True, "redacted": False},
+                {"text": f"{marker}{SESSION_URL}", "isMe": False, "redacted": True},
+                {"text": f"SESSION_LINK slack:{ISSUE}/1794000000.123456 {SESSION_URL}",
+                 "isMe": False, "redacted": False},
+                {"text": f"{marker}https://other.example/c/fake",
+                 "isMe": False, "redacted": False},
+                {"text": f"{marker}{SESSION_URL}", "isMe": False, "redacted": False},
+            ]}
+        raise AssertionError(f"unexpected Beeper call: {args}, {payload}")
+
+    a.beeper = AsyncMock(side_effect=beeper)
+    monkeypatch.setattr(plugin, "_beeper", a.beeper)
     return a
 
 
@@ -102,27 +135,32 @@ def _message(channel: str, ts: str, text: str = "can you check whether Rogers bi
 
 
 def _turn(adapter):
-    adapter.handle_message.assert_awaited_once()
-    return adapter.handle_message.await_args.args[0]
+    adapter.model_handler.assert_awaited_once()
+    adapter.delegate.assert_not_awaited()
+    return adapter.model_handler.await_args.args[0]
+
+
+async def _delegated_turn(adapter):
+    async with asyncio.timeout(1):
+        while not adapter._app.client.chat_postMessage.await_count:
+            await asyncio.sleep(0)
+    adapter.model_handler.assert_not_awaited()
+    adapter.delegate.assert_awaited_once()
+    return adapter.delegate.await_args.args[1]
 
 
 @pytest.mark.asyncio
-async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
+async def test_leons_dm_is_delegated_in_its_new_issue_channel(adapter, intake):
     plugin.wire(None, adapter)
     ts = "1794000000.000001"
 
-    async def start_work(_turn):
-        adapter._app.client.chat_postMessage.assert_awaited_once_with(
-            channel=NEW, text=plugin.RECEIPT_TEXT, thread_ts=COPY_TS)
-
-    adapter.handle_message.side_effect = start_work
     await adapter._handle_slack_message(_message(DM, ts))
 
     assert intake.requests == [{
         "url": plugin.DEFAULT_URL, "token": "autolinear-token", "channel": DM, "ts": ts,
         "thread_ts": None, "user": LEON, "text": "can you check whether Rogers billed me twice?",
         "where": "a DM with Hermes"}]
-    turn = _turn(adapter)
+    turn = await _delegated_turn(adapter)
     assert (turn.source.chat_id, turn.source.chat_type) == (NEW, "group")
     assert turn.source.chat_name == "leon-401-check-rogers"
     assert turn.source.user_id == LEON
@@ -134,21 +172,21 @@ async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
         "[autolinear: Leon sent this in a DM with Hermes. It is now LEON-401 "
         "(https://linear.app/x/issue/LEON-401), and this is its channel, #leon-401-check-rogers")
     assert turn.text.endswith("\n\ncan you check whether Rogers billed me twice?")
-    assert plugin._handoff_prompt() in turn.channel_prompt
-    assert "Skip a duplicate acknowledgement" in turn.channel_prompt
     assert turn.raw_message["channel"] == NEW and turn.raw_message["ts"] == COPY_TS
     assert turn.raw_message["_autolinear"] == {
         "from_channel": DM, "from_ts": ts, "issue": "LEON-401"}
 
-    # 👀 covers intake at the source. The copy gets a completion reaction, while the dispatch
-    # command owns the Executing transition.
-    await adapter.on_processing_start(turn)
-    await adapter.on_processing_complete(turn, ProcessingOutcome.SUCCESS)
+    adapter._app.client.chat_postMessage.assert_awaited_once_with(
+        channel=NEW, text=LINK_TEXT, thread_ts=COPY_TS, unfurl_links=False, unfurl_media=False)
+    sent = adapter.beeper.await_args_list[1].kwargs["payload"]
+    assert (sent["room_id"], sent["slack_channel"], sent["slack_thread_ts"]) == (DOT, NEW, COPY_TS)
+    assert sent["idempotency_key"] == f"autolinear:slack:{DM}/{ts}"
+    assert "can you check whether Rogers billed me twice?" in sent["text"]
+    assert "LEON-401" in sent["text"]
+
     added = [(c.kwargs["channel"], c.kwargs["timestamp"], c.kwargs["name"])
              for c in adapter._app.client.reactions_add.call_args_list]
-    assert added == [(DM, ts, "eyes"), (NEW, COPY_TS, "white_check_mark")]
-    assert any(c.kwargs["channel"] == DM and c.kwargs["timestamp"] == ts
-               for c in adapter._app.client.reactions_remove.call_args_list)
+    assert added == [(DM, ts, "eyes"), (NEW, COPY_TS, "eyes")]
 
 
 @pytest.mark.asyncio
@@ -173,11 +211,12 @@ async def test_the_source_gets_a_receipt_while_intake_is_still_running(adapter, 
         await asyncio.wait_for(intake_started.wait(), 1)
         await asyncio.wait_for(source_reacted.wait(), 1)
         adapter._app.client.chat_postMessage.assert_not_awaited()
-        adapter.handle_message.assert_not_awaited()
+        adapter.model_handler.assert_not_awaited()
+        adapter.delegate.assert_not_awaited()
     finally:
         allow_copy.set()
         await message
-    adapter._app.client.chat_postMessage.assert_awaited_once()
+    await _delegated_turn(adapter)
 
 
 @pytest.mark.asyncio
@@ -193,11 +232,13 @@ async def test_a_thread_reply_keeps_its_thread_context(adapter, intake):
 
     assert intake.requests[0]["thread_ts"] == root
     assert intake.requests[0]["where"] == "a thread in #general"
-    turn = _turn(adapter)
+    turn = await _delegated_turn(adapter)
     assert turn.source.chat_id == NEW
     assert turn.source.thread_id == COPY_TS, "the copy starts its own thread in the issue channel"
     assert "thread_ts" not in turn.raw_message
     assert turn.channel_context and "file the T4" in turn.channel_context
+    sent = adapter.beeper.await_args_list[1].kwargs["payload"]
+    assert "file the T4" in sent["text"]
 
 
 @pytest.mark.parametrize("event", [
@@ -219,37 +260,67 @@ async def test_other_users_and_commands_are_answered_in_place(adapter, intake, e
 
 @pytest.mark.parametrize("thread", [False, True])
 @pytest.mark.asyncio
-async def test_an_existing_issue_gets_a_receipt_in_its_conversation(adapter, intake, thread):
-    adapter.config.extra["channel_prompts"] = {ISSUE: "Keep the question brief."}
+async def test_an_existing_issue_gets_the_session_link_in_its_conversation(adapter, intake, thread):
     flat_replies.wire(None, adapter)
     plugin.wire(None, adapter)
     parent = {"thread_ts": "1794000000.000019"} if thread else {}
     adapter._app.client.conversations_replies.return_value = {"messages": []}
-    message = _message(ISSUE, "1794000000.000020", "Show me the draft.", **parent)
-    await adapter._handle_slack_message(message)
+    ts = "1794000000.000020"
+    await adapter._handle_slack_message(_message(ISSUE, ts, "Show me the draft.", **parent))
 
     assert intake.requests == []
-    turn = _turn(adapter)
+    turn = await _delegated_turn(adapter)
     assert turn.source.chat_id == ISSUE
     assert turn.text == "Show me the draft."
-    assert turn.channel_prompt.startswith(f"Keep the question brief.\n\n{plugin._handoff_prompt()}")
-    assert "`stay` (leave the status as it is)" in turn.channel_prompt
-    assert "return NO_REPLY" not in turn.channel_prompt
-    assert "`move executing` after the handoff succeeds" in turn.channel_prompt
     adapter._app.client.chat_postMessage.assert_awaited_once_with(
-        channel=ISSUE, text=plugin.RECEIPT_TEXT, **parent)
+        channel=ISSUE, text=LINK_TEXT, unfurl_links=False, unfurl_media=False, **parent)
+    adapter._app.client.reactions_add.assert_awaited_once_with(
+        channel=ISSUE, timestamp=ts, name="eyes")
+    sent = adapter.beeper.await_args_list[1].kwargs["payload"]
+    assert sent["slack_thread_ts"] == parent.get("thread_ts", ts)
 
 
 @pytest.mark.asyncio
-async def test_a_failed_receipt_does_not_prevent_delegation(adapter, intake):
-    adapter._app.client.chat_postMessage.side_effect = OSError("Slack unavailable")
-    plugin.wire(None, adapter)
-    await adapter._handle_slack_message(_message(ISSUE, "1794000000.000027"))
+async def test_delegation_proceeds_while_slack_reaction_waits(adapter, intake):
+    allow_reaction = asyncio.Event()
 
-    turn = _turn(adapter)
-    assert "hand off every task to another agent" in turn.channel_prompt
-    assert "already received the receipt" not in turn.channel_prompt
-    assert "`move executing` after the handoff succeeds" in turn.channel_prompt
+    async def react(**_):
+        await allow_reaction.wait()
+
+    adapter._app.client.reactions_add.side_effect = react
+    flat_replies.wire(None, adapter)
+    plugin.wire(None, adapter)
+    try:
+        await adapter._handle_slack_message(_message(ISSUE, "1794000000.000027"))
+        await _delegated_turn(adapter)
+        assert adapter._app.client.chat_postMessage.await_args.kwargs["text"] == LINK_TEXT
+    finally:
+        allow_reaction.set()
+
+
+@pytest.mark.parametrize("stage", ["dispatch", "link"])
+@pytest.mark.asyncio
+async def test_unavailable_dispatch_or_link_does_not_start_a_model_turn(
+        adapter, intake, monkeypatch, stage):
+    flat_replies.wire(None, adapter)
+    plugin.wire(None, adapter)
+    if stage == "dispatch":
+        adapter.beeper.side_effect = OSError("Beeper unavailable")
+        expected = "I couldn’t confirm the Codex handoff."
+    else:
+        original = adapter.beeper.side_effect
+
+        async def no_link(*args, payload):
+            if args == ("journal",) and "after" in payload:
+                return {"cursor": payload["after"], "entries": []}
+            return await original(*args, payload=payload)
+
+        adapter.beeper.side_effect = no_link
+        monkeypatch.setattr(plugin, "SESSION_LINK_TIMEOUT_SECONDS", 0.01)
+        expected = "I handed this to Codex, but the session link hasn’t arrived."
+    await adapter._handle_slack_message(_message(ISSUE, "1794000000.000027"))
+    await _delegated_turn(adapter)
+    assert adapter._app.client.chat_postMessage.await_args.kwargs["text"] == expected
 
 
 @pytest.mark.asyncio
@@ -308,16 +379,17 @@ def test_without_the_bots_id_the_rule_asks_for_a_plain_mention(monkeypatch):
     [(503, {}), (503, {})],
 ])
 @pytest.mark.asyncio
-async def test_when_linear_sync_declines_or_fails_hermes_answers_in_place(
+async def test_when_linear_sync_declines_or_fails_hermes_reports_dm_handoff_blocker(
         adapter, intake, answers):
     intake.answers = answers
     plugin.wire(None, adapter)
     await adapter._handle_slack_message(_message(DM, "1794000000.000030"))
-    turn = _turn(adapter)
+    turn = await _delegated_turn(adapter)
     assert turn.source.chat_id == DM
     assert turn.text == "can you check whether Rogers billed me twice?"
-    assert turn.reply_expected is False
-    adapter._app.client.chat_postMessage.assert_awaited_once()
+    adapter.beeper.assert_not_awaited()
+    assert "couldn’t open a Slack task channel" in (
+        adapter._app.client.chat_postMessage.await_args.kwargs["text"])
 
 
 @pytest.mark.asyncio
@@ -326,7 +398,7 @@ async def test_a_failed_try_is_retried_once(adapter, intake):
     plugin.wire(None, adapter)
     await adapter._handle_slack_message(_message(DM, "1794000000.000031"))
     assert len(intake.requests) == 2
-    assert _turn(adapter).source.chat_id == NEW
+    assert (await _delegated_turn(adapter)).source.chat_id == NEW
 
 
 @pytest.mark.asyncio
@@ -367,7 +439,7 @@ async def test_the_link_edit_and_the_live_copy_start_no_second_turn(adapter, int
         "type": "message", "subtype": "message_changed", "channel": NEW, "channel_type": "group",
         "ts": "1794000001.000002", "message": {**copy, "attachments": [{"title": "unfurl"}]}})
 
-    adapter.handle_message.assert_awaited_once()
+    await _delegated_turn(adapter)
     assert len(intake.requests) == 1
     adapter._app.client.chat_postMessage.assert_awaited_once()
 
@@ -378,8 +450,9 @@ async def test_the_copy_gets_reactions_whichever_plugin_wires_first(adapter, int
     for module in ((always_react, plugin) if react_first else (plugin, always_react)):
         module.wire(None, adapter)
     await adapter._handle_slack_message(_message(GENERAL, "1794000000.000060"))
-    turn = _turn(adapter)
-    assert adapter._reacting_target(turn) is not None
+    turn = await _delegated_turn(adapter)
+    assert any(c.kwargs == {"channel": NEW, "timestamp": COPY_TS, "name": "eyes"}
+               for c in adapter._app.client.reactions_add.call_args_list)
     assert turn.message_type == MessageType.TEXT
 
 
@@ -417,7 +490,7 @@ async def test_the_intake_starts_before_hermes_reads_the_thread_or_files(adapter
     assert started_first == [True]
     assert intake.requests[0]["files"] == [
         {"name": "a.png", "title": "receipt.png", "permalink": "https://files.slack.com/F1"}]
-    assert _turn(adapter).source.chat_id == NEW
+    assert (await _delegated_turn(adapter)).source.chat_id == NEW
     assert not adapter._autolinear_pending, "taken by the turn"
 
 
@@ -437,4 +510,4 @@ async def test_a_message_mentioning_someone_else_starts_only_once_hermes_answers
         _message(DM, "1794000000.000071", f"ask <@U0SOMEONE1> about it, <@U_BOT>"))
     assert started_first == [False]
     assert len(intake.requests) == 1
-    assert _turn(adapter).source.chat_id == NEW
+    assert (await _delegated_turn(adapter)).source.chat_id == NEW

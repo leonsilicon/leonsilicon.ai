@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import pathlib
 from unittest.mock import AsyncMock, MagicMock
@@ -122,20 +123,33 @@ def test_bots_dms_and_reaction_turns_keep_their_threads(adapter):
 
 @pytest.mark.parametrize("flat_first", [True, False])
 @pytest.mark.asyncio
-async def test_autolinears_copy_is_answered_in_its_issue_channel(adapter, monkeypatch, flat_first):
+async def test_autolinears_session_link_is_posted_in_the_issue_channel(adapter, monkeypatch, flat_first):
     monkeypatch.setenv(autolinear.TOKEN_ENV, "t")
     monkeypatch.setenv(autolinear.USER_ENV, LEON)
     monkeypatch.setattr(autolinear, "_post_json", lambda *a: (200, {
         "ok": True, "issue": {"id": "i", "identifier": "LEON-428", "url": "https://linear.app/x"},
         "channel": {"id": NEW, "name": "leon-428-check-rogers"}, "ts": "1794000001.000001",
         "source": "a DM with Hermes"}))
+    finished = asyncio.Event()
+    routed = []
+
+    async def delegate(adapter, turn):
+        routed.append(turn)
+        await autolinear._send_delegation_reply(adapter, turn, "Open Codex session")
+        finished.set()
+
+    monkeypatch.setattr(autolinear, "_delegate", delegate)
+    model_handler = adapter.handle_message
     for module in ((plugin, autolinear) if flat_first else (autolinear, plugin)):
         module.wire(None, adapter)
     await adapter._handle_slack_message(_message("1794000000.000030", channel=DM))
-    turn = _turns(adapter)[0]
+    await asyncio.wait_for(finished.wait(), 1)
+    model_handler.assert_not_awaited()
+    turn, = routed
     assert turn.source.chat_id == NEW and turn.message_id == "1794000001.000001"
     assert turn.source.thread_id is None
-    assert await _reply_thread(adapter, turn) is None
+    adapter._app.client.chat_postMessage.assert_awaited_once_with(
+        channel=NEW, text="Open Codex session", unfurl_links=False, unfurl_media=False)
 
 
 def test_wire_is_idempotent(adapter):

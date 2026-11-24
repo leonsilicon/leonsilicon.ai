@@ -1,19 +1,20 @@
 # @-/com.leonsilicon.hermes.plugins.autolinear
 
-Hermes plugin that gives each of Leon's Slack messages its own Linear issue and channel the moment it arrives, through [autolinear](../../../../../../apps/autolinear/README.md), and has Hermes answer it there.
+Hermes plugin that gives each of Leon's Slack messages its own Linear issue and channel the moment it arrives, through [autolinear](../../../../../../apps/autolinear/README.md), and hands Leon's request to a Codex session.
 
 ## Why
 
-Every message Leon sends to Hermes outside an issue channel gets a new Linear issue in Awaiting Init and its own Slack channel. AutoLinear edits his message to link the channel where Hermes answers and keeps the conversation.
+Every message Leon sends to Hermes outside an issue channel gets a new Linear issue in Awaiting Init and its own Slack channel. AutoLinear edits his message to link the channel where Hermes posts the Codex session link and follows up on the work.
 
 ## What happens
 
 1. Leon writes to Hermes outside an issue channel: a DM, `#general`, a project channel, a reply under a `#feed-` post.
 2. AutoLinear's Slack app usually starts intake before Hermes receives the message. Once the message reaches Hermes and passes dedup and the bot check, the plugin calls `POST /intake` in the background to get the running or finished intake. AutoLinear creates the issue, opens its `leon-<n>-<first words>` channel, and posts a copy of the message there as Leon. Once Slack confirms the copy, AutoLinear replaces the original message with the channel link.
-3. Meanwhile Hermes reads the thread and downloads files as usual. When it builds the turn, the plugin waits for autolinear's answer and builds the turn as if Leon had written that copy: same text, files and thread history, in the new channel, with a one-line note naming the issue. Hermes adds 👀 to the original while intake runs, then posts “On it. I’ll follow up here.” in the issue channel before starting the model turn. In an existing issue the receipt goes directly to Leon's conversation. With [slack-flat-replies](../slack-flat-replies/README.md), top-level requests get top-level replies and a thread gets its own replies.
-4. Hermes dispatches the task to another agent in the background and ends its turn. For acknowledged requests, Hermes's command after a successful dispatch moves the issue to Executing. An ordinary issue-channel turn ends with one line that starts with Autolinear's mention and says what to do with the channel: `move done`, `move leon`, `move others who="…"`, `move listener event="…" stop=…`, `move date start=…`, `move executing` or `stay` (Leon's rule, 2026-11-23). Only that line moves the issue; slack22linear reads it ([Autolinear's commands](../../../../../ai/leonsilicon/services/slack22linear/README.md#autolinears-commands)). Hermes uses `move executing` while delegated work is underway. When the agent finishes, Hermes gives Leon the result in the same Slack conversation and updates the issue. When an ordinary issue-channel turn ends without a command, Autolinear reminds Hermes there.
+3. Hermes adds 👀 to acknowledge the request. It keeps the message, Slack thread context and file links when AutoLinear moves the request. In an existing issue channel, the handoff uses Leon's conversation there.
+4. The Slack gateway dispatches directly to Silicon Dot through the [Beeper inbox](../../../../../ai/leonsilicon/services/beeper-inbox/README.md#agent-tasks-2026-11-21). Dot opens or resumes the Codex session and returns its private ChatGPT URL. The gateway matches Dot's reply to Leon's request and posts **Open Codex session** as soon as it gets the link. The acknowledgement, dispatch and link run without a Hermes model turn. [slack-flat-replies](../slack-flat-replies/README.md) keeps top-level requests and threaded requests in their respective conversations.
+5. slack22linear sees 👀 in the issue channel and moves the issue to Executing. Codex reports through Slack Puppet in the task thread, and Hermes coordinates follow-up in the same conversation. It can handle routine worker reports silently and sends an [Autolinear command](../../../../../ai/leonsilicon/services/slack22linear/README.md#autolinears-commands) when the report calls for a status change.
 
-The receipt is sent once per fresh request from Leon. Commands, edits, bot messages, and delegated-agent reports skip it. If Slack can't post the receipt, Hermes still handles the task. The plugin adds the delegation rule to Slack task turns even when intake leaves the message in place. It adds the status rule with Autolinear's exact mention to the channel prompt. The prompt also tells Hermes to keep the original Linear title and channel name and create a linked issue for separate work. On Grok Bot and Codex reports in issue channels, Hermes can stay silent when there is no action or meaningful update. It sends a `move` command only when the report calls for a different issue status. Hermes's Slack adapter shows Hermes every mention it reads as a plain `@Name`, so the prompt is where Hermes gets the raw `<@U…>` token.
+The gateway delegates fresh requests from Leon. Commands, edits, bot messages and delegated-agent reports continue through the adapter's usual path. The handoff preserves the original Linear title and Slack channel name and directs separate work to a linked issue. Model turns still receive the delegation and status instructions when appropriate, including Autolinear's raw bot mention for status commands.
 
 ## Which messages
 
@@ -25,7 +26,7 @@ A thread reply's thread goes along: Hermes keeps the thread history it read, and
 
 ## Failure
 
-It fails open. When autolinear can't be reached, errors, declines, or takes longer than 25 seconds, Hermes answers in place. A network error or a 5xx gets one retry; autolinear runs each message's intake once, so a retry gets the same issue. When the adapter internals it relies on disappear, it logs a warning and does nothing.
+When AutoLinear declines intake, fails or takes longer than 25 seconds, channel requests can still hand off from their original conversation. A DM needs an issue channel for Codex's Slack reports. The gateway reports a failed handoff or a missing session link in the request's conversation. It waits up to three minutes for Dot's link. AutoLinear retries intake once for a network error or 5xx and deduplicates it by Slack message. Beeper also uses a stable idempotency key for each Slack request.
 
 The copy carries slack-as-leon's `client_msg_id` marker, so [slack-as-leon-guard](../slack-as-leon-guard/README.md) drops its live event, and Hermes doesn't answer the message twice. Keep that plugin enabled; this one logs a warning when it isn't. The copy's ts is also claimed, so its unfurl edits start no turn. autolinear's edit of Leon's message starts none either: Hermes claimed that message's ts before its turn was built.
 
@@ -46,7 +47,9 @@ They're read on every message, so removing the token turns the plugin off once H
 
 ## Install
 
-Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/autolinear/` (`/opt/data` on Hermes Cloud), add `autolinear` to `plugins.enabled` in `config.yaml`, and restart the gateway. The gateway log then shows `autolinear: immediate receipts and delegated execution for Leon's Slack messages`, followed by `(off until …)` when a setting is missing. Each moved message logs `autolinear: <channel>:<ts> is LEON-<n> ({…step timings…}); Hermes answers in #leon-<n>-…`.
+Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/autolinear/` (`/opt/data` on Hermes Cloud), add `autolinear` to `plugins.enabled` in `config.yaml`, and restart the gateway. The gateway log shows `autolinear: direct Codex delegation for Leon's Slack messages`. It uses the [Beeper inbox installation](../../../../../../apps/beeper-inbox/README.md) at `$BEEPER_INBOX_HOME` (default `$HERMES_HOME/beeper-inbox`).
+
+The gateway finds the exact direct chat named `Silicon Dot` on Beeper's ChatGPT network. Set `AUTOLINEAR_DOT_ROOM_ID` in Hermes's environment if the chat has a different name or multiple rooms match.
 
 Hermes Cloud's `SOUL.md`, `issue-execution-sweep`, and `leon-messaging-voice` should require delegation for every task and use the same status rule for Slack replies, including the exception for delegated-agent reports. A sweep originating in Linear can use a Linear comment with Leon's mention to trigger the handoff.
 
@@ -61,4 +64,4 @@ VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
 cd - && HERMES_HOME=$(mktemp -d) PYTHONPATH=/tmp/hermes-v0.23.2 /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider __tests__
 ```
 
-They load `slack-as-leon-guard` and `slack-always-react` from their sibling directories, to check the copy isn't answered twice and gets its reactions whichever plugin wires first.
+They drive the real Slack adapter with a simulated Beeper inbox and check that fresh requests dispatch once, bypass the model turn, and post a matching session link in the right conversation.
