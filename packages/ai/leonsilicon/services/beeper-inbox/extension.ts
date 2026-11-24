@@ -32,6 +32,8 @@ export interface ExtensionContext {
   >;
   /** Write and verify a Linear issue snapshot in this account's room data. */
   publishLinearIssue(roomId: string, record: Record<string, unknown>): Promise<void>;
+  /** Write and verify a Linear project's color and icon in this account's room data. */
+  publishProjectAppearance(roomId: string, record: Record<string, unknown>): Promise<void>;
   /** Write and verify closed Slack project channels in this account's global data. */
   publishProjectVisibility(record: Record<string, unknown>): Promise<void>;
   /** Display names for Matrix user IDs, where the homeserver has one. */

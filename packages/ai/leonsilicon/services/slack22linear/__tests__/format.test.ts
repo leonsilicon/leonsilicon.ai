@@ -5,7 +5,6 @@ import {
   channelName,
   channelNumber,
   channelTopic,
-  projectChannelTopic,
   formatTitle,
   hasTime,
   intakeTitle,
@@ -155,26 +154,6 @@ test("the topic carries status styling, priority, title, metadata and link withi
       url,
       0,
     ).endsWith(`${url} · Confirm the deal`),
-  );
-});
-
-test("project topics keep the existing summary and bound the icon metadata", () => {
-  const project = { color: "#E99B51", icon: "IconBook" };
-  const initial = projectChannelTopic("Course planning", project);
-  assert.equal(initial, "Course planning · [linear-project:v1 #e99b51 IconBook]");
-  assert.equal(
-    projectChannelTopic(initial, { ...project, icon: null }),
-    "Course planning · [linear-project:v1 #e99b51]",
-  );
-  assert.equal(
-    projectChannelTopic("", { color: "#5e6ad2", icon: "🏃" }, "Training"),
-    "Training · [linear-project:v1 #5e6ad2 🏃]",
-  );
-  const full = "x".repeat(250);
-  assert.equal(projectChannelTopic(full, project), full);
-  assert.equal(
-    projectChannelTopic("x".repeat(215), { ...project, icon: "a".repeat(40) }),
-    `${"x".repeat(215)} · [linear-project:v1 #e99b51]`,
   );
 });
 

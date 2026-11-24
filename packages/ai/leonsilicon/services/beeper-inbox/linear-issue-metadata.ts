@@ -11,6 +11,14 @@ interface Snapshot {
   teamId: string;
   closedProjectChannelIds?: unknown;
   records: Array<Record<string, unknown> & { channelId: string; identifier: string }>;
+  projectAppearances?: Array<{ channelId: string; color: string | null; icon: string | null }>;
+}
+
+interface RoomWrite {
+  kind: "issue" | "project";
+  roomId: string;
+  record: Record<string, unknown>;
+  signature: string;
 }
 
 interface SlackRoom {
@@ -67,7 +75,8 @@ export function linearIssueMetadataExtension(): DaemonExtension {
       let failure: string | null = null;
       let lastSuccess: string | null = null;
       let unmatched = 0;
-      const published = new Map<string, string>();
+      let unmatchedProjects = 0;
+      const published = { issue: new Map<string, string>(), project: new Map<string, string>() };
       let publishedProjectVisibility: string | null = null;
 
       async function publish() {
@@ -76,7 +85,8 @@ export function linearIssueMetadataExtension(): DaemonExtension {
           signal: AbortSignal.timeout(15_000),
         });
         if (!response.ok) throw new Error(`snapshot request: HTTP ${response.status}`);
-        const { teamId, records, closedProjectChannelIds } = (await response.json()) as Snapshot;
+        const { teamId, records, closedProjectChannelIds, projectAppearances } =
+          (await response.json()) as Snapshot;
         if (!/^T[A-Z0-9]+$/.test(teamId) || !Array.isArray(records))
           throw new Error("invalid Linear issue snapshot");
         if (Date.now() >= nextDirectoryRefresh) {
@@ -85,8 +95,9 @@ export function linearIssueMetadataExtension(): DaemonExtension {
         }
 
         let withoutRoom = 0;
+        let projectsWithoutRoom = 0;
         let failed = 0;
-        const writes = [];
+        const writes: RoomWrite[] = [];
         for (const record of records) {
           const identifier = record.identifier.toLowerCase();
           const rooms = directory.get(record.channelId)?.filter((room) => {
@@ -99,21 +110,37 @@ export function linearIssueMetadataExtension(): DaemonExtension {
           }
           const signature = JSON.stringify(record);
           for (const room of rooms) {
-            if (published.get(room.room_id) !== signature)
-              writes.push({ roomId: room.room_id, record, signature });
+            if (published.issue.get(room.room_id) !== signature)
+              writes.push({ kind: "issue", roomId: room.room_id, record, signature });
+          }
+        }
+        for (const { channelId, color, icon } of projectAppearances ?? []) {
+          const rooms = directory.get(channelId);
+          if (!rooms?.length) {
+            projectsWithoutRoom++;
+            continue;
+          }
+          const record = { version: 1, teamId, channelId, color, icon };
+          const signature = JSON.stringify(record);
+          for (const room of rooms) {
+            if (published.project.get(room.room_id) !== signature)
+              writes.push({ kind: "project", roomId: room.room_id, record, signature });
           }
         }
         unmatched = withoutRoom;
+        unmatchedProjects = projectsWithoutRoom;
         for (let start = 0; start < writes.length && !stopped; start += 8) {
           await Promise.all(
-            writes.slice(start, start + 8).map(async ({ roomId, record, signature }) => {
+            writes.slice(start, start + 8).map(async ({ kind, roomId, record, signature }) => {
               try {
-                await context.publishLinearIssue(roomId, record);
-                published.set(roomId, signature);
+                if (kind === "issue") await context.publishLinearIssue(roomId, record);
+                else await context.publishProjectAppearance(roomId, record);
+                published[kind].set(roomId, signature);
               } catch (error) {
                 failed++;
                 if (failed === 1)
-                  context.log("warn", "Linear issue account data write failed", {
+                  context.log("warn", "Linear room account data write failed", {
+                    kind,
                     error: String(error),
                   });
               }
@@ -157,9 +184,11 @@ export function linearIssueMetadataExtension(): DaemonExtension {
         status: () => ({
           running: !stopped,
           lastSuccess,
-          published: published.size,
+          published: published.issue.size,
+          publishedProjects: published.project.size,
           projectVisibilityPublished: publishedProjectVisibility !== null,
           unmatched,
+          unmatchedProjects,
           failure,
         }),
         async stop() {

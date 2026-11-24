@@ -16,6 +16,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { callIpc } from "#ipc";
 import { startDaemon } from "#daemon";
+import { linearIssueMetadataExtension } from "#linear-issue-metadata";
 import { inboxPaths } from "#paths";
 import type { ExtensionContext } from "#extension";
 import type { PickleRuntime } from "#pickle";
@@ -32,6 +33,7 @@ const ROOM = "!chat:beeper.local";
 /** Silicon Dot's chat: a ChatGPT Dots room. */
 const DOT_ROOM = "!dot:beeper.local";
 const GROK_ROOM = "!grok:beeper.local";
+const PROJECT_ROOM = "!project:beeper.local";
 const ENC = encodeURIComponent(ROOM);
 
 /** A homeserver that dedupes sends by transaction ID, as the spec requires, and can lose responses. */
@@ -46,6 +48,7 @@ class FakeHomeserver {
   sendPuts: string[] = [];
   loseNextSendResponses = 0;
   includeGrokRoom = false;
+  includeProjectRoom = false;
   media = new Map<string, Uint8Array>();
 
   constructor() {
@@ -132,6 +135,25 @@ class FakeHomeserver {
                           type: "m.bridge",
                           state_key: "grok",
                           content: { protocol: { id: "grokbot" } },
+                        },
+                      ],
+                    },
+                  },
+                }
+              : {}),
+            ...(this.includeProjectRoom
+              ? {
+                  [PROJECT_ROOM]: {
+                    state: {
+                      events: [
+                        { type: "m.room.name", state_key: "", content: { name: "project-demo" } },
+                        {
+                          type: "m.bridge",
+                          state_key: "b",
+                          content: {
+                            protocol: { id: "slackgo" },
+                            channel: { id: "TWORK-CPROJECT" },
+                          },
                         },
                       ],
                     },
@@ -667,6 +689,50 @@ test("extensions: served by the same daemon, reach Beeper through the inbox's to
   await daemon.shutdown();
   assert.deepEqual(stopped, ["echo"]);
 });
+
+test(
+  "the Linear publisher writes project appearance to the matching Matrix room and reads it back",
+  { timeout: 3000 },
+  async (t) => {
+    const { env, paths, server, pickle } = setup();
+    server.includeProjectRoom = true;
+    const settings = join(paths.home, "linear-issue-metadata");
+    mkdirSync(settings);
+    writeFileSync(join(settings, "env"), "LINEAR_ISSUE_METADATA_TOKEN=test-token\n");
+    const appearance = { channelId: "CPROJECT", color: "#eb5757", icon: "IconBook" };
+    t.mock.method(globalThis, "fetch", () =>
+      Promise.resolve(
+        Response.json({ teamId: "TWORK", records: [], projectAppearances: [appearance] }),
+      ),
+    );
+
+    const readback = Promise.withResolvers<unknown>();
+    let saved: unknown;
+    const baseFetch: typeof fetch = (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      const path = `/_matrix/client/v3/user/${ME}/rooms/${PROJECT_ROOM}/account_data/ai.leonsilicon.linear.project`;
+      if (decodeURIComponent(url.pathname) !== path) return server.fetch(input, init);
+      if (init?.method === "PUT") {
+        assert.ok(typeof init.body === "string");
+        saved = JSON.parse(init.body) as unknown;
+        return Promise.resolve(Response.json({}));
+      }
+      readback.resolve(saved);
+      return Promise.resolve(Response.json(saved));
+    };
+    const daemon = await startDaemon({
+      env,
+      pickle,
+      baseFetch,
+      embedded: true,
+      bridgeStatusWaitMs: 20,
+      extensions: [linearIssueMetadataExtension()],
+    });
+    assert.ok(daemon);
+    t.after(() => daemon.shutdown());
+    assert.deepEqual(await readback.promise, { version: 1, teamId: "TWORK", ...appearance });
+  },
+);
 
 test("journal: sync messages are written down once; edits, late keys and deletions update them", async (t) => {
   const { env, paths, server, pickle } = setup();

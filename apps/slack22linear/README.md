@@ -40,7 +40,7 @@ It typechecks and builds `www/` first, then deploys with `varlock-wrangler`, whi
 
 Check `curl -s https://linear-slack.leonsilicon.ai/healthz`. It returns `{"ok":true,"bot":"ok","session":"ok","projects":"ok",…}`, or 503 when the bot token or the session fails, or when Linear has no Slack app for project channels (`projects: "off: …"`). Cloudflare 403s some default user agents on this zone, so send your own. Logs: `vpx wrangler tail linear-slack-sync`.
 
-`/healthz` reports `issueMetadata: "matrix"` when the Beeper publisher's read-only endpoint has a credential configured, or `"unconfigured"` when `LINEAR_ISSUE_METADATA_TOKEN` is missing from Infisical's `/linear-slack-sync` folder. The sync keeps collecting issue records in either case. The [Beeper inbox](../beeper-inbox/README.md#linear-metadata) reports room publishing status.
+`/healthz` reports `issueMetadata: "matrix"` when the Beeper publisher's read-only endpoint has a credential configured, or `"unconfigured"` when `LINEAR_ISSUE_METADATA_TOKEN` is missing from Infisical's `/linear-slack-sync` folder. The sync keeps collecting issue details and project appearance in either case. The [Beeper inbox](../beeper-inbox/README.md#linear-metadata) reports room publishing status.
 
 ## Operating it
 
@@ -60,7 +60,7 @@ Other tasks:
 
 ## autolinear
 
-[autolinear](../autolinear/README.md) creates an issue and opens its channel itself, as Leon, so both appear at once, then hands the channel over through a binding to this Worker's Durable Object (`/adopt`; the Worker's public routes never reach it). The Durable Object invites the bot and Hermes, records the channel, and queues the rest (intro, topic, section, project, thread quote) as an `adopted` job. An autolinear issue (ID starting `a7011ea7`) whose webhook comes first waits up to two minutes for the hand-over instead of getting a second channel. The details are in the [service README](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-issues). Deploy this Worker before autolinear when `/adopt` changes.
+[autolinear](../autolinear/README.md) creates an issue and opens its channel itself, as Leon, so both appear at once, then hands the channel over through a binding to this Worker's Durable Object (`/adopt`; the Worker's public routes never reach it). The Durable Object invites the bot and Hermes, records the channel, and queues the rest (intro, issue metadata, section, project, thread quote) as an `adopted` job. An autolinear issue (ID starting `a7011ea7`) whose webhook comes first waits up to two minutes for the hand-over instead of getting a second channel. The details are in the [service README](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-issues). Deploy this Worker before autolinear when `/adopt` changes.
 
 ## Hermes
 

@@ -143,6 +143,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
             await waitReady();
             await inbox.publishLinearIssue(roomId, record);
           },
+          publishProjectAppearance: async (roomId, record) => {
+            await waitReady();
+            await inbox.publishProjectAppearance(roomId, record);
+          },
           publishProjectVisibility: async (record) => {
             await waitReady();
             await inbox.publishProjectVisibility(record);

@@ -44,6 +44,12 @@ export interface ProjectRecord {
   requestedAt: number | null;
 }
 
+export interface ProjectAppearance {
+  channelId: string;
+  color: string | null;
+  icon: string | null;
+}
+
 /**
  * Hermes's 👀 moved an issue to Executing: the status it had before, and when the move was
  * done (ms; null while it's under way). Autolinear's reminder names that status, so Hermes can put
@@ -94,6 +100,8 @@ const MIGRATIONS = [
     section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS project_visibility (
     id INTEGER PRIMARY KEY CHECK (id = 1), closed_channel_ids TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS matrix_project_appearance (
+    channel_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, color TEXT, icon TEXT)`,
   `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER, thread_ts TEXT)`,
   `CREATE TABLE IF NOT EXISTS command_moves (
@@ -219,6 +227,36 @@ export class Store {
 
   allProjects(): ProjectRecord[] {
     return this.#sql.exec(`SELECT * FROM projects`).map(toProject);
+  }
+
+  projectAppearances(): ProjectAppearance[] {
+    return this.#sql
+      .exec(`SELECT channel_id, color, icon FROM matrix_project_appearance ORDER BY channel_id`)
+      .map((r) => ({
+        channelId: r.channel_id as string,
+        color: r.color as string | null,
+        icon: r.icon as string | null,
+      }));
+  }
+
+  saveProjectAppearance(projectId: string, { channelId, color, icon }: ProjectAppearance): void {
+    // Keep an empty record for a former channel so the publisher can clear it after a restart.
+    this.#sql.exec(
+      `UPDATE matrix_project_appearance SET color = NULL, icon = NULL
+       WHERE project_id = ? AND channel_id != ? AND (color IS NOT NULL OR icon IS NOT NULL)`,
+      projectId,
+      channelId,
+    );
+    this.#sql.exec(
+      `INSERT INTO matrix_project_appearance (channel_id, project_id, color, icon) VALUES (?, ?, ?, ?)
+       ON CONFLICT (channel_id) DO UPDATE SET project_id = excluded.project_id,
+         color = excluded.color, icon = excluded.icon
+       WHERE project_id IS NOT excluded.project_id OR color IS NOT excluded.color OR icon IS NOT excluded.icon`,
+      channelId,
+      projectId,
+      color,
+      icon,
+    );
   }
 
   putProject(r: ProjectRecord): void {

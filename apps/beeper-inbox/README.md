@@ -46,7 +46,7 @@ It fetches Pickle at the revision in [`@assets/pickle.json`](@assets/pickle.json
 
 Install the dedicated read-only publisher credential with `vpx _env-file linear-issue-metadata` as `/opt/data/beeper-inbox/linear-issue-metadata/env` (mode 600). Restart the daemon to load it. slack22linear fills the endpoint from issue webhooks and its daily tick. Run the authorized slack22linear `/admin/tick` to seed existing rooms during rollout.
 
-The publisher checks for changes every 10 seconds and refreshes its Slack-to-Matrix room map every minute. It publishes issue records as room account data and closed Slack project channels as account-wide `ai.leonsilicon.linear.project_visibility`. It uses the inbox's existing Matrix session and reads back each changed record. `status.extensions["linear-issue-metadata"]` shows the last successful pass, verified rooms, unmapped channels, and whether project visibility was published.
+The publisher checks for changes every 10 seconds and refreshes its Slack-to-Matrix room map every minute. It publishes issue records and project colors and icons as room account data, and closed Slack project channels as account-wide `ai.leonsilicon.linear.project_visibility`. It uses the inbox's existing Matrix session and reads back each changed record. `status.extensions["linear-issue-metadata"]` shows the last successful pass, verified issue and project rooms, unmapped channels, and whether project visibility was published.
 
 ## Beeper Feed
 

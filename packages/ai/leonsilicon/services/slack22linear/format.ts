@@ -1,6 +1,6 @@
 import { parse as parseYaml } from "@-/com.npmjs.yaml";
 import { AWAITING_PREFIX, COMMAND_KEYS } from "#command";
-import type { LinearIssue, LinearProject } from "#linear";
+import type { LinearIssue } from "#linear";
 
 export type TitleMeta = Record<string, string>;
 
@@ -298,8 +298,6 @@ export function channelNumber(prefix: string, name: string): number | null {
 
 const TOPIC_MAX = 250;
 const TOPIC_SEPARATOR = " · ";
-const PROJECT_TOPIC_SUFFIX =
-  /(?:^| · )\[linear-project:v1 (#[\da-f]{6}|-)(?: ([^[\]\r\n]{1,80}))?\]$/i;
 const topicColor = (color: string | undefined) =>
   color && /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : "-";
 
@@ -332,24 +330,6 @@ export function channelTopic(
   }
 
   return `${prefix}${title}${suffix}`;
-}
-
-/** Adds the project's icon and color without cutting the existing Slack summary. */
-export function projectChannelTopic(
-  current: string,
-  project: Pick<LinearProject, "icon" | "color">,
-  purpose = "",
-) {
-  const summary = current.replace(PROJECT_TOPIC_SUFFIX, "") || purpose;
-  const prefix = summary ? `${summary}${TOPIC_SEPARATOR}` : "";
-  const color = topicColor(project.color);
-  const icon = project.icon?.trim();
-  const colorTopic = `${prefix}[linear-project:v1 ${color}]`;
-  if (icon && /^[^[\]\r\n]{1,80}$/.test(icon)) {
-    const fullTopic = `${prefix}[linear-project:v1 ${color} ${icon}]`;
-    if (fullTopic.length <= TOPIC_MAX) return fullTopic;
-  }
-  return color !== "-" && colorTopic.length <= TOPIC_MAX ? colorTopic : current;
 }
 
 /** Whether Slack message text mentions the user: `<@U…>`, or `<@U…|name>` from older clients. */

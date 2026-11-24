@@ -746,6 +746,14 @@ export class Inbox {
     );
   }
 
+  async publishProjectAppearance(roomId: string, record: Record<string, unknown>): Promise<void> {
+    const room = encodeURIComponent(roomIdOf(roomId));
+    await this.#publishAccountData(
+      `/rooms/${room}/account_data/ai.leonsilicon.linear.project`,
+      record,
+    );
+  }
+
   async publishProjectVisibility(record: Record<string, unknown>): Promise<void> {
     await this.#publishAccountData(
       "/account_data/ai.leonsilicon.linear.project_visibility",

@@ -300,7 +300,12 @@ export class SyncObject {
         this.#teamId = team_id;
       }
       const closedProjectChannelIds = this.#store.projectVisibility();
-      const header = JSON.stringify({ teamId: this.#teamId, closedProjectChannelIds }).slice(0, -1);
+      const projectAppearances = this.#store.projectAppearances();
+      const header = JSON.stringify({
+        teamId: this.#teamId,
+        closedProjectChannelIds,
+        projectAppearances,
+      }).slice(0, -1);
       const body = `${header},"records":${this.#issueMetadata.snapshot()}}`;
       return new Response(body, {
         headers: { "content-type": "application/json", "cache-control": "no-store" },

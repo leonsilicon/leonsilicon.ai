@@ -1269,29 +1269,46 @@ test("a project that already has a Linear channel is adopted, and Leon joins it"
   assert.equal(slack.sectionOf(channel.id), "Projects");
 });
 
-test("project webhooks and the daily tick refresh the bridged icon without replacing the summary", async () => {
-  const { linear, slack, sync } = setup();
+test("project webhooks and daily reconciliation save appearance for Matrix without writing Slack topics", async () => {
+  const { linear, slack, sync, store } = setup();
   const channel = slack.addLinearChannel("project-university");
   channel.topic = "Course planning";
   const project = linear.addProject("University");
   project.slackChannelId = channel.id;
-  project.color = "#e99b51";
+  project.color = "#E99B51";
   project.icon = null;
 
   await sync.run("linear", projectHook(project.id));
-  assert.equal(channel.topic, "Course planning · [linear-project:v1 #e99b51]");
-  const topicWrites = () => slack.calls.filter(({ method }) => method === "conversations.setTopic");
-  assert.equal(topicWrites()[0]?.who, "leon");
-  await sync.run("tick", {});
-  assert.equal(topicWrites().length, 1);
+  assert.deepEqual(store.projectAppearances(), [
+    { channelId: channel.id, color: "#e99b51", icon: null },
+  ]);
+  assert.equal(channel.topic, "Course planning");
 
   // Linear's Slack app can update the summary independently of our webhook.
   channel.topic = "Fall semester planning";
   project.icon = "IconBook";
   project.color = "#5e6ad2";
   await sync.run("tick", {});
-  assert.equal(channel.topic, "Fall semester planning · [linear-project:v1 #5e6ad2 IconBook]");
-  assert.equal(topicWrites().length, 2);
+  assert.deepEqual(store.projectAppearances(), [
+    { channelId: channel.id, color: "#5e6ad2", icon: "IconBook" },
+  ]);
+
+  const replacement = slack.addLinearChannel("project-university-2");
+  project.slackChannelId = replacement.id;
+  await sync.run("linear", projectHook(project.id));
+  assert.deepEqual(store.projectAppearances(), [
+    { channelId: channel.id, color: null, icon: null },
+    { channelId: replacement.id, color: "#5e6ad2", icon: "IconBook" },
+  ]);
+  project.icon = null;
+  project.color = undefined;
+  await sync.run("tick", {});
+  assert.deepEqual(store.projectAppearances(), [
+    { channelId: channel.id, color: null, icon: null },
+    { channelId: replacement.id, color: null, icon: null },
+  ]);
+  assert.equal(channel.topic, "Fall semester planning");
+  assert.ok(!slack.calls.some(({ method }) => method === "conversations.setTopic"));
   assert.equal(slack.posts.filter((post) => post.channel === channel.id).length, 0);
 });
 
@@ -1450,7 +1467,10 @@ test("a day's project is left to dailylinear: no channel request, no section, no
   await sync.run("linear", projectHook(day.id));
   assert.deepEqual([...channel.members].sort(), [LINEAR_BOT, LEON, HERMES].sort());
   assert.equal(store.project(day.id)!.channelId, channel.id);
-  assert.equal(channel.topic, "[linear-project:v1 #f2c94c]");
+  assert.deepEqual(store.projectAppearances(), [
+    { channelId: channel.id, color: "#f2c94c", icon: null },
+  ]);
+  assert.ok(!slack.calls.some(({ method }) => method === "conversations.setTopic"));
   assert.equal(slack.sectionOf(channel.id), null, "not filed under Projects");
   assert.ok(slack.stars.has(channel.id), "dailylinear's star stays");
   assert.equal(channel.name, "project-2026-11-19");

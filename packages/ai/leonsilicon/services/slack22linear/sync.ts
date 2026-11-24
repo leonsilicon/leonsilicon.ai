@@ -17,7 +17,6 @@ import {
   metaInstant,
   parseTitle,
   projectChannelName,
-  projectChannelTopic,
   projectDay,
   slackToLinear,
   withDay,
@@ -599,35 +598,17 @@ export class Sync {
       rec.section = section;
     this.#store.putProject(rec);
     if (!same) this.#log("project_channel", { project: project.name, channel: channelId });
-    await this.#syncProjectTopic(project, channelId);
+    this.#saveProjectAppearance(project, channelId);
     return rec;
   }
 
-  async #syncProjectTopic(project: LinearProject, channelId: string): Promise<void> {
-    if (!project.color && !project.icon) return;
-    const slack = this.#session ?? this.#bot;
-    try {
-      const info = await slack("conversations.info", { channel: channelId });
-      const channel = info.channel as
-        | {
-            topic?: { value?: string };
-            purpose?: { value?: string };
-          }
-        | undefined;
-      if (!channel) throw new Error(`Slack did not return project channel ${channelId}`);
-      const current = channel.topic?.value ?? "";
-      const topic = projectChannelTopic(current, project, channel.purpose?.value);
-      if (topic !== current) await slack("conversations.setTopic", { channel: channelId, topic });
-    } catch (error) {
-      if (
-        !(error instanceof SlackError) ||
-        ![...ARCHIVED, "channel_not_found", "not_in_channel", "user_is_restricted"].includes(
-          error.code,
-        )
-      )
-        throw error;
-      this.#log("project_topic_unavailable", { channel: channelId, error: error.code });
-    }
+  #saveProjectAppearance(project: LinearProject, channelId: string): void {
+    this.#store.saveProjectAppearance(project.id, {
+      channelId,
+      color:
+        project.color && /^#[\da-f]{6}$/i.test(project.color) ? project.color.toLowerCase() : null,
+      icon: project.icon?.trim() || null,
+    });
   }
 
   async #channelSettings(): Promise<ProjectChannelSettings | null> {
@@ -1518,7 +1499,7 @@ export class Sync {
         (projectDay(project.name) === null && rec.section !== this.#c.projectSection)
       )
         await this.syncProject(project);
-      else if (rec.channelId) await this.#syncProjectTopic(project, rec.channelId);
+      else if (rec.channelId) this.#saveProjectAppearance(project, rec.channelId);
     }
     const open = new Set(projects.map((p) => p.id));
     for (const rec of this.#store.allProjects()) {
