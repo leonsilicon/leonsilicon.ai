@@ -16,7 +16,8 @@ live Slack adapter:
 - ``_build_message_event``: runs only after every gate (auth, channel, mention, bot) has accepted a
   message, so it sees exactly the messages Hermes answers. It waits for the request started early,
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
-  thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there.
+  thread history, in the new channel. The plugin sends Leon a receipt there before the model runs,
+  and Hermes follows up there with the result. A 👀 on the original covers the intake.
 
 Slack task turns get Leon's delegation rule in their channel prompt. In an issue channel, Hermes
 ends ordinary turns with an explicit Autolinear command. Reports from delegated agents can be
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 _PATCHED_ATTR = "_autolinear_patched"
 _PENDING_ATTR = "_autolinear_pending"
+_DISPATCH_STATUS_FLAG = "_autolinear_dispatch_sets_status"
 _warned_guard = False
 
 #: Settings, from Hermes's environment ($HERMES_HOME/.env). Without the first two, the plugin is off.
@@ -68,6 +70,8 @@ TIMEOUT_SECONDS = 20.0
 RETRY_DELAY_SECONDS = 1.0
 #: How long building a turn waits for its intake before answering in place.
 WAIT_SECONDS = 25.0
+RECEIPT_TIMEOUT_SECONDS = 2.0
+RECEIPT_TEXT = "On it. I’ll follow up here."
 #: How long an intake nobody waited for is kept, in case its turn is still being built.
 KEEP_SECONDS = 120.0
 
@@ -82,7 +86,10 @@ _DELEGATION_PROMPT = (
     "Use your task-routing tools to dispatch it and give the agent the context it needs. "
     "You own the coordination, follow-up, and reporting. Route any remaining work back to the "
     "assigned agent or hand it to another available agent. If a handoff fails, try another agent. "
-    "If no agent can take it, report what blocked delegation."
+    "If no agent can take it, report what blocked delegation. Dispatch through a tool that returns "
+    "before the assigned agent finishes. End your turn after the handoff. For a handoff through "
+    "another service, include where Leon asked so you can route the result back. When the result "
+    "comes back, verify it and give Leon the substantive answer in the same Slack conversation."
 )
 
 
@@ -102,6 +109,7 @@ def _handoff_prompt(*, agent_report: bool = False) -> str:
         )
         stay = ""
         reminder = ""
+        dispatch_note = ""
     else:
         instructions = (
             f"{_DELEGATION_PROMPT}\n\n"
@@ -110,6 +118,10 @@ def _handoff_prompt(*, agent_report: bool = False) -> str:
         )
         stay = ", or `stay` (leave the status as it is)"
         reminder = " When you forget, Autolinear reminds you here. Answer it with the line."
+        dispatch_note = (
+            "For a new task, send `move executing` after the handoff succeeds and end the turn. "
+            "When the result comes back, give Leon the answer and move the issue based on the result. "
+        )
     return (
         f"{instructions}Start that line with {mention}, written exactly so, then one of: "
         "`move done` (nothing is left for anyone, even after a thanks), "
@@ -118,6 +130,7 @@ def _handoff_prompt(*, agent_report: bool = False) -> str:
         "`move listener event=\"<what>\" stop=YYYY-MM-DD` (waiting for something to happen), "
         "`move date start=<RFC 3339 time or YYYY-MM-DD>` (work starts later), "
         f"`move executing` (a delegated agent is working on it){stay}. "
+        f"{dispatch_note}"
         "Set the issue status through Autolinear. Mentioning Leon only notifies him."
         f"{reminder} When Autolinear says a command didn't work, send a corrected line."
     )
@@ -199,6 +212,48 @@ def _is_marked(event: dict) -> bool:
     return isinstance(value, str) and value.startswith(f"{MARKER}-")
 
 
+def _is_ordinary_message(event: dict) -> bool:
+    return not (event.get("_hermes_reaction") or event.get("_hermes_force_process")
+                or event.get("bot_id") or _is_marked(event))
+
+
+async def _react_during_intake(adapter, channel_id, ts, team_id, intake) -> None:
+    """Show receipt on the source while the issue channel is being opened."""
+    try:
+        added = await asyncio.wait_for(
+            adapter._add_reaction(channel_id, ts, "eyes", team_id), RECEIPT_TIMEOUT_SECONDS)
+        if not added:
+            return
+        result = await asyncio.shield(intake)
+        if result is not None:
+            await asyncio.wait_for(
+                adapter._remove_reaction(channel_id, ts, "eyes", team_id), RECEIPT_TIMEOUT_SECONDS)
+    except Exception:
+        logger.debug("autolinear: could not show intake receipt for %s:%s", channel_id, ts, exc_info=True)
+
+
+async def _send_receipt(adapter, turn) -> bool:
+    """A standalone post in the turn's conversation, without touching any active reply stream."""
+    source = turn.source
+    channel = source.chat_id
+    try:
+        from gateway.platforms.base import _reply_anchor_for_event, _thread_metadata_for_event
+
+        if adapter._outbound_blocked(channel, "autolinear receipt to"):
+            return False
+        params = {"channel": channel, "text": RECEIPT_TEXT}
+        thread_ts = adapter._resolve_thread_ts(
+            _reply_anchor_for_event(turn), _thread_metadata_for_event(turn))
+        if thread_ts:
+            params["thread_ts"] = thread_ts
+        client = adapter._get_client(channel, team_id=source.scope_id)
+        await asyncio.wait_for(client.chat_postMessage(**params), RECEIPT_TIMEOUT_SECONDS)
+        return True
+    except Exception:
+        logger.warning("autolinear: could not send receipt in %s", channel, exc_info=True)
+        return False
+
+
 def _where(event: dict, channel_id: str, name: str) -> str:
     kind = event.get("channel_type") or ("im" if channel_id.startswith("D") else "")
     place = ("a DM with Hermes" if kind == "im" else "a group DM" if kind == "mpim"
@@ -207,7 +262,8 @@ def _where(event: dict, channel_id: str, name: str) -> str:
     return f"a thread in {place}" if thread and thread != event.get("ts") else place
 
 
-async def _start(adapter, settings: dict, event: dict, channel_id: str, team_id: str):
+async def _start(adapter, settings: dict, event: dict, channel_id: str, team_id: str,
+                 receipt_tasks: set):
     """Starts the intake for a message in the background, unless it's in an issue channel."""
     pending = _pending(adapter)
     ts = str(event.get("ts") or "")
@@ -242,6 +298,10 @@ async def _start(adapter, settings: dict, event: dict, channel_id: str, team_id:
              "permalink": f.get("permalink") or ""} for f in files]
     task = asyncio.ensure_future(_request_intake(settings, payload))
     pending[key] = task
+    if ts and not event.get("_slack_changed_event_ts") and adapter._reactions_enabled():
+        receipt = asyncio.create_task(_react_during_intake(adapter, channel_id, ts, team_id, task))
+        receipt_tasks.add(receipt)
+        receipt.add_done_callback(receipt_tasks.discard)
 
     def forget(_task) -> None:
         # Kept a while for a turn still being built, then dropped; one nobody took is logged.
@@ -260,10 +320,8 @@ async def _start(adapter, settings: dict, event: dict, channel_id: str, team_id:
 
 def _answers_for_sure(adapter, settings: dict, event: dict, team_id: str) -> bool:
     """True for a message Hermes always answers: worth starting on before its gates have run."""
-    if event.get("_slack_changed_event_ts") or event.get("_hermes_reaction") or event.get(
-            "_hermes_force_process") or event.get("bot_id") or _is_marked(event):
-        return False
-    if str(event.get("user") or "") != settings["user"]:
+    if (event.get("_slack_changed_event_ts") or event.get("user") != settings["user"]
+            or not _is_ordinary_message(event)):
         return False
     text = str(event.get("text") or "")
     if text.lstrip().startswith(("/", "!")):
@@ -281,10 +339,19 @@ def _note(result: dict) -> str:
         "answer here and keep the conversation here.]")
 
 
-def _add_task_prompt(msg_event, *, in_issue_channel: bool, agent_report: bool = False) -> None:
+def _add_task_prompt(msg_event, *, in_issue_channel: bool, agent_report: bool = False,
+                     receipt_posted: bool = False) -> None:
     prompt = _handoff_prompt(agent_report=agent_report) if in_issue_channel else _DELEGATION_PROMPT
     if in_issue_channel and agent_report:
         msg_event.reply_expected = False
+    if receipt_posted:
+        if not in_issue_channel:
+            msg_event.reply_expected = False
+        prompt += (
+            "\n\nLeon already received the receipt. Skip a duplicate acknowledgement. "
+            "For a successful handoff still in progress, "
+            + ("reply with just the status command." if in_issue_channel else "end with NO_REPLY.")
+        )
     msg_event.channel_prompt = "\n\n".join(
         filter(None, (msg_event.channel_prompt, prompt)))
 
@@ -301,7 +368,7 @@ def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
         logger.debug("autolinear: could not warm caches for %s", channel_id, exc_info=True)
 
 
-async def _move(adapter, settings: dict, event: dict, kwargs: dict):
+async def _move(adapter, settings: dict, event: dict, kwargs: dict, receipt_tasks: set):
     """``(event, kwargs)`` for the copy in the issue's channel, or None to answer in place."""
     channel_id = str(kwargs.get("channel_id") or "")
     ts = str(kwargs.get("ts") or "")
@@ -309,7 +376,7 @@ async def _move(adapter, settings: dict, event: dict, kwargs: dict):
     if not channel_id or not ts:
         return None
     task = _pending(adapter).get((channel_id, ts)) or await _start(
-        adapter, settings, event, channel_id, team_id)
+        adapter, settings, event, channel_id, team_id, receipt_tasks)
     if task is None:
         return None
     result = await asyncio.wait_for(asyncio.shield(task), WAIT_SECONDS)
@@ -341,15 +408,19 @@ def wire(native, adapter) -> None:
         return
     build = getattr(adapter, "_build_message_event", None)
     prefilter = getattr(adapter, "_prefilter_inbound", None)
-    seams = (build, prefilter, getattr(adapter, "_resolve_channel_name", None),
+    processing_start = getattr(adapter, "on_processing_start", None)
+    seams = (build, prefilter, processing_start, getattr(adapter, "_resolve_channel_name", None),
              getattr(adapter, "_session_thread_ts", None),
              getattr(adapter, "_track_reacting_message", None),
-             getattr(adapter, "_reactions_enabled", None))
+             getattr(adapter, "_reactions_enabled", None), getattr(adapter, "_get_client", None),
+             getattr(adapter, "_outbound_blocked", None), getattr(adapter, "_add_reaction", None),
+             getattr(adapter, "_remove_reaction", None), getattr(adapter, "_resolve_thread_ts", None))
     if not all(callable(seam) for seam in seams):
         logger.warning(
             "autolinear: Slack adapter internals changed; Hermes answers Leon's messages where he "
             "sends them")
         return
+    receipt_tasks: set[asyncio.Task] = set()
 
     @functools.wraps(prefilter)
     async def prefilter_and_start(event, *args, **kwargs):
@@ -361,21 +432,37 @@ def wire(native, adapter) -> None:
             normalized, team_id, channel_id = accepted
             if isinstance(normalized, dict) and _answers_for_sure(
                     adapter, settings, normalized, str(team_id or "")):
-                await _start(adapter, settings, normalized, str(channel_id or ""), str(team_id or ""))
+                await _start(
+                    adapter, settings, normalized, str(channel_id or ""), str(team_id or ""),
+                    receipt_tasks)
         except Exception:
             logger.warning("autolinear: could not start early", exc_info=True)
         return accepted
 
-    async def build_in_place(settings, event, *args, **kwargs):
+    async def prepare_turn(event, msg_event, *, in_issue_channel, send_receipt) -> None:
+        if msg_event is None:
+            return
+        receipt_posted = False
+        if (send_receipt and not msg_event.source.is_bot and msg_event.reply_expected is not False
+                and not event.get("_slack_changed_event_ts")):
+            receipt_posted = await _send_receipt(adapter, msg_event)
+            if in_issue_channel:
+                # Slack Sync treats 👀 in issue channels as Executing. The dispatch command owns
+                # that transition for these turns. Completion reactions still use normal tracking.
+                msg_event.raw_message[_DISPATCH_STATUS_FLAG] = True
+        client_id = event.get("client_msg_id") if isinstance(event, dict) else None
+        _add_task_prompt(
+            msg_event, in_issue_channel=in_issue_channel, receipt_posted=receipt_posted,
+            agent_report=isinstance(client_id, str) and client_id.startswith(_AGENT_REPORTS))
+
+    async def build_in_place(settings, event, *args, send_receipt=False, **kwargs):
         """In-place Slack turns get the delegation rule, plus Autolinear's rule in issue channels."""
         msg_event = await build(event, *args, **kwargs)
         if msg_event is not None and not kwargs.get("is_command_text"):
             in_issue_channel = settings is not None and bool(
                 settings["issue_channel"].match(msg_event.source.chat_name or ""))
-            client_id = event.get("client_msg_id") if isinstance(event, dict) else None
-            _add_task_prompt(
-                msg_event, in_issue_channel=in_issue_channel,
-                agent_report=isinstance(client_id, str) and client_id.startswith(_AGENT_REPORTS))
+            await prepare_turn(
+                event, msg_event, in_issue_channel=in_issue_channel, send_receipt=send_receipt)
         return msg_event
 
     @functools.wraps(build)
@@ -383,18 +470,17 @@ def wire(native, adapter) -> None:
         settings = _settings()
         if (settings is None or not isinstance(event, dict)
                 or kwargs.get("user_id") != settings["user"] or kwargs.get("is_command_text")
-                or event.get("_hermes_reaction") or event.get("_hermes_force_process")
-                or _is_marked(event)):
+                or not _is_ordinary_message(event)):
             return await build_in_place(settings, event, *args, **kwargs)
         try:
-            target = await _move(adapter, settings, event, kwargs)
+            target = await _move(adapter, settings, event, kwargs, receipt_tasks)
         except Exception:
             logger.warning(
                 "autolinear: no issue for %s:%s; answering it there",
                 kwargs.get("channel_id"), kwargs.get("ts"), exc_info=True)
             target = None
         if target is None:
-            return await build_in_place(settings, event, *args, **kwargs)
+            return await build_in_place(settings, event, *args, send_receipt=True, **kwargs)
         moved, moved_kwargs = target
         try:
             msg_event = await build(moved, *args, **moved_kwargs)
@@ -402,9 +488,8 @@ def wire(native, adapter) -> None:
             logger.warning(
                 "autolinear: could not build the turn in %s; answering in place",
                 moved_kwargs["channel_id"], exc_info=True)
-            return await build_in_place(settings, event, *args, **kwargs)
-        if msg_event is not None:
-            _add_task_prompt(msg_event, in_issue_channel=True)
+            return await build_in_place(settings, event, *args, send_receipt=True, **kwargs)
+        await prepare_turn(event, msg_event, in_issue_channel=True, send_receipt=True)
         copy_ts, team_id = moved_kwargs["ts"], str(moved_kwargs.get("team_id") or "")
         try:
             # Hermes's ✅ on the copy is what marks the answer done, so it always gets the lifecycle.
@@ -416,11 +501,18 @@ def wire(native, adapter) -> None:
             logger.warning("autolinear: could not track %s", copy_ts, exc_info=True)
         return msg_event
 
+    @functools.wraps(processing_start)
+    async def start_processing(event, *args, **kwargs):
+        raw = event.raw_message
+        if not (isinstance(raw, dict) and raw.get(_DISPATCH_STATUS_FLAG)):
+            return await processing_start(event, *args, **kwargs)
+
     adapter._prefilter_inbound = prefilter_and_start
     adapter._build_message_event = build_in_issue_channel
+    adapter.on_processing_start = start_processing
     setattr(adapter, _PATCHED_ATTR, True)
     logger.info(
-        "autolinear: each of Leon's Slack messages gets a Linear issue and channel at once%s",
+        "autolinear: immediate receipts and delegated execution for Leon's Slack messages%s",
         "" if _settings() else f" (off until {TOKEN_ENV} and {USER_ENV} are set)")
 
 

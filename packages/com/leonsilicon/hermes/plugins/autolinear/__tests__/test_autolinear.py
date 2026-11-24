@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import pathlib
 import urllib.error
@@ -26,6 +27,7 @@ def _load(name: str, path: pathlib.Path):
 plugin = _load("autolinear", _HERE / "__init__.py")
 guard = _load("slack_as_leon_guard", _HERE.parent / "slack-as-leon-guard" / "__init__.py")
 always_react = _load("slack_always_react", _HERE.parent / "slack-always-react" / "__init__.py")
+flat_replies = _load("slack_flat_replies", _HERE.parent / "slack-flat-replies" / "__init__.py")
 
 LEON, HERMES = "U0LEON00001", "U0HERMES001"
 DM, GENERAL, ISSUE, NEW = "D0LEONDM01", "C0GENERAL1", "C0ISSUE001", "C0NEWISSUE"
@@ -108,6 +110,12 @@ def _turn(adapter):
 async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
     plugin.wire(None, adapter)
     ts = "1794000000.000001"
+
+    async def start_work(_turn):
+        adapter._app.client.chat_postMessage.assert_awaited_once_with(
+            channel=NEW, text=plugin.RECEIPT_TEXT, thread_ts=COPY_TS)
+
+    adapter.handle_message.side_effect = start_work
     await adapter._handle_slack_message(_message(DM, ts))
 
     assert intake.requests == [{
@@ -126,17 +134,50 @@ async def test_leons_dm_is_answered_in_its_new_issue_channel(adapter, intake):
         "[autolinear: Leon sent this in a DM with Hermes. It is now LEON-401 "
         "(https://linear.app/x/issue/LEON-401), and this is its channel, #leon-401-check-rogers")
     assert turn.text.endswith("\n\ncan you check whether Rogers billed me twice?")
-    assert turn.channel_prompt.endswith(plugin._handoff_prompt())
+    assert plugin._handoff_prompt() in turn.channel_prompt
+    assert "Skip a duplicate acknowledgement" in turn.channel_prompt
     assert turn.raw_message["channel"] == NEW and turn.raw_message["ts"] == COPY_TS
     assert turn.raw_message["_autolinear"] == {
         "from_channel": DM, "from_ts": ts, "issue": "LEON-401"}
 
-    # 👀 and ✅ land on the copy in the issue channel: that is what moves the issue.
+    # 👀 covers intake at the source. The copy gets a completion reaction, while the dispatch
+    # command owns the Executing transition.
     await adapter.on_processing_start(turn)
     await adapter.on_processing_complete(turn, ProcessingOutcome.SUCCESS)
     added = [(c.kwargs["channel"], c.kwargs["timestamp"], c.kwargs["name"])
              for c in adapter._app.client.reactions_add.call_args_list]
-    assert added == [(NEW, COPY_TS, "eyes"), (NEW, COPY_TS, "white_check_mark")]
+    assert added == [(DM, ts, "eyes"), (NEW, COPY_TS, "white_check_mark")]
+    assert any(c.kwargs["channel"] == DM and c.kwargs["timestamp"] == ts
+               for c in adapter._app.client.reactions_remove.call_args_list)
+
+
+@pytest.mark.asyncio
+async def test_the_source_gets_a_receipt_while_intake_is_still_running(adapter, monkeypatch):
+    allow_copy = asyncio.Event()
+    intake_started = asyncio.Event()
+    source_reacted = asyncio.Event()
+
+    async def intake(_settings, _payload):
+        intake_started.set()
+        await allow_copy.wait()
+        return RESULT
+
+    async def react(**_):
+        source_reacted.set()
+
+    monkeypatch.setattr(plugin, "_request_intake", intake)
+    adapter._app.client.reactions_add.side_effect = react
+    plugin.wire(None, adapter)
+    message = asyncio.create_task(adapter._handle_slack_message(_message(DM, "1794000000.000002")))
+    try:
+        await asyncio.wait_for(intake_started.wait(), 1)
+        await asyncio.wait_for(source_reacted.wait(), 1)
+        adapter._app.client.chat_postMessage.assert_not_awaited()
+        adapter.handle_message.assert_not_awaited()
+    finally:
+        allow_copy.set()
+        await message
+    adapter._app.client.chat_postMessage.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -170,24 +211,45 @@ async def test_other_users_and_commands_are_answered_in_place(adapter, intake, e
     assert intake.requests == []
     turn = _turn(adapter)
     assert turn.source.chat_id == event["channel"]
+    adapter._app.client.chat_postMessage.assert_not_awaited()
     assert plugin._handoff_prompt() not in (turn.channel_prompt or "")
     assert ("hand off every task to another agent" in (turn.channel_prompt or "")) == (
         event["channel"] == GENERAL)
 
 
+@pytest.mark.parametrize("thread", [False, True])
 @pytest.mark.asyncio
-async def test_an_existing_issue_keeps_its_message_and_gets_the_handoff_rule(adapter, intake):
+async def test_an_existing_issue_gets_a_receipt_in_its_conversation(adapter, intake, thread):
     adapter.config.extra["channel_prompts"] = {ISSUE: "Keep the question brief."}
+    flat_replies.wire(None, adapter)
     plugin.wire(None, adapter)
-    await adapter._handle_slack_message(_message(ISSUE, "1794000000.000020", "Show me the draft."))
+    parent = {"thread_ts": "1794000000.000019"} if thread else {}
+    adapter._app.client.conversations_replies.return_value = {"messages": []}
+    message = _message(ISSUE, "1794000000.000020", "Show me the draft.", **parent)
+    await adapter._handle_slack_message(message)
 
     assert intake.requests == []
     turn = _turn(adapter)
     assert turn.source.chat_id == ISSUE
     assert turn.text == "Show me the draft."
-    assert turn.channel_prompt == f"Keep the question brief.\n\n{plugin._handoff_prompt()}"
+    assert turn.channel_prompt.startswith(f"Keep the question brief.\n\n{plugin._handoff_prompt()}")
     assert "`stay` (leave the status as it is)" in turn.channel_prompt
     assert "return NO_REPLY" not in turn.channel_prompt
+    assert "`move executing` after the handoff succeeds" in turn.channel_prompt
+    adapter._app.client.chat_postMessage.assert_awaited_once_with(
+        channel=ISSUE, text=plugin.RECEIPT_TEXT, **parent)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_receipt_does_not_prevent_delegation(adapter, intake):
+    adapter._app.client.chat_postMessage.side_effect = OSError("Slack unavailable")
+    plugin.wire(None, adapter)
+    await adapter._handle_slack_message(_message(ISSUE, "1794000000.000027"))
+
+    turn = _turn(adapter)
+    assert "hand off every task to another agent" in turn.channel_prompt
+    assert "already received the receipt" not in turn.channel_prompt
+    assert "`move executing` after the handoff succeeds" in turn.channel_prompt
 
 
 @pytest.mark.asyncio
@@ -231,6 +293,7 @@ async def test_delegated_reports_only_get_a_command_for_a_status_change(adapter,
     assert "`move leon`" in turn.channel_prompt
     assert plugin._DELEGATION_PROMPT not in turn.channel_prompt
     assert adapter._reacting_target(turn) is None
+    adapter._app.client.chat_postMessage.assert_not_awaited()
 
 
 def test_without_the_bots_id_the_rule_asks_for_a_plain_mention(monkeypatch):
@@ -253,6 +316,8 @@ async def test_when_linear_sync_declines_or_fails_hermes_answers_in_place(
     turn = _turn(adapter)
     assert turn.source.chat_id == DM
     assert turn.text == "can you check whether Rogers billed me twice?"
+    assert turn.reply_expected is False
+    adapter._app.client.chat_postMessage.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -304,6 +369,7 @@ async def test_the_link_edit_and_the_live_copy_start_no_second_turn(adapter, int
 
     adapter.handle_message.assert_awaited_once()
     assert len(intake.requests) == 1
+    adapter._app.client.chat_postMessage.assert_awaited_once()
 
 
 @pytest.mark.parametrize("react_first", [True, False])
