@@ -32,7 +32,7 @@ Since 2026-11-21 (v2.2.0, Codex since v2.3.0) Leon's Grok Bot bots, and the Code
 
 ## Limits
 
-- **Marker.** Every post's `client_msg_id` starts with `de1e6a7e` (`CLIENT_MSG_ID_PREFIX`), and the rest is random. Hermes's [`slack-as-leon-guard`](../../../../com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md) plugin drops events carrying it, so Hermes doesn't answer its own posts. Other bots don't see any difference.
+- **Marker.** Every post's `client_msg_id` starts with `de1e6a7e` (`CLIENT_MSG_ID_PREFIX`), and the rest is random. Hermes's [`slack-as-leon-guard`](../../../../../apps/hermes-plugin-slack-as-leon-guard/README.md) plugin drops events carrying it, so Hermes doesn't answer its own posts. Other bots don't see any difference.
 - **Refused.** The users in `SLACK_AS_LEON_BLOCKED_USERS`, which is required (Silicon Dot, in practice): no DM and no mention. Silicon Dot acts on Leon's own messages, and Hermes hands it tasks through its Beeper chat (Leon's rule, 2026-11-12), not in Leon's name in Slack. Change this with `SLACK_AS_LEON_BLOCKED_USERS`. `@channel`, `@here` and `@everyone` are refused too.
 - **Rate.** 30 messages per rolling hour (`SLACK_AS_LEON_MAX_PER_HOUR`), counted in a `RateStore` (Workers KV in production).
 - **Reading.** It reads only the answers to its own posts, never other conversations. Hermes's read-only `slack` MCP covers channels its bot is in.

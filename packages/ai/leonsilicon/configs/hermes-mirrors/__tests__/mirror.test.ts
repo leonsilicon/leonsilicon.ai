@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { mainRevision, PLUGINS, pluginNames, syncMirror } from "#mirror";
+import { mainRevision, mirrorNames, syncMirror } from "#mirror";
 
 test("mirrors publish standalone trees and advance only when their contents change", (t) => {
   const tmp = mkdtempSync(join(tmpdir(), "hermes-mirror-test-"));
@@ -24,27 +24,28 @@ test("mirrors publish standalone trees and advance only when their contents chan
   git(["config", "user.email", "test@example.test"]);
   git(["config", "user.name", "Test"]);
   git(["config", "commit.gpgsign", "false"]);
-  const name = "autolinear";
-  const path = join(cwd, PLUGINS, name);
+  const name = "hermes-plugin-autolinear";
+  const path = join(cwd, "apps", name);
   mkdirSync(path, { recursive: true });
   const manifest = join(path, "plugin.yaml");
   writeFileSync(manifest, "name: autolinear\nversion: 1.0.0\n");
+  const worker = join(cwd, "apps", "autolinear");
+  mkdirSync(worker);
+  writeFileSync(join(worker, "wrangler.jsonc"), "{}\n");
 
   const publish = () => {
     git(["add", "."]);
     git(["commit", "-m", "Update source"]);
     const source = git(["rev-parse", "HEAD"]);
-    assert.deepEqual(pluginNames(source, cwd), [name]);
+    assert.deepEqual(mirrorNames(source, cwd), [name]);
     syncMirror({ source, name, fetchUrl: remote, pushUrl: remote, cwd });
     return mainRevision(remote, cwd)!;
   };
 
   const first = publish();
   assert.equal(git(["ls-tree", "--name-only", "HEAD"], remote), "plugin.yaml");
-  assert.equal(
-    git(["rev-parse", "HEAD^{tree}"], remote),
-    git(["rev-parse", `HEAD:${PLUGINS}/${name}`]),
-  );
+  assert.equal(git(["show", "HEAD:plugin.yaml"], remote), "name: autolinear\nversion: 1.0.0");
+  assert.equal(git(["rev-parse", "HEAD^{tree}"], remote), git(["rev-parse", `HEAD:apps/${name}`]));
   writeFileSync(join(cwd, "other.txt"), "unrelated source change");
   assert.equal(publish(), first);
   writeFileSync(manifest, "name: autolinear\nversion: 1.0.1\n");

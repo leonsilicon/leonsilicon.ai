@@ -22,7 +22,7 @@ Every delegation carries the channel and root timestamp. The extension validates
 - Beeper's [official Grok Bot connector](https://help.beeper.com/en_US/quick-references/ai-assistants-in-beeper) delivers the task bot's messages to the inbox journal. `slack22grokbot` copies them to Slack as marked Grok replies and applies Beeper edits to the same Slack message. Slack replies go back to the bot's Beeper conversation with the author's name. The bridge skips its own messages in both directions. Attachment messages carry their text or a file reference. Binary files and interactive cards stay in their source app.
 - Hermes starts work with `grok_bot_send`, then answers the task bot in Slack. Once Hermes has verified the final result, it calls `grok_task_complete` with the same thread. The service drains pending Grok replies and asks [grokbot-admin](../grok-bot-roster/README.md) to delete the task bot by its pinned roster ID. A failed deletion stays pending for retry.
 - Task bot names use the channel ID. Ambiguous routes and missing Slack roots show up in status. The service picks up new activity after installation and uses persisted cursors on restart.
-- Hermes's [Slack guard](../../../../com/leonsilicon/hermes/plugins/slack-as-leon-guard/README.md) recognizes the same Grok marker for mirrored posts.
+- Hermes's [Slack guard](../../../../../apps/hermes-plugin-slack-as-leon-guard/README.md) recognizes the same Grok marker for mirrored posts.
 
 ### Enable on Hermes Cloud
 

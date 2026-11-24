@@ -1,1 +1,1 @@
-export { mainRevision, PLUGINS, pluginNames, syncMirror } from "#mirror";
+export { mainRevision, mirrorNames, syncMirror } from "#mirror";

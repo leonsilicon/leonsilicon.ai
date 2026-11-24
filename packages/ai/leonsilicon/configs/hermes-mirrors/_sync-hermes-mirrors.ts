@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { mainRevision, pluginNames, syncMirror } from "#mirror";
+import { mainRevision, mirrorNames, syncMirror } from "#mirror";
 
 const organization = "leonsiliconAI";
 const sourceRepository = "https://github.com/leonsilicon/leonsilicon.ai.git";
@@ -27,7 +27,7 @@ function sync(): void {
   };
 
   const failures: string[] = [];
-  for (const name of pluginNames(source, cwd)) {
+  for (const name of mirrorNames(source, cwd)) {
     const url = `https://github.com/${organization}/${name}.git`;
     try {
       console.log(

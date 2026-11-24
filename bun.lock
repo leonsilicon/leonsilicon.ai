@@ -71,6 +71,34 @@
         "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*",
       },
     },
+    "apps/hermes-plugin-autolinear": {
+      "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-dropbox-task-memory": {
+      "name": "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-slack-always-react": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-always-react",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-slack-as-leon-guard": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-slack-auto-join": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-auto-join",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-slack-flat-replies": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-flat-replies",
+      "version": "1.0.0",
+    },
+    "apps/hermes-plugin-slack-own-thread-reply": {
+      "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
+      "version": "1.0.0",
+    },
     "apps/landing": {
       "name": "@-apps/landing",
     },
@@ -322,34 +350,6 @@
         "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
-    "packages/com/leonsilicon/hermes/plugins/autolinear": {
-      "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/dropbox-task-memory": {
-      "name": "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/slack-always-react": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-always-react",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/slack-auto-join": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-auto-join",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/slack-flat-replies": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-flat-replies",
-      "version": "1.0.0",
-    },
-    "packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
-      "version": "1.0.0",
-    },
     "packages/com/npmjs/citty": {
       "name": "@-/com.npmjs.citty",
       "dependencies": {
@@ -523,19 +523,19 @@
 
     "@-/ai.leonsilicon.services.x2slack": ["@-/ai.leonsilicon.services.x2slack@workspace:packages/ai/leonsilicon/services/x2slack"],
 
-    "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
+    "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:apps/hermes-plugin-autolinear"],
 
-    "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory": ["@-/com.leonsilicon.hermes.plugins.dropbox-task-memory@workspace:packages/com/leonsilicon/hermes/plugins/dropbox-task-memory"],
+    "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory": ["@-/com.leonsilicon.hermes.plugins.dropbox-task-memory@workspace:apps/hermes-plugin-dropbox-task-memory"],
 
-    "@-/com.leonsilicon.hermes.plugins.slack-always-react": ["@-/com.leonsilicon.hermes.plugins.slack-always-react@workspace:packages/com/leonsilicon/hermes/plugins/slack-always-react"],
+    "@-/com.leonsilicon.hermes.plugins.slack-always-react": ["@-/com.leonsilicon.hermes.plugins.slack-always-react@workspace:apps/hermes-plugin-slack-always-react"],
 
-    "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard": ["@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard@workspace:packages/com/leonsilicon/hermes/plugins/slack-as-leon-guard"],
+    "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard": ["@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard@workspace:apps/hermes-plugin-slack-as-leon-guard"],
 
-    "@-/com.leonsilicon.hermes.plugins.slack-auto-join": ["@-/com.leonsilicon.hermes.plugins.slack-auto-join@workspace:packages/com/leonsilicon/hermes/plugins/slack-auto-join"],
+    "@-/com.leonsilicon.hermes.plugins.slack-auto-join": ["@-/com.leonsilicon.hermes.plugins.slack-auto-join@workspace:apps/hermes-plugin-slack-auto-join"],
 
-    "@-/com.leonsilicon.hermes.plugins.slack-flat-replies": ["@-/com.leonsilicon.hermes.plugins.slack-flat-replies@workspace:packages/com/leonsilicon/hermes/plugins/slack-flat-replies"],
+    "@-/com.leonsilicon.hermes.plugins.slack-flat-replies": ["@-/com.leonsilicon.hermes.plugins.slack-flat-replies@workspace:apps/hermes-plugin-slack-flat-replies"],
 
-    "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply"],
+    "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:apps/hermes-plugin-slack-own-thread-reply"],
 
     "@-/com.npmjs.citty": ["@-/com.npmjs.citty@workspace:packages/com/npmjs/citty"],
 

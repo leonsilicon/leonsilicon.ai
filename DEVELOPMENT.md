@@ -4,19 +4,19 @@ This workspace follows the [Flatcap convention](https://github.com/leonsilicon/f
 
 ## Workspace layout
 
-| Location                                          | Purpose                                                                                                                                                                                  |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `www/<hostname, labels reversed>/`                | Website application packages, each entered through its `index.html`                                                                                                                      |
-| `apps/<name>/`                                    | Deployable entrypoints (Workers and what runs on Hermes Cloud), deploy commands and `@assets/`                                                                                           |
-| `packages/ai/leonsilicon/configs/cloudflare/`     | Serves the built pages from Workers, plus the script and styles the pages share                                                                                                          |
-| `packages/ai/leonsilicon/services/<name>/`        | The services behind `*.leonsilicon.ai` and on Hermes Cloud                                                                                                                               |
-| `packages/ai/leonsilicon/configs/<name>/`         | Cronometer as it ran on the Mac mini until 2026-11-21 (kept for reference), the env-file renderer, Unsnooze patching, Silicon Dot's agents-vault, and the Todoist Automations' manifests |
-| `packages/com/leonsilicon/hermes/skills/<name>/`  | Agent Skills folders installable with the Hermes skills CLI                                                                                                                              |
-| `packages/com/leonsilicon/hermes/plugins/<name>/` | Hermes plugins, installed to `$HERMES_HOME/plugins/<name>/` on Hermes Cloud                                                                                                              |
-| `packages/com/npmjs/`                             | Wrappers for upstream runtime dependencies                                                                                                                                               |
-| `patches.gen/`                                    | Committed versioned diffs generated from codemods                                                                                                                                        |
+| Location                                         | Purpose                                                                                                                                                                                  |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `www/<hostname, labels reversed>/`               | Website application packages, each entered through its `index.html`                                                                                                                      |
+| `apps/<name>/`                                   | Deployable entrypoints (Workers and what runs on Hermes Cloud), deploy commands and `@assets/`                                                                                           |
+| `packages/ai/leonsilicon/configs/cloudflare/`    | Serves the built pages from Workers, plus the script and styles the pages share                                                                                                          |
+| `packages/ai/leonsilicon/services/<name>/`       | The services behind `*.leonsilicon.ai` and on Hermes Cloud                                                                                                                               |
+| `packages/ai/leonsilicon/configs/<name>/`        | Cronometer as it ran on the Mac mini until 2026-11-21 (kept for reference), the env-file renderer, Unsnooze patching, Silicon Dot's agents-vault, and the Todoist Automations' manifests |
+| `packages/com/leonsilicon/hermes/skills/<name>/` | Agent Skills folders installable with the Hermes skills CLI                                                                                                                              |
+| `apps/hermes-plugin-<name>/`                     | Hermes plugins, installed to `$HERMES_HOME/plugins/<name>/` on Hermes Cloud                                                                                                              |
+| `packages/com/npmjs/`                            | Wrappers for upstream runtime dependencies                                                                                                                                               |
+| `patches.gen/`                                   | Committed versioned diffs generated from codemods                                                                                                                                        |
 
-Worker and CLI applications use `@-apps/<folder>`. Sites use `@-apps/<reverse hostname>`, such as `@-apps/ai.leonsilicon.cronometer`. Importable package names mirror their path beneath `packages/`, joined with dots. For example, `packages/ai/leonsilicon/configs/cloudflare` is `@-/ai.leonsilicon.configs.cloudflare`. Upstream npm packages are wrapped in `packages/com/npmjs/<name>`.
+Worker and CLI applications use `@-apps/<folder>`. Sites use `@-apps/<reverse hostname>`, such as `@-apps/ai.leonsilicon.cronometer`. Native Hermes plugins keep their `@-/com.leonsilicon.hermes.plugins.<name>` package names where present. Importable package names mirror their path beneath `packages/`, joined with dots. For example, `packages/ai/leonsilicon/configs/cloudflare` is `@-/ai.leonsilicon.configs.cloudflare`. Upstream npm packages are wrapped in `packages/com/npmjs/<name>`.
 
 ## Sites
 
@@ -84,7 +84,7 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `cronometer` Worker (Python)  | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
 | `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
 | Hermes skills                 | Install a skill from its repository path. See [Hermes skills](#hermes-skills).                                                                  |
-| Hermes plugins                | Install from the standalone `leonsiliconAI/<name>` Git repository. See [Hermes plugin mirrors](#hermes-plugin-mirrors).                         |
+| Hermes plugins                | Install from `leonsiliconAI/hermes-plugin-<name>`. See [Hermes plugin mirrors](#hermes-plugin-mirrors).                                         |
 | Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
 | Beeper inbox extensions       | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
@@ -103,9 +103,9 @@ hermes skills install leonsilicon/leonsilicon.ai/packages/com/leonsilicon/hermes
 
 ### Hermes plugin mirrors
 
-The plugin sources live under `packages/com/leonsilicon/hermes/plugins/`. Each matching repository in [leonsiliconAI](https://github.com/leonsiliconAI) mirrors that plugin directory at its Git root. The [mirror workflow](.github/workflows/sync-hermes-plugins.yml) runs after successful CI on `main`. It links each mirror commit to its source and advances the mirror by fast-forward only when the plugin files change, so Hermes can pull an update into an existing checkout.
+Each `apps/hermes-plugin-<name>/` directory maps to the root of `leonsiliconAI/hermes-plugin-<name>`. Hermes takes its installed name from `plugin.yaml` and installs it under `$HERMES_HOME/plugins/<name>/`. The [mirror workflow](.github/workflows/sync-hermes-plugins.yml) runs after successful CI on `main`. It links each mirror commit to its source and advances the mirror by fast-forward when the plugin files change, so Hermes can pull an update into an existing checkout.
 
-Install from the mirror using the command in the plugin's README. For existing copies on Hermes Cloud, back up each installed plugin directory outside `$HERMES_HOME/plugins`, compare its files with the mirror, and reinstall from Git with `--force`. Use `--enable` or `--no-enable` to keep its current enabled state. Restart the gateway after replacing the Slack adapter plugins. Run `hermes plugins check-updates` to verify the installs and `hermes plugins auto-update on` to opt the profile into automatic updates.
+Install from the mirror using the command in the plugin's README. GitHub redirects former mirror URLs so existing Git checkouts can fetch from their recorded sources. When replacing a manually installed copy, back up its directory outside `$HERMES_HOME/plugins`, compare its files with the mirror, and reinstall from Git with `--force`. Use `--enable` or `--no-enable` to keep its current enabled state. Restart the gateway after replacing the Slack adapter plugins. Run `hermes plugins check-updates` to verify the installs and `hermes plugins auto-update on` to opt the profile into automatic updates.
 
 The workflow uses a fine-grained GitHub token from the `HERMES_MIRROR_TOKEN` Actions secret in this repository. Scope it to `leonsiliconAI` and the plugin mirrors with Contents read and write. Create a corresponding mirror repository and add it to the token's scope when adding a plugin.
 

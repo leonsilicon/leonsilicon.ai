@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
-export const PLUGINS = "packages/com/leonsilicon/hermes/plugins";
+const APPS = "apps";
+const PLUGIN_APP_PREFIX = "hermes-plugin-";
 
 function git(args: string[], cwd: string, env = process.env): string {
   return execFileSync("git", args, {
@@ -15,8 +16,10 @@ export function mainRevision(url: string, cwd: string): string | undefined {
   return git(["ls-remote", "--refs", url, "refs/heads/main"], cwd).split(/\s+/)[0] || undefined;
 }
 
-export function pluginNames(source: string, cwd: string): string[] {
-  return git(["ls-tree", "-d", "--name-only", `${source}:${PLUGINS}`], cwd).split("\n");
+export function mirrorNames(source: string, cwd: string): string[] {
+  return git(["ls-tree", "-d", "--name-only", `${source}:${APPS}`], cwd)
+    .split("\n")
+    .filter((name) => name.startsWith(PLUGIN_APP_PREFIX));
 }
 
 export function syncMirror({
@@ -34,7 +37,7 @@ export function syncMirror({
   cwd: string;
   env?: NodeJS.ProcessEnv;
 }): string {
-  const directory = `${source}:${PLUGINS}/${name}`;
+  const directory = `${source}:${APPS}/${name}`;
   git(["cat-file", "-e", `${directory}/plugin.yaml`], cwd);
   const tree = git(["rev-parse", "--verify", directory], cwd);
   const existing = mainRevision(fetchUrl, cwd);
