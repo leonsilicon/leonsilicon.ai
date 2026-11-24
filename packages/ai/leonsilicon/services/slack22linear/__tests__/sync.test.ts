@@ -247,7 +247,7 @@ function fakeSlack() {
   const reactions: { channel: string; ts: string; name: string; by: string }[] = [];
   const calls: { who: string; method: string; params: SlackParams }[] = [];
   /** Makes the next matching call fail with a Slack error, once. */
-  const failures: { who: string; method: string; code: string; name?: string }[] = [];
+  const failures: { who: string; method: string; code: string }[] = [];
   /** Leon's starred channels. Slack keeps them apart from custom sections: a channel can be in both. */
   const stars = new Set<string>();
   let seq = 0;
@@ -260,9 +260,7 @@ function fakeSlack() {
     (who: "bot" | "leon" | "autolinear"): SlackCall =>
     async (method, params = {}) => {
       calls.push({ who, method, params });
-      const failure = failures.findIndex(
-        (f) => f.who === who && f.method === method && (!f.name || f.name === params.name),
-      );
+      const failure = failures.findIndex((f) => f.who === who && f.method === method);
       if (failure >= 0) throw new SlackError(method, failures.splice(failure, 1)[0]!.code);
       const me = who === "bot" ? BOT : who === "autolinear" ? AUTO : LEON;
       const member = (c: Channel) => {
@@ -1662,7 +1660,7 @@ test("Hermes's 👀 files the channel under Executing and reacts on Leon's messa
   assert.equal(t.slack.sectionOf(channel.id), "Executing");
   assert.ok(!t.slack.order().includes("Awaiting Init"), "the emptied section is gone");
   assert.equal(t.slack.posts.length, posts);
-  assert.deepEqual(autolinearReactions(t, message), ["seedling", "arrow_right", "gear"]);
+  assert.deepEqual(autolinearReactions(t, message), ["gear"]);
 
   // A second 👀 (Leon wrote again) moves nothing more.
   t.clock.now += 1000;
@@ -1677,10 +1675,10 @@ test("Hermes's 👀 files the channel under Executing and reacts on Leon's messa
   // Linear's webhook for the move finds nothing left to do.
   await t.sync.run("linear", issueHook(issue.id));
   assert.equal(t.slack.posts.length, posts);
-  assert.equal(t.slack.reactions.length, 3);
+  assert.equal(t.slack.reactions.length, 1);
 });
 
-test("the Linear webhook completes a partially reacted acknowledgement on the exact Slack reply", async () => {
+test("the Linear webhook retries the automatic move reaction on the exact Slack reply", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);
   const parent = t.slack.say(channel.id, LEON, "Original message");
@@ -1689,23 +1687,18 @@ test("the Linear webhook completes a partially reacted acknowledgement on the ex
     item: { type: "message", channel: channel.id, ts: reply.ts },
   });
   const posts = t.slack.posts.length;
-  t.slack.failures.push({
-    who: "autolinear",
-    method: "reactions.add",
-    name: "arrow_right",
-    code: "ratelimited",
-  });
+  t.slack.failures.push({ who: "autolinear", method: "reactions.add", code: "ratelimited" });
   await assert.rejects(t.sync.run("slack", reaction), /ratelimited/);
   assert.equal(issue.state.name, "Executing");
-  assert.deepEqual(autolinearReactions(t, reply.ts), ["seedling"]);
+  assert.deepEqual(t.slack.reactions, []);
   await t.sync.run("linear", issueHook(issue.id));
   await t.sync.run("slack", reaction);
   assert.equal(t.slack.posts.length, posts);
-  assert.deepEqual(autolinearReactions(t, reply.ts), ["seedling", "arrow_right", "gear"]);
+  assert.deepEqual(autolinearReactions(t, reply.ts), ["gear"]);
   assert.deepEqual(autolinearReactions(t, parent.ts), []);
 });
 
-test("a status change from an edited Hermes reply reacts to the reply without posting", async () => {
+test("an explicit move to Executing in an edited Hermes reply is silent", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);
   const parent = t.slack.say(channel.id, LEON, "Original message");
@@ -1715,44 +1708,38 @@ test("a status change from an edited Hermes reply reacts to the reply without po
     type: "message",
     subtype: "message_changed",
     channel: channel.id,
-    message: { ...reply, text: `<@${AUTO}> move done` },
+    message: { ...reply, text: `<@${AUTO}> move executing` },
   });
   t.clock.now += COMMAND_SETTLE_MS;
   await t.drain();
-  assert.equal(issue.state.name, "Done");
+  assert.equal(issue.state.name, "Executing");
+  assert.equal(t.slack.sectionOf(channel.id), "Executing");
   assert.equal(t.slack.posts.length, posts);
-  assert.deepEqual(autolinearReactions(t, reply.ts), [
-    "seedling",
-    "arrow_right",
-    "white_check_mark",
-  ]);
-  assert.deepEqual(autolinearReactions(t, parent.ts), []);
+  assert.deepEqual(t.slack.reactions, []);
 });
 
-test("a retried closing command finishes its reactions before archiving", async () => {
+test("a retried closing command archives the channel silently", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t, "Executing");
   const text = `<@${AUTO}> move done`;
   const { ts } = t.slack.say(channel.id, HERMES, text);
   const posts = t.slack.posts.length;
   const job: CommandJob = { channel: channel.id, ts, text, by: "hermes" };
-  t.slack.failures.push({
-    who: "autolinear",
-    method: "reactions.add",
-    name: "white_check_mark",
-    code: "ratelimited",
-  });
+  t.slack.failures.push(
+    { who: "bot", method: "conversations.archive", code: "ratelimited" },
+    { who: "leon", method: "conversations.archive", code: "ratelimited" },
+  );
   await assert.rejects(t.sync.run("command", job), /ratelimited/);
-  assert.deepEqual(autolinearReactions(t, ts), ["gear", "arrow_right"]);
   assert.equal(issue.state.name, "Done");
   assert.equal(channel.archived, false);
 
-  await t.sync.run("command", job);
   await t.sync.run("linear", issueHook(issue.id));
-  assert.deepEqual(autolinearReactions(t, ts), ["gear", "arrow_right", "white_check_mark"]);
+  await t.sync.run("command", job);
+  assert.deepEqual(t.slack.reactions, []);
   assert.equal(t.linear.updates.length, 1);
   assert.equal(t.slack.posts.length, posts);
   assert.equal(channel.archived, true);
+  assert.equal(t.store.commandMove(issue.id), null);
 });
 
 /** Hermes's command for Autolinear, at the end of a post of its own, read once the settle time has passed. */
@@ -1803,7 +1790,7 @@ test("Hermes's answer moves nothing; Autolinear reminds it, and its command move
   const command = await hermesCommands(t, channel.id, "move done", "Nothing left here.");
   assert.equal(issue.state.name, "Done");
   assert.equal(channel.archived, true);
-  assert.deepEqual(autolinearReactions(t, command), ["gear", "arrow_right", "white_check_mark"]);
+  assert.deepEqual(autolinearReactions(t, command), []);
   assert.equal(t.slack.posts.length, posts + 1, "only the reminder was posted");
   await hermesReacts(t, channel.id, reminder!.ts);
   assert.equal(autolinearPosts(t, posts).length, 1, "no second reminder");
@@ -1827,7 +1814,7 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   assert.equal(issue.title, "testing autolinear");
   assert.deepEqual(issueWorkflow(issue), { event: "Rogers BYOD deal", stop: "2026-12-01" });
   assert.equal(t.slack.sectionOf(channel.id), "Awaiting Listener");
-  assert.deepEqual(autolinearReactions(t, command), ["gear", "arrow_right", "bell"]);
+  assert.deepEqual(autolinearReactions(t, command), []);
   await hermesReacts(t, channel.id, message);
   assert.equal(autolinearPosts(t, posts).length, 0, "the turn said what to do");
 
@@ -1845,7 +1832,7 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   assert.equal(issue.state.name, "Awaiting Others");
   assert.deepEqual(issueWorkflow(issue), { who: "Rogers support" });
   const sameStatus = await hermesCommands(t, channel.id, 'move others who="Rogers billing"');
-  assert.deepEqual(autolinearReactions(t, sameStatus), ["white_check_mark"]);
+  assert.deepEqual(autolinearReactions(t, sameStatus), []);
   assert.deepEqual(issueWorkflow(issue), { who: "Rogers billing" });
   assert.deepEqual(JSON.parse(t.issueMetadata.snapshot())[0].meta, { who: "Rogers billing" });
 
@@ -1855,18 +1842,14 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   assert.equal(issue.title, "testing autolinear");
   assert.equal(channel.name, "leon-427-testing-autolinear");
 
-  // A handoff to Leon uses the same reaction sequence.
+  // Hermes can hand the issue to Leon silently.
   t = setup();
   ({ issue, channel } = await issueChannel(t));
   const priorPosts = t.slack.posts.length;
   const handoff = await hermesCommands(t, channel.id, "move leon", "Plan B saves $8 a month.");
   assert.equal(issue.state.name, "Awaiting Leon");
   assert.equal(t.slack.posts.length, priorPosts);
-  assert.deepEqual(autolinearReactions(t, handoff), [
-    "seedling",
-    "arrow_right",
-    "bust_in_silhouette",
-  ]);
+  assert.deepEqual(autolinearReactions(t, handoff), []);
 });
 
 test("stay keeps the status, and a command in an edit is read once Hermes stops editing, once", async () => {
@@ -1892,9 +1875,7 @@ test("stay keeps the status, and a command in an edit is read once Hermes stops 
   assert.equal(t.slack.reactions.length, 0, "still settling after the last edit");
   t.clock.now += 1;
   await t.drain();
-  assert.deepEqual(t.slack.reactions, [
-    { channel: channel.id, ts, name: "white_check_mark", by: "autolinear" },
-  ]);
+  assert.deepEqual(t.slack.reactions, []);
   assert.equal(issue.state.name, "Executing");
   assert.equal(autolinearPosts(t).length, 0, "the half-written command got no answer");
 
@@ -2029,7 +2010,7 @@ test("a handoff in Linear pings Hermes and starts Executing when Hermes takes it
   );
   assert.equal(issue.state.name, "Executing");
   assert.equal(t.slack.posts.at(-1)!.ts, ping.ts);
-  assert.deepEqual(autolinearReactions(t, ping.ts), ["robot_face", "arrow_right", "gear"]);
+  assert.deepEqual(autolinearReactions(t, ping.ts), ["gear"]);
 });
 
 test("Hermes's turn on a bot's ping owes a command as well", async () => {

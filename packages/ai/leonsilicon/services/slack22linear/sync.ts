@@ -138,7 +138,6 @@ export interface CommandJob {
 interface Outcome {
   ok: boolean;
   text: string;
-  statusChanged?: boolean;
 }
 
 export interface SyncDeps {
@@ -157,8 +156,8 @@ export interface SyncDeps {
   /** The bot's own Slack user ID, when the caller already knows it; else `auth.test` finds it. */
   botUserId?: string;
   /**
-   * Autolinear's bot (Leon's rule, 2026-11-23): it reminds Hermes to say what to do with an issue
-   * channel and confirms Hermes's commands. Without it, nothing is posted for commands.
+   * Autolinear's bot reacts to automatic moves, reminds Hermes when it owes a command, and
+   * explains command failures.
    */
   autolinear?: SlackCall | null;
   /** Answers Leon's `/autolinear` at Slack's `response_url`. Tests pass a fake. */
@@ -958,8 +957,8 @@ export class Sync {
   /**
    * A command for Autolinear (Leon's rule, 2026-11-23; `#command`): from the last line of Hermes's
    * message that starts with Autolinear's mention, or from Leon's `/autolinear`. `move` goes through
-   * at once, with its workflow details, and the channel follows; `stay` keeps the status. Autolinear
-   * reacts to successful commands and explains failures to Hermes so it can try again. Leon's slash
+   * at once, with its workflow details, and the channel follows; `stay` keeps the status. Successful
+   * Hermes commands run silently. Autolinear explains failures so Hermes can try again. Leon's slash
    * command gets its answer privately. Each message acts once.
    */
   async onCommand(job: CommandJob): Promise<void> {
@@ -978,19 +977,13 @@ export class Sync {
       if (moved) {
         // A previous attempt wrote to Linear. Finish syncing even if the command closed the issue.
         await this.syncIssue(issue, "live");
-        outcome = {
-          ok: true,
-          text: `${issue.identifier} is now *${move.toState}*.`,
-          statusChanged: true,
-        };
+        outcome = { ok: true, text: `${issue.identifier} is now *${move.toState}*.` };
       } else if (open) outcome = await this.#command(issue, words, job);
       else outcome = { ok: false, text: "This isn't the channel of an open issue." };
       if (job.by === "leon") {
         if (job.responseUrl) await this.#respond(job.responseUrl, outcome.text);
       } else if (!outcome.ok)
         await this.#askHermes(issue!, job.channel, outcome.text, job.threadTs ?? job.ts);
-      else if (!outcome.statusChanged)
-        await this.#react(job.channel, job.ts, [this.#c.hermesAnsweredReaction]);
       if (outcome.ok && issue) {
         this.#store.markFired(workedKey(job.channel, job.ts), this.#now());
         this.#store.dropAck(issue.id);
@@ -1061,8 +1054,7 @@ export class Sync {
     }
     if (!Object.keys(update).length)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
-    const statusChanged = update.stateId !== undefined;
-    if (statusChanged)
+    if (update.stateId !== undefined)
       this.#store.putCommandMove({
         issueId: issue.id,
         ts: job.ts,
@@ -1075,7 +1067,7 @@ export class Sync {
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved) await this.syncIssue(moved, "live");
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
-    return { ok: true, text: `${issue.identifier} is now *${to}*.`, statusChanged };
+    return { ok: true, text: `${issue.identifier} is now *${to}*.` };
   }
 
   /**
@@ -1804,11 +1796,19 @@ export class Sync {
     const to = issue.state.name;
     const command = this.#store.commandMove(issue.id);
     const move = command?.toState === to ? command : null;
-    if (move?.by === "hermes") return this.#reactToMove(channelId, move.ts, move.fromState, to);
+    if (move?.by === "hermes") return;
     if (!move && to === this.#c.hermesAckState) {
       const ack = this.#store.ack(issue.id);
       if (ack?.at === null) {
-        if (ack.messageTs) await this.#reactToMove(channelId, ack.messageTs, ack.fromState, to);
+        if (ack.messageTs && this.#autolinear)
+          await tolerate(
+            this.#autolinearCall("reactions.add", {
+              channel: channelId,
+              timestamp: ack.messageTs,
+              name: STATUS_REACTIONS.get(to) ?? "gear",
+            }),
+            ["already_reacted", "message_not_found", ...ARCHIVED],
+          );
         return;
       }
     }
@@ -1822,26 +1822,6 @@ export class Sync {
       }),
       ARCHIVED,
     );
-  }
-
-  #reactToMove(channel: string, timestamp: string, from: string, to: string): Promise<void> {
-    return this.#react(channel, timestamp, [
-      STATUS_REACTIONS.get(from) ?? "white_circle",
-      "arrow_right",
-      STATUS_REACTIONS.get(to) ?? "black_circle",
-    ]);
-  }
-
-  async #react(channel: string, timestamp: string, names: string[]): Promise<void> {
-    if (!this.#autolinear) return;
-    for (const name of names) {
-      // Slack displays reactions in the order they were added. On retry, skip those already there.
-      await tolerate(this.#autolinearCall("reactions.add", { channel, timestamp, name }), [
-        "already_reacted",
-        "message_not_found",
-        ...ARCHIVED,
-      ]);
-    }
   }
 
   /** `lead` replaces the description's excerpt; `quiet` mentions no one. */
