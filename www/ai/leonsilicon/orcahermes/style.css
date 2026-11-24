@@ -83,3 +83,39 @@ code {
   font-size: 0.925em;
   overflow-wrap: anywhere;
 }
+
+.install-link {
+  display: inline-block;
+  margin-top: 0.9rem;
+  font-weight: 650;
+}
+
+.command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid light-dark(#c8d8d1, #3c514c);
+  border-radius: 0.5rem;
+  background: light-dark(#eaf2ee, #1b2926);
+}
+
+.command pre {
+  flex: 1 1 26rem;
+  min-width: 0;
+  order: -1;
+  margin: 0;
+  overflow: auto;
+  font-size: 0.875rem;
+}
+
+.command button {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}

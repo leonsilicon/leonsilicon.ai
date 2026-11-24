@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Install OrcaHermes on a new managed Hermes Linux host." />
+    <title>Install OrcaHermes</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./setup.ts"></script>
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="/">Overview</a>
+      <a href="/setup.html" aria-current="page">Install</a>
+      <a href="/server.html">Server</a>
+      <a href="https://orcahermes-supervisor.leonsilicon.ai/">Supervisor</a>
+      <a href="/platform.html">Platform</a>
+    </nav>
+    <main>
+      <header>
+        <h1>Install OrcaHermes</h1>
+        <p>Set up an always-available Orca server on your own Hermes instance.</p>
+      </header>
+      <section aria-labelledby="requirements">
+        <h2 id="requirements">What you need</h2>
+        <ul>
+          <li>A shell on a managed Hermes Linux host, as the account that runs Hermes.</li>
+          <li>Linux x86-64 or arm64, Python 3.12 or newer, Bash, and curl.</li>
+          <li>
+            A persistent <code>/opt/data</code> mount and the writable Hermes s6 service tree.
+          </li>
+          <li>
+            Orca on your computer and a Tailscale admin who can configure MagicDNS, HTTPS, and
+            access rules.
+          </li>
+        </ul>
+        <p>
+          This installer checks the host before registering services. For a self-hosted Hermes
+          deployment with a different service manager, use
+          <a href="https://orca.dev/docs/remote-servers#orca-serve-as-a-service"
+            >Orca’s service setup</a
+          >.
+        </p>
+      </section>
+      <section aria-labelledby="install">
+        <h2 id="install">1. Install on the Hermes host</h2>
+        <p>
+          Run this in a shell on the host. The installer verifies the publisher’s checksums and
+          places Orca, Tailscale, and Codex under <code>/opt/data/orcahermes</code>. It uses the
+          existing service manager to start Orca and the private network daemon at boot.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="install-command" hidden>Copy</button>
+          <pre id="install-command">
+installer=$(mktemp) &amp;&amp;
+curl --proto '=https' -fsSL https://orcahermes.leonsilicon.ai/install.py -o "$installer" &amp;&amp;
+python3 "$installer" install</pre>
+        </div>
+        <p>
+          <a href="/install.py" download="install-orcahermes.py">Download the installer source</a>
+        </p>
+      </section>
+      <section aria-labelledby="network">
+        <h2 id="network">2. Connect your private network</h2>
+        <p>
+          In the Tailscale admin console, enable MagicDNS and HTTPS. Add the
+          <code>tag:orcahermes</code> device tag and give your Orca users access to it only on TCP
+          port <code>16768</code>. Merge these entries into your tailnet policy and replace the
+          example account with your own.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="policy-example" hidden>Copy</button>
+          <pre id="policy-example">
+{
+  "tagOwners": { "tag:orcahermes": ["autogroup:admin"] },
+  "grants": [{
+    "src": ["you@example.com"],
+    "dst": ["tag:orcahermes"],
+    "ip": ["tcp:16768"]
+  }]
+}</pre>
+        </div>
+        <p>
+          Tailscale rules are additive. Narrow any broader rule that covers this device, since
+          userspace networking can forward other listening ports when policy grants access.
+          <a href="https://tailscale.com/docs/reference/syntax/grants">Tailscale grants</a>
+        </p>
+        <p>
+          Pick a unique lowercase name for this host. Open the Tailscale sign-in link printed by the
+          command and authorize the tagged device. If sign-in times out, rerun the command to finish
+          setup.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="network-command" hidden>Copy</button>
+          <pre id="network-command">
+python3 /opt/data/orcahermes/orcahermes.py network my-orcahermes</pre>
+        </div>
+        <p>
+          The command prints the private TLS endpoint after Tailscale Serve is configured.
+          <a href="https://tailscale.com/docs/reference/tailscale-cli/serve"
+            >Tailscale Serve documentation</a
+          >
+        </p>
+      </section>
+      <section aria-labelledby="pair">
+        <h2 id="pair">3. Pair an Orca client</h2>
+        <p>
+          Generate the pairing link in your private shell. The command briefly restarts Orca to
+          issue the offer and waits for the supervised service to return.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="pair-command" hidden>Copy</button>
+          <pre id="pair-command">python3 /opt/data/orcahermes/orcahermes.py pair</pre>
+        </div>
+        <p>
+          On your computer, connect to the same tailnet. In Orca, go to
+          <strong>Settings → Remote Orca Servers → Add Server</strong> and paste the link. Choose a
+          display name for the server, connect, and add a project from the host.
+          <a href="https://orca.dev/docs/remote-servers">Orca pairing documentation</a>
+        </p>
+      </section>
+      <section aria-labelledby="codex">
+        <h2 id="codex">4. Sign in to Codex if you use it</h2>
+        <p>
+          Follow the device sign-in instructions printed by Codex on the host. Then open a fresh
+          Orca terminal on the remote server and run <code>codex login status</code>.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="codex-command" hidden>Copy</button>
+          <pre id="codex-command">python3 /opt/data/orcahermes/orcahermes.py codex</pre>
+        </div>
+      </section>
+      <section aria-labelledby="verify">
+        <h2 id="verify">Verify your setup</h2>
+        <p>
+          Check both services and the local Orca request, then open a terminal on the paired host.
+          The host keeps its own projects and sessions under <code>/opt/data</code>.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="status-command" hidden>Copy</button>
+          <pre id="status-command">python3 /opt/data/orcahermes/orcahermes.py status</pre>
+        </div>
+        <p>
+          If a service fails to start, read its rotating log under
+          <code>/opt/data/orcahermes/logs</code>. Re-running the installer resumes an incomplete
+          setup. An unrecognized OrcaHermes installation is left in place.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
