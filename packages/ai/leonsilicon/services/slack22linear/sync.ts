@@ -1,6 +1,13 @@
 import type { IssueMetadata } from "#issue-metadata";
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
-import { AWAITING_PREFIX, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
+import {
+  AWAITING_HERMES,
+  AWAITING_PREFIX,
+  commandLine,
+  commandUsage,
+  matchStatus,
+  parseCommand,
+} from "#command";
 import type { AutolinearCommand } from "#command";
 import type { SyncConfig } from "#config";
 import {
@@ -132,8 +139,6 @@ export interface CommandJob {
   /** Where Leon's slash command is answered (Slack's `response_url`, ephemeral). */
   responseUrl?: string;
 }
-
-type ResumeJob = Pick<CommandJob, "channel" | "ts" | "threadTs">;
 
 /** What a command came to: told back to Leon, or to Hermes when it didn't work. */
 interface Outcome {
@@ -291,12 +296,8 @@ const saidKey = (channel: string, ts = "") => `said:${channel}:${ts}`;
 const doneKey = (channel: string, ts = "") => `done:${channel}:${ts}`;
 const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
 const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
-const resumeKey = (channel: string, threadTs?: string, ts = "") =>
-  `resume-hermes:${channel}:${threadTs ?? "channel"}:${ts}`;
-const AWAITING_HERMES = "Awaiting Hermes";
-// A Slack Puppet post from Autolinear must reach Hermes's adapter as a new request.
-// The shared Slack Puppet marker would make Hermes's own-message guard discard it.
-const RESUME_MSG_ID_PREFIX = "a7011eaf";
+// Ignore late Slack deliveries of continuation messages sent before the command was retired.
+const RETIRED_RESUME_MSG_ID_PREFIX = "a7011eaf-";
 /** A notice for a due time (not a bare day) this late says "Overdue". */
 const LATE_MS = 3600_000;
 
@@ -375,7 +376,7 @@ export class Sync {
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
-    else if (kind === "resume-hermes") await this.#resumeHermes(payload as ResumeJob);
+    else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
     else if (kind === "tick") {
       await this.tick();
       await this.#publishProjectVisibility();
@@ -859,7 +860,7 @@ export class Sync {
     if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
-    if (event.client_msg_id?.startsWith(`${RESUME_MSG_ID_PREFIX}-`)) return;
+    if (event.client_msg_id?.startsWith(RETIRED_RESUME_MSG_ID_PREFIX)) return;
     const rec = this.#store.issueByChannel(event.channel);
     if (!rec || rec.archived) return;
     if (this.#store.commentBySlack(event.channel, event.ts)) return;
@@ -1110,12 +1111,11 @@ export class Sync {
     job: CommandJob,
   ): Promise<Outcome> {
     const fail = (why: string) => ({ ok: false, text: `I couldn't do that: ${why}.` });
-    const names = [...(await this.#stateIds()).keys()];
+    const names = [...(await this.#stateIds()).keys()].filter(
+      (name) => name.toLowerCase() !== AWAITING_HERMES.toLowerCase(),
+    );
     const to = matchStatus(command.status, names);
     if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
-    const resume = job.by === "hermes" && to === AWAITING_HERMES;
-    if (resume && !this.#session)
-      return fail("Slack Puppet's session is unavailable. Use `move executing` for active work");
     const { name, meta } = parseTitle(issue.title);
     const { who, ...keys } = command.keys;
     let base = name.replace(AWAITING_PREFIX, "");
@@ -1142,24 +1142,14 @@ export class Sync {
     const update: IssueUpdate = {};
     if (to !== issue.state.name) update.stateId = await this.#stateId(to);
     if (title !== issue.title) update.title = title;
-    if (!Object.keys(update).length && !resume)
+    if (!Object.keys(update).length)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
     const threadTs =
       job.by === "hermes"
         ? (job.threadTs ?? (await this.#messageThread(job.channel, job.ts)))
         : undefined;
-    const followUp: ResumeJob = {
-      channel: job.channel,
-      ts: job.ts,
-      ...(threadTs && threadTs !== job.ts ? { threadTs } : {}),
-    };
-    if (resume && this.#alreadyResumed(followUp))
-      return fail(
-        "I've already sent a continuation prompt here. Use `move executing` for active work or give the status of the current blocker",
-      );
-    const changed = Object.keys(update).length > 0;
-    if (changed) await this.#linear.updateIssue(issue.id, update);
-    const moved = changed ? await this.#linear.issue(issue.id) : issue;
+    await this.#linear.updateIssue(issue.id, update);
+    const moved = await this.#linear.issue(issue.id);
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved)
       await this.syncIssue(moved, "live", {
@@ -1168,44 +1158,8 @@ export class Sync {
         quietHermes: job.by === "hermes",
         quietLeon: job.by === "leon" || mentions(job.text, this.#c.leonUserId),
       });
-    if (resume && moved?.state.name === to)
-      this.#store.enqueue(
-        resumeKey(followUp.channel, followUp.threadTs, followUp.ts),
-        "resume-hermes",
-        followUp,
-        this.#now(),
-      );
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
     return { ok: true, text: `${issue.identifier} is now *${to}*.` };
-  }
-
-  /** One automatic follow-up per conversation until someone writes again. */
-  #alreadyResumed({ channel, threadTs, ts }: ResumeJob): boolean {
-    const lastMessage = this.#store.lastSpoke(channel);
-    const since = lastMessage ? slackTsMs(lastMessage) : 0;
-    const key = resumeKey(channel, threadTs, ts);
-    return this.#store
-      .firedSince(resumeKey(channel, threadTs), since)
-      .some((entry) => entry.key !== key);
-  }
-
-  async #resumeHermes(job: ResumeJob): Promise<void> {
-    const { channel, ts, threadTs } = job;
-    const key = resumeKey(channel, threadTs, ts);
-    if (this.#store.fired(key) || this.#alreadyResumed(job) || this.#store.spokeAfter(channel, ts))
-      return;
-    const issue = await this.#openIssueIn(channel);
-    if (!issue || issue.state.name !== AWAITING_HERMES) return;
-    if (!this.#session) throw new Error("Slack Puppet's session is unavailable");
-    const uuid = await stableUuid(key);
-    await this.#session("chat.postMessage", {
-      channel,
-      thread_ts: threadTs,
-      client_msg_id: `${RESUME_MSG_ID_PREFIX}${uuid.slice(8)}`,
-      text: `<@${this.#c.hermesUserId}> Please pick up ${issue.identifier} from where you left off and take the next available step. If work is already running, use \`move executing\`. If you need input or hit a blocker, say what's needed and move the issue to the corresponding status. _(Automatic follow-up from Autolinear.)_`,
-      unfurl_links: false,
-    });
-    this.#store.markFired(key, this.#now());
   }
 
   /**

@@ -1941,68 +1941,37 @@ test("a turn Leon wrote after is skipped: the turn on his newer message counts",
   assert.equal(issue.state.name, "Executing");
 });
 
-test("Hermes's handoff sends one continuation from Leon and returns to Executing on acknowledgement", async () => {
+test("Autolinear rejects a handoff to Hermes without changing the issue", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t, "Executing");
   const posts = t.slack.posts.length;
   const ts = await hermesCommands(t, channel.id, "move hermes", "I'll pick this up next.");
-  assert.equal(issue.state.name, "Awaiting Hermes");
-  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Hermes");
-  const [status, prompt] = t.slack.posts.slice(posts);
-  assert.equal(status!.text, "*Executing* → *Awaiting Hermes* (Hermes told Autolinear)");
-  assert.equal(status!.thread_ts, ts);
-  assert.equal(prompt!.user, LEON);
-  assert.equal(prompt!.thread_ts, undefined);
-  assert.ok(prompt!.text.startsWith(`<@${HERMES}> Please pick up LEON-427`));
-  assert.ok(prompt!.text.includes("`move executing`"));
-  assert.ok(prompt!.client_msg_id);
-  assert.ok(!prompt!.client_msg_id.startsWith("de1e6a7e-"), "Hermes's guard lets it through");
-
-  await t.sync.run("slack", { ...prompt, type: "message" });
-  assert.equal(t.linear.comments.size, 0, "the automated prompt is not mirrored as Leon's words");
-  await hermesReacts(t, channel.id, prompt!.ts, "eyes");
+  const [reply] = t.slack.posts.slice(posts);
+  assert.equal(t.slack.posts.length, posts + 1);
+  assert.equal(reply!.user, AUTO);
+  assert.equal(reply!.thread_ts, ts);
+  assert.match(reply!.text, /Awaiting Hermes is only available in Linear/);
   assert.equal(issue.state.name, "Executing");
-  assert.equal(t.slack.sectionOf(channel.id), "Executing");
+  assert.equal(t.linear.updates.length, 0);
 
-  await hermesCommands(t, channel.id, 'move "Awaiting Hermes"');
-  assert.equal(t.slack.posts.filter((post) => post.user === LEON).length, 1);
-  assert.equal(issue.state.name, "Executing", "a repeated handoff cannot start an automatic loop");
-  assert.ok(autolinearPosts(t).at(-1)!.text.includes("already sent a continuation prompt"));
+  await hermesCommands(t, channel.id, "move executing", "I handed this off.");
+  assert.equal(issue.state.name, "Executing");
+  assert.equal(t.slack.posts.length, posts + 1);
 });
 
-test("a failed Slack Puppet send retries the prompt in the original thread without moving twice", async () => {
+test("a queued continuation from an earlier deployment is discarded", async () => {
   const t = setup();
-  const { issue, channel } = await issueChannel(t, "Executing");
-  const parent = t.slack.say(channel.id, LEON, "Original message");
-  const reply = t.slack.say(channel.id, HERMES, `<@${AUTO}> move "Awaiting Hermes"`, {
-    thread_ts: parent.ts,
-  });
-  await t.sync.run("slack", { ...reply, type: "message" });
-  t.slack.failures.push({ who: "leon", method: "chat.postMessage", code: "ratelimited" });
-  t.clock.now += COMMAND_SETTLE_MS;
-  await assert.rejects(t.drain(), /ratelimited/);
-  assert.equal(issue.state.name, "Awaiting Hermes");
-  assert.equal(t.linear.updates.length, 1);
-  await t.drain();
-  const sends = t.slack.calls.filter(
-    ({ who, method }) => who === "leon" && method === "chat.postMessage",
-  );
-  assert.equal(sends.length, 2);
-  assert.equal(sends[0]!.params.client_msg_id, sends[1]!.params.client_msg_id);
-  assert.equal(t.slack.posts.at(-1)!.thread_ts, parent.ts);
-  assert.equal(t.linear.updates.length, 1);
+  const { channel } = await issueChannel(t, "Awaiting Hermes");
+  const posts = t.slack.posts.length;
+  await t.sync.run("resume-hermes", { channel: channel.id, ts: "1794000000.000001" });
+  assert.equal(t.slack.posts.length, posts);
 });
 
-test("a handoff from Leon pings Hermes and starts Executing when Hermes takes it up", async () => {
+test("a handoff in Linear pings Hermes and starts Executing when Hermes takes it up", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t, "Executing");
-  await t.sync.run("command", {
-    channel: channel.id,
-    ts: "slash-1",
-    text: "move hermes",
-    by: "leon",
-  });
-  assert.equal(issue.state.name, "Awaiting Hermes");
+  issue.state = state("Awaiting Hermes");
+  await t.sync.run("linear", issueHook(issue.id));
   const ping = t.slack.posts.at(-1)!;
   assert.equal(ping.user, BOT);
   assert.ok(ping.text.includes(`<@${HERMES}>`));

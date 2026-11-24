@@ -171,6 +171,8 @@ async def test_other_users_and_commands_are_answered_in_place(adapter, intake, e
     turn = _turn(adapter)
     assert turn.source.chat_id == event["channel"]
     assert plugin._handoff_prompt() not in (turn.channel_prompt or "")
+    assert ("hand off every task to another agent" in (turn.channel_prompt or "")) == (
+        event["channel"] == GENERAL)
 
 
 @pytest.mark.asyncio
@@ -199,6 +201,9 @@ async def test_anyones_turn_in_an_issue_channel_gets_the_rule_with_autolinears_m
     assert turn.source.chat_id == ISSUE
     assert turn.channel_prompt.endswith(plugin._handoff_prompt())
     assert "Start that line with <@U0AUTOLIN01>, written exactly so" in turn.channel_prompt
+    assert "hand off every task to another agent" in turn.channel_prompt
+    assert "`move executing` (a delegated agent is working on it)" in turn.channel_prompt
+    assert "move hermes" not in turn.channel_prompt
 
 
 def test_without_the_bots_id_the_rule_asks_for_a_plain_mention(monkeypatch):

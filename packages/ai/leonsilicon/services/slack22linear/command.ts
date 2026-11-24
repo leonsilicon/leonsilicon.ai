@@ -10,8 +10,8 @@
  * @Autolinear help
  * ```
  *
- * `<status>` is a Linear status of the team, with or without "Awaiting": `done`, `leon`,
- * `"Awaiting Others"`. Values with spaces are double-quoted.
+ * `<status>` is a Linear status available to Autolinear, with or without "Awaiting": `done`,
+ * `leon`, `"Awaiting Others"`. Values with spaces are double-quoted.
  */
 
 export type AutolinearCommand =
@@ -23,6 +23,7 @@ export type ParsedCommand = { ok: true; command: AutolinearCommand } | { ok: fal
 
 /** Title keys a `move` may set: Awaiting Others' `who` (the title's `[AWAITING: …]`), and metadata. */
 export const COMMAND_KEYS = ["who", "start", "event", "stop", "due"] as const;
+export const AWAITING_HERMES = "Awaiting Hermes";
 
 /** What Hermes writes after Autolinear's mention (or Leon after `/autolinear`), as Slack mrkdwn. */
 export function commandUsage(lead: string): string {
@@ -33,7 +34,6 @@ export function commandUsage(lead: string): string {
     `\`${lead} move listener event="Rogers BYOD deal" stop=2026-12-01\`: waiting for something to happen`,
     `\`${lead} move date start=2026-12-01T09:00:00-05:00\`: work starts later`,
     `\`${lead} move executing\`: work is already underway`,
-    `\`${lead} move hermes\`: Hermes needs to pick up the task`,
     `\`${lead} stay\`: leave the status as it is`,
   ]
     .map((line) => `• ${line}`)
@@ -115,7 +115,10 @@ export function parseCommand(words: string): ParsedCommand {
         keys[key] = value;
       }
       if (!words.length) return { ok: false, error: "`move` needs a status, such as `move done`" };
-      return { ok: true, command: { verb: "move", status: words.join(" "), keys } };
+      const status = words.join(" ");
+      if (matchStatus(status, [AWAITING_HERMES]))
+        return { ok: false, error: "Awaiting Hermes is only available in Linear" };
+      return { ok: true, command: { verb: "move", status, keys } };
     }
     case "":
       return { ok: false, error: "there's no command after my name" };

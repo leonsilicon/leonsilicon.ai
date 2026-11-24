@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AWAITING_PREFIX, commandLine, matchStatus, parseCommand } from "#command";
+import { AWAITING_PREFIX, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
 
 const AUTO = "U0AUTOLIN01";
 
@@ -72,4 +72,13 @@ test("a status matches without regard to case, with or without Awaiting", () => 
   assert.equal(matchStatus("executing", statuses), "Executing");
   assert.equal(matchStatus("lion", statuses), null);
   assert.equal("[AWAITING: Apple App Review] ship it".replace(AWAITING_PREFIX, ""), "ship it");
+});
+
+test("Awaiting Hermes is only available in Linear", () => {
+  for (const words of ["move hermes", "move Awaiting Hermes", "MOVE “Awaiting  HERMES”."])
+    assert.deepEqual(parseCommand(words), {
+      ok: false,
+      error: "Awaiting Hermes is only available in Linear",
+    });
+  assert.doesNotMatch(commandUsage("@Autolinear"), /move hermes/i);
 });

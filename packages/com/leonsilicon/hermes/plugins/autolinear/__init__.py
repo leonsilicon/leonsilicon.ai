@@ -18,8 +18,8 @@ live Slack adapter:
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
   thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there.
 
-Every turn in an issue channel, new or existing, whoever started it, gets Autolinear's rule in its
-channel prompt (Leon's rule, 2026-11-23): end the turn with one line that starts with Autolinear's
+Slack task turns get Leon's delegation rule in their channel prompt. Every turn in an issue
+channel also gets Autolinear's rule: end the turn with one line that starts with Autolinear's
 mention and says what to do with the channel (``move done``, ``move leon``, ``stay``…). Nothing
 moves on Hermes's answer otherwise, and Autolinear reminds Hermes when a turn ends without one.
 
@@ -76,6 +76,13 @@ _THREAD_KEYS = (
     "latest_reply", "replies", "subscribed", "last_read", "edited", "_slack_changed_event_ts",
 )
 _MENTION = re.compile(r"<@([UW][A-Z0-9]+)")
+_DELEGATION_PROMPT = (
+    "Leon's rule: always hand off every task to another agent before starting the work. "
+    "Use your task-routing tools to dispatch it and give the agent the context it needs. "
+    "You own the coordination, follow-up, and reporting. Route any remaining work back to the "
+    "assigned agent or hand it to another available agent. If a handoff fails, try another agent. "
+    "If no agent can take it, report what blocked delegation."
+)
 
 
 def _handoff_prompt() -> str:
@@ -84,6 +91,7 @@ def _handoff_prompt() -> str:
     bot = os.environ.get(BOT_ENV, "").strip()
     mention = f"<@{bot}>" if bot else "@Autolinear"
     return (
+        f"{_DELEGATION_PROMPT}\n\n"
         "Autolinear (Leon's rule, November 23, 2026): this is a Linear issue's channel, and every "
         "turn you finish here must end with one line of its own that tells Autolinear what to do "
         f"with the channel. Start that line with {mention}, written exactly so, then one of: "
@@ -92,8 +100,7 @@ def _handoff_prompt() -> str:
         "`move others who=\"<who>\"` (waiting on someone else), "
         "`move listener event=\"<what>\" stop=YYYY-MM-DD` (waiting for something to happen), "
         "`move date start=<RFC 3339 time or YYYY-MM-DD>` (work starts later), "
-        "`move executing` (work is underway, including work you delegated), "
-        "`move hermes` (you need a new turn to continue; Autolinear sends a follow-up), or "
+        "`move executing` (a delegated agent is working on it), or "
         "`stay` (leave the status as it is). "
         "Only that line moves the issue: mentioning Leon moves nothing, and you don't set this "
         "status in Linear yourself. When you forget, Autolinear reminds you here; answer it with "
@@ -259,9 +266,10 @@ def _note(result: dict) -> str:
         "answer here and keep the conversation here.]")
 
 
-def _add_handoff_prompt(msg_event) -> None:
+def _add_task_prompt(msg_event, *, in_issue_channel: bool) -> None:
+    prompt = _handoff_prompt() if in_issue_channel else _DELEGATION_PROMPT
     msg_event.channel_prompt = "\n\n".join(
-        filter(None, (msg_event.channel_prompt, _handoff_prompt())))
+        filter(None, (msg_event.channel_prompt, prompt)))
 
 
 def _remember(adapter, team_id: str, channel_id: str, name: str) -> None:
@@ -342,12 +350,12 @@ def wire(native, adapter) -> None:
         return accepted
 
     async def build_in_place(settings, event, *args, **kwargs):
-        """The turn where the message is; one in an issue channel gets Autolinear's rule, whoever
-        started it (Leon, a bot's ping, Autolinear's reminder)."""
+        """In-place Slack turns get the delegation rule, plus Autolinear's rule in issue channels."""
         msg_event = await build(event, *args, **kwargs)
-        if (settings is not None and msg_event is not None and not kwargs.get("is_command_text")
-                and settings["issue_channel"].match(msg_event.source.chat_name or "")):
-            _add_handoff_prompt(msg_event)
+        if msg_event is not None and not kwargs.get("is_command_text"):
+            in_issue_channel = settings is not None and bool(
+                settings["issue_channel"].match(msg_event.source.chat_name or ""))
+            _add_task_prompt(msg_event, in_issue_channel=in_issue_channel)
         return msg_event
 
     @functools.wraps(build)
@@ -374,9 +382,9 @@ def wire(native, adapter) -> None:
             logger.warning(
                 "autolinear: could not build the turn in %s; answering in place",
                 moved_kwargs["channel_id"], exc_info=True)
-            return await build(event, *args, **kwargs)
+            return await build_in_place(settings, event, *args, **kwargs)
         if msg_event is not None:
-            _add_handoff_prompt(msg_event)
+            _add_task_prompt(msg_event, in_issue_channel=True)
         copy_ts, team_id = moved_kwargs["ts"], str(moved_kwargs.get("team_id") or "")
         try:
             # Hermes's ✅ on the copy is what marks the answer done, so it always gets the lifecycle.

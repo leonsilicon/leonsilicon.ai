@@ -77,15 +77,14 @@ Slack runs slash commands only for people, so Hermes writes the command as a men
 @Autolinear move listener event="Rogers BYOD deal" stop=2026-12-01
 @Autolinear move date start=2026-12-01T09:00:00-05:00
 @Autolinear move executing
-@Autolinear move hermes
 @Autolinear stay
 @Autolinear help
 ```
 
-- **Reading it (`#command`).** `commandLine` finds the last line that starts with the mention: Slack's `<@U…>` token, or a plain `@Autolinear`, since Hermes's Slack adapter shows Hermes every mention as `@Name` and Hermes may copy it. A mention inside a line, a quote or a code block isn't a command. `parseCommand` reads the words: the status is any of the team's Linear statuses, without regard to case and with or without "Awaiting " (`matchStatus`), and values with spaces are double-quoted (Slack's curly quotes work too).
+- **Reading it (`#command`).** `commandLine` finds the last line that starts with the mention: Slack's `<@U…>` token, or a plain `@Autolinear`, since Hermes's Slack adapter shows Hermes every mention as `@Name` and Hermes may copy it. A mention inside a line, a quote or a code block isn't a command. `parseCommand` reads the words. Status names are case-insensitive and accept the "Awaiting " prefix (`matchStatus`). Set Awaiting Hermes directly in Linear. Double-quote values with spaces. Slack's curly quotes work too.
 - **When.** A Hermes message with a command line marks the turn as having said what to do at once. The command itself runs `COMMAND_SETTLE_MS` (3 s) after Hermes last posted or edited the message, from its newest text, so a reply streamed by editing is read whole. Each message acts once.
 - **What `move` does.** It sets the status and the title keys in one Linear update, then syncs the channel at once, posting `*From* → *To* (Hermes told Autolinear)`. Awaiting Date needs `start`, Awaiting Listener `event` and `stop`, and Awaiting Others `who`, which becomes the title's `[AWAITING: <who>]` prefix (Leon's convention). Each can come from the command or already be in the title, as after Hermes's 👀, which keeps the keys. Keys of other statuses leave the title, and so does the prefix. The status post doesn't ping whoever gave the command, nor Leon when Hermes's message already mentioned him.
-- **Hermes handoffs.** Use `move executing` while work is underway. `move hermes` moves to Awaiting Hermes. When Hermes gives that command, Autolinear immediately uses Slack Puppet's session to ask Hermes to continue from Leon's account in the same Slack conversation. Hermes's 👀 moves the issue back to Executing. Autolinear sends one automatic follow-up per conversation until someone writes again.
+- **Delegation.** Hermes hands every task to another agent and uses `move executing` while that agent works. A move to Awaiting Hermes in Linear still pings Hermes to pick up the issue and delegate it.
 - **Answers.** Autolinear marks a command that worked with ✅ on Hermes's message. When one doesn't, it says why in a thread under it, mentioning Hermes, with the commands. Leon's `/autolinear` gets its answer privately, through Slack's response URL.
 - **Reminders.** See the table above. Autolinear's bot is invited to every issue channel with Hermes. In an older channel it isn't in yet, Leon's session invites it the first time it posts. Hermes answers its mentions because Hermes's `SLACK_ALLOWED_USERS` lists it, alongside `allow_bots: mentions`.
 
