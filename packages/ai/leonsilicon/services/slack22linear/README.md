@@ -28,6 +28,8 @@ Keeps one Slack channel per Linear issue, and one per Linear project. Leon works
 
 **Ignored:** bot posts (including Composio, and Hermes's own except for a command to Autolinear), system messages, and posts made as Leon with the slack-as-leon marker (`client_msg_id` starting `de1e6a7e`): Hermes's through slack-as-leon, and autolinear's copies of Leon's messages in new issue channels.
 
+When Hermes's 👀 or a command in a Hermes message changes an issue's status, Linear Sync posts the update in the Slack thread of the message that triggered the change. A top-level trigger becomes the parent of the reply. Status changes without a Slack message, such as timers and changes made in Linear, are posted in the issue channel.
+
 **No echoes:**
 
 - A comment made from Slack is created with an ID derived from the Slack message (`stableUuid`), and that ID is recorded first. Linear's webhook for it is then recognized and skipped.

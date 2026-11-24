@@ -58,7 +58,14 @@ export interface SlackMessageEvent {
   client_msg_id?: string;
   files?: SlackFile[];
   /** The edited message, on `message_changed`. */
-  message?: { ts: string; user?: string; text?: string; bot_id?: string; files?: SlackFile[] };
+  message?: {
+    ts: string;
+    user?: string;
+    text?: string;
+    thread_ts?: string;
+    bot_id?: string;
+    files?: SlackFile[];
+  };
 }
 
 export interface SlackReactionEvent {
@@ -115,6 +122,8 @@ export interface CommandJob {
   channel: string;
   /** Hermes's message's ts, or `slash-<trigger id>` for Leon's slash command. */
   ts: string;
+  /** The Slack thread parent, or the command's own timestamp for a top-level message. */
+  threadTs?: string;
   /** Hermes's whole message, or Leon's words after `/autolinear`. */
   text: string;
   by: "hermes" | "leon";
@@ -130,6 +139,8 @@ interface Outcome {
 
 /** Extras for a live status post. */
 interface StatusPost {
+  /** The parent message for a status change triggered by a Slack message. */
+  threadTs?: string;
   /** Said after the move, e.g. why it happened. */
   note?: string;
   /** Leaves Leon unmentioned, when he was just pinged. */
@@ -807,7 +818,7 @@ export class Sync {
       const edited = event.message;
       // Hermes can stream a reply by editing it, so its command can first show up in an edit.
       if (edited?.user === this.#c.hermesUserId)
-        return this.#onHermesMessage(event.channel, edited.ts, edited.text ?? "");
+        return this.#onHermesMessage(event.channel, edited.ts, edited.text ?? "", edited.thread_ts);
       if (!edited || edited.bot_id || !edited.user) return;
       const known = this.#store.commentBySlack(event.channel, edited.ts);
       if (known?.origin === "slack")
@@ -822,7 +833,7 @@ export class Sync {
       return;
     // Hermes's posts aren't mirrored, but one can carry a command for Autolinear.
     if (event.user === this.#c.hermesUserId)
-      return this.#onHermesMessage(event.channel, event.ts, event.text ?? "");
+      return this.#onHermesMessage(event.channel, event.ts, event.text ?? "", event.thread_ts);
     if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
@@ -878,7 +889,7 @@ export class Sync {
     const rec = this.#store.issueByChannel(channel);
     if (!rec || rec.archived) return;
     if (!ended) {
-      if (event.item_user === this.#c.leonUserId) await this.onHermesAck(rec);
+      if (event.item_user === this.#c.leonUserId) await this.onHermesAck(rec, ts);
       return;
     }
     const now = this.#now();
@@ -898,7 +909,7 @@ export class Sync {
    * changes first, alongside the status, since that's what Leon watches. The status it had before
    * is kept (`acks`), and title keys stay, so Hermes can put the issue back with a command.
    */
-  async onHermesAck(rec: IssueRecord): Promise<void> {
+  async onHermesAck(rec: IssueRecord, ts: string): Promise<void> {
     const issue = await this.#openIssueIn(rec.channelId);
     if (!issue) return;
     const to = this.#c.hermesAckState;
@@ -906,22 +917,36 @@ export class Sync {
     const prior = this.#store.ack(issue.id);
     // Already Hermes's: from an earlier 👀 (whose `from` still counts), or by someone's choice.
     if (from === to && prior?.at !== null) return;
-    // Recorded before the move, so a retry after the move knows the status it came from.
-    if (from !== to) this.#store.putAck({ issueId: issue.id, fromState: from, at: null });
+    // Record the source before moving so a retry or the Linear webhook can post in the same thread.
+    const pending = from === to ? prior : null;
+    const ack = {
+      issueId: issue.id,
+      fromState: pending?.fromState ?? from,
+      at: null,
+      threadTs: pending?.threadTs ?? (await this.#messageThread(rec.channelId, ts)),
+    };
+    this.#store.putAck(ack);
     const [placed] = await Promise.all([
       this.#place(rec.channelId, to),
       from !== to ? this.#move(issue, to, { keepKeys: true }) : null,
     ]);
-    this.#store.putAck({ ...this.#store.ack(issue.id)!, at: this.#now() });
     const current = this.#store.issue(issue.id);
     if (placed && current) this.#store.putIssue({ ...current, section: to });
     const moved = await this.#linear.issue(issue.id);
-    if (moved)
-      await this.syncIssue(moved, "live", {
-        note: `(Hermes reacted :${this.#c.hermesAckReaction}: to Leon's message)`,
-        quietHermes: true,
-      });
+    if (moved) await this.syncIssue(moved, "live");
+    this.#store.putAck({ ...ack, at: this.#now() });
     this.#log("hermes_ack", { issue: issue.identifier, from });
+  }
+
+  /** Resolve a message's parent when only the message timestamp is available. */
+  async #messageThread(channel: string, ts: string): Promise<string> {
+    const known = this.#store.commentBySlack(channel, ts);
+    if (known) return known.threadTs ?? ts;
+    const result = await tolerate(this.#bot("reactions.get", { channel, timestamp: ts }), [
+      "message_not_found",
+    ]);
+    const message = result?.message as { thread_ts?: string } | undefined;
+    return message?.thread_ts ?? ts;
   }
 
   /**
@@ -960,14 +985,25 @@ export class Sync {
    * Mentioning Leon moves nothing, here or in a Linear comment (Leon's rule, 2026-11-23: issues move
    * only by explicit commands).
    */
-  async #onHermesMessage(channelId: string, ts: string, text: string): Promise<void> {
+  async #onHermesMessage(
+    channelId: string,
+    ts: string,
+    text: string,
+    threadTs?: string,
+  ): Promise<void> {
     if (commandLine(text, this.#c.autolinearUserId) === null) return;
     const rec = this.#store.issueByChannel(channelId);
     if (!rec || rec.archived) return;
     const now = this.#now();
     this.#store.markFired(saidKey(channelId, ts), now);
     if (this.#store.fired(doneKey(channelId, ts))) return;
-    const job: CommandJob = { channel: channelId, ts, text, by: "hermes" };
+    const job: CommandJob = {
+      channel: channelId,
+      ts,
+      threadTs: threadTs ?? ts,
+      text,
+      by: "hermes",
+    };
     this.#store.setTimer(
       `command:${channelId}:${ts}`,
       "command",
@@ -1075,12 +1111,17 @@ export class Sync {
     if (title !== issue.title) update.title = title;
     if (!Object.keys(update).length)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
+    const threadTs =
+      job.by === "hermes"
+        ? (job.threadTs ?? (await this.#messageThread(job.channel, job.ts)))
+        : undefined;
     await this.#linear.updateIssue(issue.id, update);
     const moved = await this.#linear.issue(issue.id);
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved)
       await this.syncIssue(moved, "live", {
         note: `(${by} told Autolinear)`,
+        threadTs,
         quietHermes: job.by === "hermes",
         quietLeon: job.by === "leon" || mentions(job.text, this.#c.leonUserId),
       });
@@ -1835,15 +1876,25 @@ export class Sync {
     issue: LinearIssue,
     post: StatusPost = {},
   ): Promise<void> {
+    if (!post.note && issue.state.name === this.#c.hermesAckState) {
+      const ack = this.#store.ack(issue.id);
+      if (ack?.at === null && ack.fromState === from)
+        post = {
+          threadTs: ack.threadTs ?? undefined,
+          note: `(Hermes reacted :${this.#c.hermesAckReaction}: to Leon's message)`,
+          quietHermes: true,
+        };
+    }
     const mentions = this.#mentions(issue, post);
     const move = `*${from}* → *${issue.state.name}*${post.note ? ` ${post.note}` : ""}`;
     await tolerate(
       this.#bot("chat.postMessage", {
         channel: channelId,
+        thread_ts: post.threadTs,
         text: `${move}${mentions ? `\n${mentions}` : ""}`,
         unfurl_links: false,
       }),
-      ARCHIVED,
+      post.threadTs ? [...ARCHIVED, "message_not_found", "thread_not_found"] : ARCHIVED,
     );
   }
 

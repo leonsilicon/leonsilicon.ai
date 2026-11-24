@@ -53,6 +53,8 @@ export interface AckRecord {
   issueId: string;
   fromState: string;
   at: number | null;
+  /** The parent of the Slack message Hermes took up, null for acknowledgements made before threading. */
+  threadTs: string | null;
 }
 
 export interface Job {
@@ -82,7 +84,7 @@ const MIGRATIONS = [
     project_id TEXT PRIMARY KEY, name TEXT NOT NULL, status_name TEXT NOT NULL, channel_id TEXT,
     section TEXT, archived INTEGER NOT NULL DEFAULT 0, requested_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER, thread_ts TEXT)`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -131,6 +133,8 @@ export class Store {
   constructor(sql: Sql) {
     this.#sql = sql;
     for (const statement of MIGRATIONS) sql.exec(statement);
+    if (!sql.exec(`PRAGMA table_info(acks)`).some((column) => column.name === "thread_ts"))
+      sql.exec(`ALTER TABLE acks ADD COLUMN thread_ts TEXT`);
   }
 
   issue(issueId: string): IssueRecord | null {
@@ -342,22 +346,28 @@ export class Store {
   }
 
   ack(issueId: string): AckRecord | null {
-    const row = this.#sql.exec(`SELECT from_state, at FROM acks WHERE issue_id = ?`, issueId)[0];
+    const row = this.#sql.exec(
+      `SELECT from_state, at, thread_ts FROM acks WHERE issue_id = ?`,
+      issueId,
+    )[0];
     if (!row) return null;
     return {
       issueId,
       fromState: row.from_state as string,
       at: row.at === null || row.at === undefined ? null : Number(row.at),
+      threadTs: (row.thread_ts as string | null) ?? null,
     };
   }
 
   putAck(ack: AckRecord): void {
     this.#sql.exec(
-      `INSERT INTO acks (issue_id, from_state, at) VALUES (?, ?, ?)
-       ON CONFLICT (issue_id) DO UPDATE SET from_state = excluded.from_state, at = excluded.at`,
+      `INSERT INTO acks (issue_id, from_state, at, thread_ts) VALUES (?, ?, ?, ?)
+       ON CONFLICT (issue_id) DO UPDATE SET from_state = excluded.from_state, at = excluded.at,
+         thread_ts = excluded.thread_ts`,
       ack.issueId,
       ack.fromState,
       ack.at,
+      ack.threadTs,
     );
   }
 
