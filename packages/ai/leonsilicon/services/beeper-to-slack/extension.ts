@@ -6,8 +6,6 @@ import { decisionsScreener, slackBot } from "@-/ai.leonsilicon.services.feed-com
 import { BeeperFeed } from "#feed";
 import { MAX_TEXT } from "#format";
 
-const INTERVAL_MS = 5_000;
-
 export function beeperToSlackExtension({
   name,
   network,
@@ -68,34 +66,7 @@ export function beeperToSlackExtension({
         stateFile: join(context.home, "state.json"),
         log: context.log,
       });
-      let stopped = false;
-      let failed = false;
-      let active = Promise.resolve();
-      const run = () => {
-        active = feed
-          .tick(() => stopped)
-          .then(
-            () => {
-              failed = false;
-            },
-            () => {
-              failed = true;
-              context.log("warn", "Slack feed cycle failed; will retry");
-            },
-          )
-          .finally(() => {
-            if (!stopped) timer = setTimeout(run, INTERVAL_MS);
-          });
-      };
-      let timer = setTimeout(run, 0);
-      return {
-        status: () => ({ running: !stopped, failed, ...feed.status() }),
-        async stop() {
-          stopped = true;
-          clearTimeout(timer);
-          await active;
-        },
-      };
+      return feed.start();
     },
   };
 }

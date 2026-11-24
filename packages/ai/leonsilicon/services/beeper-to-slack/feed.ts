@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import {
   writeJsonAtomic,
   type ExtensionContext,
-  type ExtensionJournal,
   type JournalEntry,
   type RoomInfo,
+  type RunningExtension,
 } from "@-/ai.leonsilicon.services.beeper-inbox";
 import {
   FAIL_CLOSED,
@@ -15,6 +15,7 @@ import {
 import { MAX_TEXT, mirrorText } from "#format";
 
 const SCREEN_RETRY_MS = 15 * 60_000;
+const CYCLE_RETRY_MS = 5_000;
 const MAX_RETRY_MS = 10 * 60_000;
 const RETRY_LIFETIME_MS = 7 * 24 * 60 * 60_000;
 const BATCH_SIZE = 100;
@@ -41,7 +42,7 @@ interface FeedOptions {
   network: string;
   roomIds?: ReadonlySet<string>;
   source: Pick<ExtensionContext, "rooms" | "senderNames"> & {
-    journal: Pick<ExtensionJournal, "head" | "changes">;
+    journal: Pick<ExtensionContext["journal"], "head" | "changes" | "subscribe">;
     refreshRooms(): Promise<void>;
   };
   slack: SlackPoster;
@@ -71,6 +72,52 @@ export class BeeperFeed {
     this.#state = this.#load();
   }
 
+  start(): RunningExtension {
+    let stopped = false;
+    let failed = false;
+    let woken = false;
+    let active: Promise<void> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const run = () => {
+      clearTimeout(timer);
+      woken = false;
+      active = this.tick(() => stopped)
+        .then(
+          (nextAt) => {
+            failed = false;
+            return nextAt;
+          },
+          () => {
+            failed = true;
+            this.#options.log("warn", "Slack feed cycle failed; will retry");
+            return this.#now() + CYCLE_RETRY_MS;
+          },
+        )
+        .then((nextAt) => {
+          active = undefined;
+          if (stopped) return;
+          // A change can land while the journal page is being screened or posted.
+          if (woken && !failed) nextAt = this.#now();
+          if (nextAt !== null) timer = setTimeout(run, Math.max(0, nextAt - this.#now()));
+        });
+    };
+    const unsubscribe = this.#options.source.journal.subscribe(() => {
+      woken = true;
+      if (!stopped && !active && !failed) run();
+    });
+    run();
+    return {
+      status: () => ({ running: !stopped, failed, ...this.status() }),
+      async stop() {
+        stopped = true;
+        unsubscribe();
+        clearTimeout(timer);
+        await active;
+      },
+    };
+  }
+
   status() {
     return {
       start_at: this.#state ? new Date(this.#state.since).toISOString() : null,
@@ -81,7 +128,8 @@ export class BeeperFeed {
     };
   }
 
-  async tick(stopped: () => boolean = () => false): Promise<void> {
+  /** Runs one batch and returns the next time work is due, or null when idle. */
+  async tick(stopped: () => boolean = () => false): Promise<number | null> {
     const { source } = this.#options;
     if (!this.#state) {
       const since = this.#now();
@@ -105,7 +153,9 @@ export class BeeperFeed {
         );
       });
       const ids = [...new Set(candidates.map((message) => message.roomId))];
-      const rooms = new Map((await source.rooms(ids)).map((room) => [room.roomId, room]));
+      const rooms = new Map(
+        (ids.length ? await source.rooms(ids) : []).map((room) => [room.roomId, room]),
+      );
       for (const message of candidates) {
         const room = rooms.get(message.roomId);
         // Keep unresolved rooms pending until their bridge metadata can be checked.
@@ -159,6 +209,11 @@ export class BeeperFeed {
       }
     }
     this.#lastTick = this.#now();
+    let nextAt = page.entries.length === BATCH_SIZE ? this.#lastTick : null;
+    for (const item of Object.values(this.#state!.pending)) {
+      if (nextAt === null || item.retryAt < nextAt) nextAt = item.retryAt;
+    }
+    return nextAt;
   }
 
   #includesRoom(id: string): boolean {

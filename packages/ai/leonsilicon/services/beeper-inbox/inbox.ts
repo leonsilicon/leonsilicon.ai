@@ -199,6 +199,7 @@ export class Inbox {
   readonly #decryptErrors = new Map<string, string>();
   readonly #bridgeStatus = new Map<string, BridgeStatus>();
   readonly #profiles = new Map<string, { name: string | null; at: number }>();
+  readonly #journalSubscribers = new Set<() => void>();
   readonly #fetch: MatrixFetch;
   #db: DatabaseSync | null = null;
   #pickleDb: DatabaseSync | null = null;
@@ -238,6 +239,13 @@ export class Inbox {
 
   get state(): InboxState {
     return this.#state;
+  }
+
+  subscribeToJournal(listener: () => void): () => void {
+    this.#journalSubscribers.add(listener);
+    return () => {
+      this.#journalSubscribers.delete(listener);
+    };
   }
 
   /** Opens the stores and signs in. Never throws: failures leave the state at needs_login or error. */
@@ -390,6 +398,15 @@ export class Inbox {
     this.#pickleDb = open(this.#paths.pickleDb);
     this.#directory = new RoomDirectory(this.#db);
     this.#journal = new MessageJournal(this.#db, this.#now());
+    this.#journal.subscribe(() => {
+      for (const listener of this.#journalSubscribers) {
+        try {
+          listener();
+        } catch {
+          this.#log("warn", "journal subscriber failed");
+        }
+      }
+    });
     this.#journal.prune(this.#now());
     this.#ledger = new SendLedger(this.#db);
     this.#ledger.prune(30 * 24 * 60 * 60_000, this.#now());

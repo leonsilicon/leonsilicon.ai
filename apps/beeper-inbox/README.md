@@ -66,7 +66,7 @@ Install the inbox release to retire `beeper-feed` and register the platform feed
 
 1. Enable a feed by running `vpx _env-file <name>` and installing the generated settings as `/opt/data/beeper-inbox/<name>/env` (mode 600).
 2. To limit a feed to particular chats, add `BEEPER_ROOM_IDS` to its settings as a comma-separated list of exact Matrix room IDs. Use the feed's Beeper network in `list_conversations` to find its `room_id` values. Omit the setting to copy conversations from the chosen network.
-3. Restart the inbox daemon and check `status.extensions` under the feed's name. Each feed starts with new messages the first time it runs. The status shows the latest pass, pending work and delivery counts.
+3. Restart the inbox daemon and check `status.extensions` under the feed's name. Each feed starts with new messages the first time it runs. The status shows the latest pass, pending work and delivery counts. A feed can stay healthy with an old `last_tick_at` while its journal is idle.
 
 Move a feed's settings file out of its directory and restart the daemon to pause it. Restoring the file resumes from its saved cursor. Keep room IDs and settings on Hermes Cloud.
 

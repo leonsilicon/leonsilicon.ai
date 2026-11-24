@@ -49,6 +49,7 @@ function setup(t: TestContext) {
   const failures = new Set<string>();
   const directory = new Map(rooms.map((room) => [room.roomId, room]));
   let refreshes = 0;
+  let journalReads = 0;
   const slack: SlackPoster = {
     async ensureChannel(channel, { create }) {
       destinations.push({ channel, create });
@@ -66,8 +67,12 @@ function setup(t: TestContext) {
       roomIds,
       source: {
         journal: {
+          subscribe: (wake) => journal.subscribe(wake),
           head: async () => journal.head(),
-          changes: async (options) => journal.changes(options),
+          async changes(options) {
+            journalReads += 1;
+            return journal.changes(options);
+          },
         },
         rooms: async (ids) => [...directory.values()].filter((room) => ids.includes(room.roomId)),
         senderNames: async () => ({ "@alice:example.test": "Alice" }),
@@ -128,11 +133,89 @@ function setup(t: TestContext) {
     journal,
     directory,
     refreshes: () => refreshes,
+    journalReads: () => journalReads,
     advance: (ms: number) => {
       now += ms;
     },
   };
 }
+
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test("sleeps while idle, wakes on a journal write, and retries without another write", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = setup(t);
+  const running = h.make().start();
+  const advance = (ms: number) => {
+    h.advance(ms);
+    t.mock.timers.tick(ms);
+  };
+  try {
+    await flush();
+    assert.equal(h.journalReads(), 1);
+    advance(60_000);
+    await flush();
+    assert.equal(h.journalReads(), 1, "idle feeds do not read the journal");
+
+    h.failures.add("feed-whatsapp");
+    h.record("retry", "retry me");
+    await flush();
+    assert.equal(running.status?.().pending, 1);
+    assert.deepEqual(h.screened, ["retry me"]);
+    h.failures.clear();
+    advance(29_999);
+    await flush();
+    assert.equal(h.journalReads(), 2);
+    assert.equal(h.posts.length, 0);
+    advance(1);
+    await flush();
+    assert.equal(h.posts.length, 1);
+    assert.deepEqual(h.screened, ["retry me"], "the persisted verdict survives the retry");
+    advance(60_000);
+    await flush();
+    assert.equal(h.journalReads(), 3);
+  } finally {
+    await running.stop?.();
+  }
+  h.record("stopped", "do not send");
+  advance(60_000);
+  await flush();
+  assert.equal(h.journalReads(), 3, "stopping removes the journal subscription");
+});
+
+test("drains a saved backlog and processes journal changes that arrive during a pass", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = setup(t);
+  await h.make().tick();
+  for (let index = 0; index < 100; index += 1) {
+    h.record(`ignored-${index}`, "ignored network", "telegram");
+  }
+  h.record("backlog", "queued while stopped");
+  const running = h.make().start();
+  try {
+    h.record("during-pass", "new during startup");
+    await flush();
+    assert.equal(h.posts.length, 0, "one pass reads at most one journal page");
+    t.mock.timers.tick(1);
+    await flush();
+    assert.deepEqual(h.screened, ["queued while stopped", "new during startup"]);
+
+    h.record("live", "new while idle");
+    h.record("second-live", "new during delivery");
+    await flush();
+    assert.equal(h.posts.length, 3);
+    t.mock.timers.tick(1);
+    await flush();
+    assert.deepEqual(h.screened, [
+      "queued while stopped",
+      "new during startup",
+      "new while idle",
+      "new during delivery",
+    ]);
+  } finally {
+    await running.stop?.();
+  }
+});
 
 test("keeps feed delivery and screening within the selected network", async (t) => {
   const h = setup(t);

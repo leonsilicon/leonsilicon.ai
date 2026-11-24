@@ -312,6 +312,14 @@ export class MessageJournal {
     return { entries, cursor: entries.at(-1)?.rev ?? options.after };
   }
 
+  /** Listen for committed changes in this journal. The returned function removes the listener. */
+  subscribe(listener: (entry: JournalEntry) => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
   /** Like `changes`, but when there is nothing yet it waits up to `waitMs` for the first one. */
   async changesWhenAny(options: {
     after: number;
@@ -324,14 +332,13 @@ export class MessageJournal {
     await new Promise<void>((resolve) => {
       const done = (): void => {
         clearTimeout(timer);
-        this.#listeners.delete(listener);
+        unsubscribe();
         resolve();
       };
-      const listener = (changed: JournalEntry): void => {
+      const unsubscribe = this.subscribe((changed) => {
         if (!options.roomId || changed.roomId === options.roomId) done();
-      };
+      });
       const timer = setTimeout(done, options.waitMs);
-      this.#listeners.add(listener);
     });
     return this.changes(options);
   }

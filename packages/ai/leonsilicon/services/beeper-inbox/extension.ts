@@ -18,7 +18,10 @@ export interface ExtensionContext {
    * New messages as sync delivers them (see journal.ts): the way to follow a chat. Reading history
    * with `list_messages` costs about half a second per message, so nothing should do that in a loop.
    */
-  journal: ExtensionJournal;
+  journal: ExtensionJournal & {
+    /** Wake on committed journal changes, including after an inbox reload. Returns an unsubscribe. */
+    subscribe(wake: () => void): () => void;
+  };
   /** What the inbox knows about rooms: name, network, connection, whether Leon muted them. */
   rooms(roomIds: readonly string[]): Promise<RoomInfo[]>;
   /** Each connection Leon's rooms belong to: a bridge and, where it has one, the network's ID. */

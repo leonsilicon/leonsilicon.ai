@@ -760,6 +760,10 @@ test("journal: sync messages are written down once; edits, late keys and deletio
   assert.ok(context);
   const { journal } = context;
   t.after(() => daemon.shutdown());
+  let wakes = 0;
+  const unsubscribe = journal.subscribe(() => {
+    wakes += 1;
+  });
   const message = (eventId: string, text: string, extra: Record<string, unknown> = {}) =>
     ({
       kind: "message",
@@ -881,6 +885,13 @@ test("journal: sync messages are written down once; edits, late keys and deletio
       ["$m3", 0, false],
     ],
   );
+  assert.equal(wakes, 4, "new messages, edits, late decryptions and redactions wake subscribers");
+  await callIpc(paths.socket, "reload");
+  server.emit(message("$m4", "after reload"));
+  assert.equal(wakes, 5, "subscribers follow the replacement journal");
+  unsubscribe();
+  server.emit(message("$m5", "after unsubscribe"));
+  assert.equal(wakes, 5);
 });
 
 test("send_message: Silicon Dot's chats need the task's Slack thread, and get the Codex handoff", async () => {

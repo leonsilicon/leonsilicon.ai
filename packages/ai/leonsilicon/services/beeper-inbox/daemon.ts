@@ -157,6 +157,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
           },
           // The journal is replaced when the inbox reloads, so it is looked up on every call.
           journal: {
+            subscribe: (wake) => inbox.subscribeToJournal(wake),
             head: async () => inbox.journal.head(),
             coveredSince: async () => inbox.journal.coveredSince(),
             latest: async (roomId, count) => inbox.journal.latest(roomId, count),
