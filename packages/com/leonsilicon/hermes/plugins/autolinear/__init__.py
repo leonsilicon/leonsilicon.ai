@@ -18,10 +18,9 @@ live Slack adapter:
   or starts it then, and builds the turn as if Leon had written the copy: same text, files and
   thread history, in the new channel. Hermes's session, reply and 👀 → ✅ land there.
 
-Slack task turns get Leon's delegation rule in their channel prompt. Every turn in an issue
-channel also gets Autolinear's rule: end the turn with one line that starts with Autolinear's
-mention and says what to do with the channel (``move done``, ``move leon``, ``stay``…). Nothing
-moves on Hermes's answer otherwise, and Autolinear reminds Hermes when a turn ends without one.
+Slack task turns get Leon's delegation rule in their channel prompt. In an issue channel, Hermes
+ends ordinary turns with an explicit Autolinear command. Reports from delegated agents can be
+handled silently and only get a command when the report calls for a status change.
 
 The copy's own event carries slack-as-leon's marker, so ``slack-as-leon-guard`` drops it and Hermes
 doesn't answer the message twice. That plugin must be enabled too.
@@ -63,6 +62,8 @@ DEFAULT_URL = "https://autolinear.leonsilicon.ai/intake"
 DEFAULT_PREFIX = "leon"
 #: First group of the client_msg_id on posts made as Leon by slack-as-leon and autolinear.
 MARKER = "de1e6a7e"
+#: Grok Bot and Codex report markers, matching slack-as-leon-guard.
+_AGENT_REPORTS = (f"{MARKER}-b075-", f"{MARKER}-c0de-")
 TIMEOUT_SECONDS = 20.0
 RETRY_DELAY_SECONDS = 1.0
 #: How long building a turn waits for its intake before answering in place.
@@ -85,26 +86,40 @@ _DELEGATION_PROMPT = (
 )
 
 
-def _handoff_prompt() -> str:
+def _handoff_prompt(*, agent_report: bool = False) -> str:
     """Autolinear's rule for a turn in an issue channel, with its mention spelled out: Hermes's Slack
     adapter shows every mention it reads as a plain @Name, so the raw token has to come from here."""
     bot = os.environ.get(BOT_ENV, "").strip()
     mention = f"<@{bot}>" if bot else "@Autolinear"
+    if agent_report:
+        instructions = (
+            "This is a report from an agent already assigned to the task. Follow up if they "
+            "need coordination, and update Leon when there is something he needs to know. "
+            "If there is no action or meaningful update, return NO_REPLY. "
+            "Send one Autolinear command only if this report calls for a different issue status. "
+            "If the status should stay the same, omit the command entirely, even if earlier "
+            "turns used `stay`. Do not post `stay` for a delegated agent's report. "
+        )
+        stay = ""
+        reminder = ""
+    else:
+        instructions = (
+            f"{_DELEGATION_PROMPT}\n\n"
+            "This is a Linear issue's channel. End the turn with one line of its own that tells "
+            "Autolinear what to do with the channel. "
+        )
+        stay = ", or `stay` (leave the status as it is)"
+        reminder = " When you forget, Autolinear reminds you here. Answer it with the line."
     return (
-        f"{_DELEGATION_PROMPT}\n\n"
-        "Autolinear (Leon's rule, November 23, 2026): this is a Linear issue's channel, and every "
-        "turn you finish here must end with one line of its own that tells Autolinear what to do "
-        f"with the channel. Start that line with {mention}, written exactly so, then one of: "
+        f"{instructions}Start that line with {mention}, written exactly so, then one of: "
         "`move done` (nothing is left for anyone, even after a thanks), "
         "`move leon` (Leon needs to see, decide or do something; Autolinear pings him), "
         "`move others who=\"<who>\"` (waiting on someone else), "
         "`move listener event=\"<what>\" stop=YYYY-MM-DD` (waiting for something to happen), "
         "`move date start=<RFC 3339 time or YYYY-MM-DD>` (work starts later), "
-        "`move executing` (a delegated agent is working on it), or "
-        "`stay` (leave the status as it is). "
-        "Only that line moves the issue: mentioning Leon moves nothing, and you don't set this "
-        "status in Linear yourself. When you forget, Autolinear reminds you here; answer it with "
-        "the line. When it says a command didn't work, send a corrected line."
+        f"`move executing` (a delegated agent is working on it){stay}. "
+        "Set the issue status through Autolinear. Mentioning Leon only notifies him."
+        f"{reminder} When Autolinear says a command didn't work, send a corrected line."
     )
 
 
@@ -266,8 +281,10 @@ def _note(result: dict) -> str:
         "answer here and keep the conversation here.]")
 
 
-def _add_task_prompt(msg_event, *, in_issue_channel: bool) -> None:
-    prompt = _handoff_prompt() if in_issue_channel else _DELEGATION_PROMPT
+def _add_task_prompt(msg_event, *, in_issue_channel: bool, agent_report: bool = False) -> None:
+    prompt = _handoff_prompt(agent_report=agent_report) if in_issue_channel else _DELEGATION_PROMPT
+    if in_issue_channel and agent_report:
+        msg_event.reply_expected = False
     msg_event.channel_prompt = "\n\n".join(
         filter(None, (msg_event.channel_prompt, prompt)))
 
@@ -355,7 +372,10 @@ def wire(native, adapter) -> None:
         if msg_event is not None and not kwargs.get("is_command_text"):
             in_issue_channel = settings is not None and bool(
                 settings["issue_channel"].match(msg_event.source.chat_name or ""))
-            _add_task_prompt(msg_event, in_issue_channel=in_issue_channel)
+            client_id = event.get("client_msg_id") if isinstance(event, dict) else None
+            _add_task_prompt(
+                msg_event, in_issue_channel=in_issue_channel,
+                agent_report=isinstance(client_id, str) and client_id.startswith(_AGENT_REPORTS))
         return msg_event
 
     @functools.wraps(build)

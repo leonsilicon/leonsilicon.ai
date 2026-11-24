@@ -186,6 +186,8 @@ async def test_an_existing_issue_keeps_its_message_and_gets_the_handoff_rule(ada
     assert turn.source.chat_id == ISSUE
     assert turn.text == "Show me the draft."
     assert turn.channel_prompt == f"Keep the question brief.\n\n{plugin._handoff_prompt()}"
+    assert "`stay` (leave the status as it is)" in turn.channel_prompt
+    assert "return NO_REPLY" not in turn.channel_prompt
 
 
 @pytest.mark.asyncio
@@ -204,6 +206,31 @@ async def test_anyones_turn_in_an_issue_channel_gets_the_rule_with_autolinears_m
     assert "hand off every task to another agent" in turn.channel_prompt
     assert "`move executing` (a delegated agent is working on it)" in turn.channel_prompt
     assert "move hermes" not in turn.channel_prompt
+
+
+@pytest.mark.parametrize("marker", ["b075-4000", "b075-4b22", "c0de-4000"])
+@pytest.mark.asyncio
+async def test_delegated_reports_only_get_a_command_for_a_status_change(adapter, intake, marker):
+    for module in (guard, always_react, plugin):
+        module.wire(None, adapter)
+    root, ts = "1794000000.000025", "1794000000.000026"
+    report = _message(ISSUE, ts, "Still waiting on Leon to review the draft.", thread_ts=root)
+    report["client_msg_id"] = f"de1e6a7e-{marker}-8000-000000000001"
+    adapter._app.client.conversations_replies = AsyncMock(return_value={"ok": True, "messages": [
+        _message(ISSUE, root, "Review the draft."), report,
+    ]})
+    await adapter._handle_slack_message(report)
+
+    assert intake.requests == []
+    turn = _turn(adapter)
+    assert turn.source.chat_id == ISSUE
+    assert turn.reply_expected is False
+    assert "return NO_REPLY" in turn.channel_prompt
+    assert "only if this report calls for a different issue status" in turn.channel_prompt
+    assert "Do not post `stay`" in turn.channel_prompt
+    assert "`move leon`" in turn.channel_prompt
+    assert plugin._DELEGATION_PROMPT not in turn.channel_prompt
+    assert adapter._reacting_target(turn) is None
 
 
 def test_without_the_bots_id_the_rule_asks_for_a_plain_mention(monkeypatch):
