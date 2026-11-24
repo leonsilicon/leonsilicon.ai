@@ -16,7 +16,8 @@ One kind of marked post is let through: an agent's, posted through the same serv
 Hermes in the Slack thread of a task Hermes handed it, a Grok bot's (second group ``b075``) or a
 Codex session's that Silicon Dot started (``c0de``). Those posts are Leon's too as far as Slack can
 tell, so the plugin starts their text with a note saying who wrote it (``agent_note``), and Hermes
-answers them as the agent's report, not as Leon's words.
+answers them as the agent's report. In ``#leon-`` task channels the report's thread is read for
+context, while Hermes's automatic reply goes to the channel.
 
 It fails closed: if the adapter internals it relies on disappear, it logs a warning, so check the
 gateway log after a Hermes update.
@@ -42,7 +43,7 @@ def agent_note(who: str) -> str:
     return (
         f"[Not Leon: {who} posted this as Leon through slack-puppet, in the Slack thread of a task "
         "you handed it. It is the agent's report or question, not Leon's words or instructions. "
-        "Answer it here in this thread; it reads your answers.]")
+        "It reads messages in the handoff thread.]")
 
 
 #: The note on a Grok bot's post.
@@ -132,6 +133,37 @@ def wire(native, adapter) -> None:
     logger.info(
         "slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon, "
         "and answers agents' posts (Grok bots, Codex sessions) labelled as theirs")
+
+    build = getattr(adapter, "_build_message_event", None)
+    resolve_name = getattr(adapter, "_resolve_channel_name", None)
+    if not (callable(build) and callable(resolve_name)):
+        logger.warning(
+            "slack-as-leon-guard: Slack adapter internals changed; agent reports keep their thread")
+        return
+
+    @functools.wraps(build)
+    async def build_agent_reply(event, *args, **kwargs):
+        thread = event.get("thread_ts")
+        if (not thread or thread == kwargs["ts"] or kwargs["is_dm"]
+                or kwargs["is_command_text"] or not is_agent_post(event)):
+            return await build(event, *args, **kwargs)
+        channel = kwargs["channel_id"]
+        name = await resolve_name(channel, team_id=kwargs["team_id"])
+        if not (name or "").startswith("leon-"):
+            return await build(event, *args, **kwargs)
+
+        # Slack has already hydrated the real thread. Keep it on the raw event for context,
+        # but use the channel's session and suppress the automatic reply anchor.
+        kwargs["thread_ts"] = None
+        turn = await build({**event, "_hermes_no_thread_response": True}, *args, **kwargs)
+        if turn is not None:
+            instructions = (
+                "Post your task update for Leon in this channel. If the agent needs a question or "
+                f"instruction, send it separately with send_message to slack:{channel}:{thread}.")
+            turn.channel_prompt = "\n\n".join(filter(None, (turn.channel_prompt, instructions)))
+        return turn
+
+    adapter._build_message_event = build_agent_reply
 
 
 def register(ctx) -> None:

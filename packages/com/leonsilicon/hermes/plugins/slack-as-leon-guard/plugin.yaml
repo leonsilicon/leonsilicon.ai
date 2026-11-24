@@ -1,7 +1,7 @@
 name: slack-as-leon-guard
 label: Slack as-Leon guard
-version: 1.0.0
+version: 1.1.0
 description: >
-  Stops Hermes from answering the Slack messages it posted as Leon through the slack-as-leon MCP
-  server (they carry a marked client_msg_id), so posting as Leon can't loop back into Hermes.
+  Filters Hermes's own posts as Leon, labels delegated agents' reports, and routes automatic
+  replies to those reports into the main conversation in leon-* task channels.
 author: leonsilicon

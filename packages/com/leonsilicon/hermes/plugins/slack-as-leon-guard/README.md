@@ -12,9 +12,11 @@ The server stamps every post with a `client_msg_id` whose first group is `de1e6a
 
 The messages stay in Slack, and Hermes's thread context still shows them (as Leon's). If the adapter internals change, it logs a warning instead of patching.
 
-## Grok bots' posts
+## Delegated agents' posts
 
-Since 2026-11-21 Grok bots post through the same server to talk to Hermes in a task's thread. Their marker has `b075` as its second group (`GROK_BOT_GROUP`). Those events are let through, and their text starts with `GROK_NOTE`, "[Not Leon: a Grok bot posted this as Leon through slack-puppet …]", so Hermes answers them as the bot's report or question. The log says `… is a Grok bot's post; Hermes answers it as one`.
+Grok bots and Codex sessions post reports and questions through the same server. Their markers use `b075` and `c0de`, respectively. Hermes receives those events with a note identifying the author of the report.
+
+In `#leon-` task channels, Hermes reads the handoff thread for context and posts its automatic reply in the main channel conversation. If the delegated agent needs a question or instruction, Hermes can send it separately to the handoff thread. In other channels Hermes answers the report in its thread. When Leon writes directly in a thread, Hermes answers him there.
 
 ## Install
 
