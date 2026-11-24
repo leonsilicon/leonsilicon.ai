@@ -21,7 +21,7 @@ export type AutolinearCommand =
 
 export type ParsedCommand = { ok: true; command: AutolinearCommand } | { ok: false; error: string };
 
-/** Title keys a `move` may set: Awaiting Others' `who` (the title's `[AWAITING: …]`), and metadata. */
+/** Workflow details a `move` may set. */
 export const COMMAND_KEYS = ["who", "start", "event", "stop", "due"] as const;
 export const AWAITING_HERMES = "Awaiting Hermes";
 
@@ -37,7 +37,10 @@ export function commandUsage(lead: string): string {
     `\`${lead} stay\`: leave the status as it is`,
   ]
     .map((line) => `• ${line}`)
-    .join("\n");
+    .join("\n")
+    .concat(
+      "\nKeep the issue title and Slack channel name. Create a separate Linear issue for new work and link it to this one.",
+    );
 }
 
 /**
@@ -143,5 +146,5 @@ export function matchStatus(name: string, statuses: string[]): string | null {
   );
 }
 
-/** Awaiting Others' title prefix (Leon's convention): `[AWAITING: Apple App Review] …`. */
+/** Awaiting Others' prefix in titles created before workflow details moved to the description. */
 export const AWAITING_PREFIX = /^\s*\[AWAITING:\s*([^\]]*)\]\s*/i;

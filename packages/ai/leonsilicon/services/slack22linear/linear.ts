@@ -117,7 +117,6 @@ export interface LinearTeam {
 /** The issue fields the sync changes. `dueDate` is `YYYY-MM-DD`, or null to clear it. */
 export interface IssueUpdate {
   stateId?: string;
-  title?: string;
   description?: string;
   dueDate?: string | null;
   projectId?: string;

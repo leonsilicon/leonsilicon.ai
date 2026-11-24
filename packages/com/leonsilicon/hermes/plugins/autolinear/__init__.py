@@ -123,6 +123,8 @@ def _handoff_prompt(*, agent_report: bool = False) -> str:
             "When the result comes back, give Leon the answer and move the issue based on the result. "
         )
     return (
+        "Keep this Linear issue's title and Slack channel name. Create a separate Linear issue "
+        "for new work, link it to this issue, and let the sync open its own Slack channel. "
         f"{instructions}Start that line with {mention}, written exactly so, then one of: "
         "`move done` (nothing is left for anyone, even after a thanks), "
         "`move leon` (Leon needs to see, decide or do something; Autolinear pings him), "

@@ -1,21 +1,15 @@
 import type { IssueMetadata } from "#issue-metadata";
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
-import {
-  AWAITING_HERMES,
-  AWAITING_PREFIX,
-  commandLine,
-  commandUsage,
-  matchStatus,
-  parseCommand,
-} from "#command";
+import { AWAITING_HERMES, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
 import type { AutolinearCommand } from "#command";
 import type { SyncConfig } from "#config";
 import {
   channelName,
   channelNumber,
   escapeSlack,
-  formatTitle,
   hasTime,
+  issueDescription,
+  issueWorkflow,
   linearToSlack,
   localDay,
   localLabel,
@@ -27,6 +21,7 @@ import {
   projectDay,
   slackToLinear,
   withDay,
+  workflowDescription,
 } from "#format";
 import type {
   IssueUpdate,
@@ -463,7 +458,6 @@ export class Sync {
   ): Promise<IssueRecord | null> {
     this.#planTimer(issue);
     const prev = this.#store.issue(issue.id);
-    const title = parseTitle(issue.title);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
       this.#issueMetadata.save(prev.channelId, issue);
@@ -522,17 +516,6 @@ export class Sync {
       };
       this.#store.putIssue(rec);
       if (created && mode === "live") await this.#postIntro(rec.channelId, issue);
-    }
-
-    if (prev && !prev.archived && parseTitle(prev.title).name !== title.name) {
-      const wanted = channelName(
-        this.#c.channelPrefix,
-        issue.number,
-        title.name,
-        this.#c.channelNameMax,
-      );
-      if (wanted !== rec.channelName && (await this.#rename(rec.channelId, wanted)))
-        rec.channelName = wanted;
     }
 
     this.#issueMetadata.save(rec.channelId, issue);
@@ -985,7 +968,7 @@ export class Sync {
   /**
    * A command for Autolinear (Leon's rule, 2026-11-23; `#command`): from the last line of Hermes's
    * message that starts with Autolinear's mention, or from Leon's `/autolinear`. `move` goes through
-   * at once, title keys and all, and the channel follows; `stay` keeps the status. Autolinear marks
+   * at once, with its workflow details, and the channel follows; `stay` keeps the status. Autolinear marks
    * Hermes's message ✅ once it's done, and when a command doesn't work, says why, mentioning Hermes,
    * so it tries again. Leon's slash command gets its answer privately. Each message acts once.
    */
@@ -1039,9 +1022,9 @@ export class Sync {
 
   /**
    * `move <status> [keys]`: the status, with the keys it needs (`start` for Awaiting Date, `event`
-   * and `stop` for Awaiting Listener, `who` for Awaiting Others, whose title starts with
-   * `[AWAITING: <who>]`), from the command or already in the title. Keys of other statuses leave
-   * the title. The status post names who gave the command and doesn't ping them, nor Leon when
+   * and `stop` for Awaiting Listener, `who` for Awaiting Others), from the command or already
+   * on the issue. Keys of other statuses are cleared. The status post names the caller
+   * and doesn't ping them, nor Leon when
    * Hermes's message already did.
    */
   async #commandMove(
@@ -1055,15 +1038,10 @@ export class Sync {
     );
     const to = matchStatus(command.status, names);
     if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
-    const { name, meta } = parseTitle(issue.title);
-    const { who, ...keys } = command.keys;
-    let base = name.replace(AWAITING_PREFIX, "");
-    if (to === this.#c.othersState) {
-      const waitingOn = who ?? AWAITING_PREFIX.exec(name)?.[1]?.trim();
-      if (!waitingOn) return fail(`*${to}* needs \`who=…\`, whoever it waits on`);
-      base = `[AWAITING: ${waitingOn}] ${base}`;
-    } else if (who) return fail(`\`who\` goes with *${this.#c.othersState}* only`);
-    for (const status of [this.#c.dateState, this.#c.listenerState]) {
+    const previous = issueWorkflow(issue);
+    const meta = { ...previous };
+    const { keys } = command;
+    for (const status of [this.#c.dateState, this.#c.listenerState, this.#c.othersState]) {
       if (status === to) continue;
       for (const key of this.#statusKeys(status)) {
         if (key in keys) return fail(`\`${key}\` goes with *${status}* only`);
@@ -1071,16 +1049,21 @@ export class Sync {
       }
     }
     for (const [key, value] of Object.entries(keys))
-      if (key !== "event" && !metaInstant(value, this.#c.timeZone))
+      if (key !== "event" && key !== "who" && !metaInstant(value, this.#c.timeZone))
         return fail(`\`${key}=${value}\` isn't a day (YYYY-MM-DD) or an RFC 3339 time`);
     Object.assign(meta, keys);
     const missing = this.#statusKeys(to).filter((key) => !meta[key]);
     if (missing.length)
       return fail(`*${to}* needs ${missing.map((k) => `\`${k}=…\``).join(" and ")}`);
-    const title = formatTitle(base, meta);
     const update: IssueUpdate = {};
     if (to !== issue.state.name) update.stateId = await this.#stateId(to);
-    if (title !== issue.title) update.title = title;
+    if (Object.keys({ ...previous, ...meta }).some((key) => previous[key] !== meta[key]))
+      update.description = workflowDescription(issue, meta);
+    if (keys.due) {
+      const due = metaInstant(keys.due, this.#c.timeZone)!;
+      const day = localDay(due.getTime(), this.#c.timeZone);
+      if (day !== issue.dueDate) update.dueDate = day;
+    }
     if (!Object.keys(update).length)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
     const threadTs =
@@ -1315,7 +1298,7 @@ export class Sync {
   async #runTimes(issue: LinearIssue): Promise<void> {
     if (this.#c.closedStateTypes.includes(issue.state.type)) return this.#planTimer(issue);
     const now = this.#now();
-    const { meta } = parseTitle(issue.title);
+    const meta = issueWorkflow(issue);
     const come = (value: string | undefined) => {
       const at = value ? metaInstant(value, this.#c.timeZone) : null;
       return at !== null && at.getTime() <= now;
@@ -1353,7 +1336,7 @@ export class Sync {
   #planTimer(issue: LinearIssue): void {
     const times: number[] = [];
     if (!this.#c.closedStateTypes.includes(issue.state.type)) {
-      const { meta } = parseTitle(issue.title);
+      const meta = issueWorkflow(issue);
       const add = (value: string | undefined) => {
         const at = value ? metaInstant(value, this.#c.timeZone) : null;
         if (at) times.push(at.getTime());
@@ -1368,11 +1351,11 @@ export class Sync {
   }
 
   /**
-   * When an issue is due: the title's `due` (a bare date is midnight, like `start`), else Linear's
+   * When an issue is due: the workflow's `due` (a bare date is midnight, like `start`), else Linear's
    * own due date, which has no time, at midnight starting that day. Both in `timeZone`.
    */
   #due(issue: LinearIssue): Due | null {
-    for (const value of [parseTitle(issue.title).meta.due, issue.dueDate]) {
+    for (const value of [issueWorkflow(issue).due, issue.dueDate]) {
       const at = value ? metaInstant(value, this.#c.timeZone) : null;
       if (value && at) return { at: at.getTime(), timed: hasTime(value) };
     }
@@ -1380,25 +1363,24 @@ export class Sync {
   }
 
   /**
-   * Keeps Linear's own due date on the day of the title's `due`, so Linear shows it and sorts by
-   * it. When Linear's date is what changed (its date picker, or clearing it), the title follows
-   * instead, keeping its time of day. Returns the issue as it now is.
+   * Keeps Linear's due date on the day of the workflow's `due`. A change from Linear's date
+   * picker updates the workflow's day and keeps its time of day.
    */
   async #syncDue(issue: LinearIssue, changed: Record<string, unknown> = {}): Promise<LinearIssue> {
     if (this.#c.closedStateTypes.includes(issue.state.type)) return issue;
-    const { name, meta } = parseTitle(issue.title);
+    const meta = issueWorkflow(issue);
     const at = meta.due ? metaInstant(meta.due, this.#c.timeZone) : null;
     if (!meta.due || !at) return issue;
     const day = localDay(at.getTime(), this.#c.timeZone);
     if (issue.dueDate === day) return issue;
-    if ("dueDate" in changed && !("title" in changed)) {
+    if ("dueDate" in changed && !("title" in changed) && !("description" in changed)) {
       const due = issue.dueDate ? withDay(meta.due, issue.dueDate, this.#c.timeZone) : null;
       if (due) meta.due = due;
       else delete meta.due;
-      const title = formatTitle(name, meta);
-      await this.#linear.updateIssue(issue.id, { title });
+      const description = workflowDescription(issue, meta);
+      await this.#linear.updateIssue(issue.id, { description });
       this.#log("due_from_linear", { issue: issue.identifier, due });
-      return { ...issue, title };
+      return { ...issue, description };
     }
     await this.#linear.updateIssue(issue.id, { dueDate: day });
     this.#log("due_to_linear", { issue: issue.identifier, day });
@@ -1591,30 +1573,30 @@ export class Sync {
     return id;
   }
 
-  /** Title metadata that belongs to a status, dropped when an issue leaves it. */
+  /** Workflow details that belong to a status. */
   #statusKeys(status: string): string[] {
     if (status === this.#c.dateState) return ["start"];
     if (status === this.#c.listenerState) return ["event", "stop"];
+    if (status === this.#c.othersState) return ["who"];
     return [];
   }
 
   /**
-   * Moves an issue to another status in Linear, stripping from its title the keys of every status
-   * but the new one: the old status's, and the one before Hermes's 👀 when it comes from there.
-   * `keepKeys` leaves the title alone, for the 👀 move, which the issue comes back from.
+   * Moves an issue to another status in Linear, clearing details for other statuses.
+   * Hermes's 👀 move keeps the details so it can return to its previous status.
    */
   async #move(issue: LinearIssue, to: string, { keepKeys = false } = {}): Promise<void> {
-    const { name, meta } = parseTitle(issue.title);
+    const meta = issueWorkflow(issue);
     const stale = keepKeys
       ? []
-      : [this.#c.dateState, this.#c.listenerState]
+      : [this.#c.dateState, this.#c.listenerState, this.#c.othersState]
           .filter((status) => status !== to)
           .flatMap((status) => this.#statusKeys(status))
           .filter((key) => key in meta);
     for (const key of stale) delete meta[key];
     await this.#linear.updateIssue(issue.id, {
       stateId: await this.#stateId(to),
-      ...(stale.length ? { title: formatTitle(name, meta) } : {}),
+      ...(stale.length ? { description: workflowDescription(issue, meta) } : {}),
     });
   }
 
@@ -1791,20 +1773,6 @@ export class Sync {
     }
   }
 
-  async #rename(channelId: string, name: string): Promise<boolean> {
-    for (const client of [this.#bot, this.#session]) {
-      if (!client) continue;
-      try {
-        await client("conversations.rename", { channel: channelId, name });
-        return true;
-      } catch (error) {
-        if (error instanceof SlackError && error.code === "name_taken") return false;
-        this.#log("rename_failed", { channelId, name, error: String(error) });
-      }
-    }
-    return false;
-  }
-
   /** The managed sections, top to bottom: the statuses, then projects. */
   #order(): string[] {
     const { sectionOrder, projectSection } = this.#c;
@@ -1874,7 +1842,7 @@ export class Sync {
   ): Promise<void> {
     const { name } = parseTitle(issue.title);
     const safe = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const description = issue.description ? linearToSlack(issue.description).trim() : "";
+    const description = linearToSlack(issueDescription(issue.description)).trim();
     const excerpt =
       lead ?? (description.length > 2500 ? `${description.slice(0, 2500)}…` : description);
     const mentions = quiet ? "" : this.#mentions(issue);

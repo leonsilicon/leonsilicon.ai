@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { loadConfig } from "#config";
+import { issueWorkflow } from "#format";
 import { IssueMetadata } from "#issue-metadata";
 import type {
   IssueUpdate,
@@ -132,8 +133,8 @@ function fakeLinear(makeChannel: MakeChannel, now: () => number = Date.now) {
         issue.state = STATES.find((s) => s.id === input.stateId)!;
         statusChanged.set(id, now());
       }
-      if (input.title) issue.title = input.title;
       if ("dueDate" in input) issue.dueDate = input.dueDate ?? null;
+      if ("description" in input) issue.description = input.description ?? null;
     },
     project: async (id) => projects.get(id) ?? null,
     openProjects: async (team, closed) =>
@@ -703,6 +704,34 @@ test("status moves post a message, mention the right party and move the section"
   assert.equal(slack.sectionOf(channel.id), "Executing");
 });
 
+test("title edits keep the original channel and a new follow-up gets its own channel", async () => {
+  const { linear, slack, store, sync } = setup();
+  const original = linear.addIssue(55, "Apply for Wispr Flow student discount", "Executing");
+  await sync.run("linear", issueHook(original.id, "create"));
+  const originalChannel = store.issue(original.id)!.channelId;
+
+  original.title =
+    "[AWAITING: Grok Bot Slack delivery configuration] Apply for Wispr Flow student discount";
+  await sync.run("linear", issueHook(original.id));
+  original.title = "[AWAITING: Wispr support ticket 281896] Apply for Wispr Flow student discount";
+  await sync.run("linear", issueHook(original.id));
+
+  const followUp = linear.addIssue(
+    56,
+    "Follow up on Wispr support ticket 281896",
+    "Awaiting Others",
+  );
+  await sync.run("linear", issueHook(followUp.id, "create"));
+
+  assert.equal(
+    slack.calls.some(({ method }) => method === "conversations.rename"),
+    false,
+  );
+  assert.equal(store.issue(original.id)!.channelId, originalChannel);
+  assert.equal(slack.channels[0]!.name, "leon-55-apply-for-wispr-flow-student-discount");
+  assert.equal(slack.channels[1]!.name, "leon-56-follow-up-on-wispr-support-ticket-281896");
+});
+
 test("sections are created in the configured order", async () => {
   const { linear, slack, sync } = setup();
   for (const [n, s] of [
@@ -973,7 +1002,8 @@ test("an Awaiting Date issue starts when its timer goes off, not before", async 
   clock.now = DEC_1;
   await drain();
   assert.equal(dated.state.name, "Awaiting Start");
-  assert.equal(dated.title, "File taxes");
+  assert.equal(dated.title, "File taxes `{start: 2026-12-01}`");
+  assert.deepEqual(issueWorkflow(dated), {});
   assert.equal(store.timer(`timer:${dated.id}`), null, "nothing left to wait for");
   // Linear's webhook for the move then files the channel.
   await sync.run("linear", issueHook(dated.id));
@@ -993,7 +1023,11 @@ test("an expired listener goes back to Leon with a comment, on its timer", async
   clock.now = Date.UTC(2026, 11, 1, 14, 0);
   await drain();
   assert.equal(listener.state.name, "Awaiting Leon");
-  assert.equal(listener.title, "switch to rogers");
+  assert.equal(
+    listener.title,
+    "switch to rogers `{event: Rogers deal, stop: 2026-12-01T09:00:00-05:00}`",
+  );
+  assert.deepEqual(issueWorkflow(listener), {});
   assert.match(
     linear.created.at(-1)!.body,
     /stop date \(2026-12-01T09:00:00-05:00\) passed .* Rogers deal/,
@@ -1071,30 +1105,29 @@ test("Linear's own due date alone goes off at midnight starting that day", async
   );
 });
 
-test("changing Linear's due date moves the title's due, keeping its time; clearing it drops it", async () => {
+test("changing Linear's due date preserves the title and time of day; clearing it drops the timer", async () => {
   const { linear, sync, store } = setup(DEC_1 - 86_400_000);
-  const issue = linear.addIssue(403, "Pay rent `{due: 2026-12-01T17:00:00-05:00}`", "Executing");
+  const title = "Pay rent `{due: 2026-12-01T17:00:00-05:00}`";
+  const issue = linear.addIssue(403, title, "Executing", "Use the usual payment method.");
   await sync.run("linear", issueHook(issue.id, "create"));
   assert.equal(issue.dueDate, "2026-12-01");
 
   // Leon picks Dec 3 in Linear's date picker.
   issue.dueDate = "2026-12-03";
   await sync.run("linear", updateHook(issue.id, { dueDate: "2026-12-01" }));
-  assert.equal(issue.title, 'Pay rent `{due: "2026-12-03T17:00:00-05:00"}`');
+  assert.equal(issue.title, title);
+  assert.match(issue.description!, /^Use the usual payment method\./);
+  assert.equal(issueWorkflow(issue).due, "2026-12-03T17:00:00-05:00");
   assert.equal(store.timer(`timer:${issue.id}`), Date.UTC(2026, 11, 3, 22, 0));
   // Its own webhook then finds the two agree.
   const writes = linear.updates.length;
-  await sync.run("linear", updateHook(issue.id, { title: "Pay rent" }));
+  await sync.run("linear", updateHook(issue.id, { description: "Use the usual payment method." }));
   assert.equal(linear.updates.length, writes);
 
-  // Editing the title instead moves Linear's date.
-  issue.title = "Pay rent `{due: 2026-12-05}`";
-  await sync.run("linear", updateHook(issue.id, { title: "x" }));
-  assert.equal(issue.dueDate, "2026-12-05");
-
   issue.dueDate = null;
-  await sync.run("linear", updateHook(issue.id, { dueDate: "2026-12-05" }));
-  assert.equal(issue.title, "Pay rent");
+  await sync.run("linear", updateHook(issue.id, { dueDate: "2026-12-03" }));
+  assert.equal(issue.title, title);
+  assert.equal(issueWorkflow(issue).due, undefined);
   assert.equal(store.timer(`timer:${issue.id}`), null);
 });
 
@@ -1737,8 +1770,7 @@ test("Hermes's answer moves nothing; Autolinear reminds it, and its command move
   assert.equal(autolinearPosts(t, posts).length, 1, "no second reminder");
 });
 
-test("a command at the end of Hermes's answer moves the issue at once, title keys and all", async () => {
-  // Waiting on a listener: the keys go in the title.
+test("Hermes moves an issue and updates workflow details without renaming it", async () => {
   let t = setup();
   let { issue, channel } = await issueChannel(t);
   let message = await leonWrites(t, channel.id, "switch me to rogers once the deal is back");
@@ -1753,7 +1785,8 @@ test("a command at the end of Hermes's answer moves the issue at once, title key
   );
   assert.equal(t.slack.posts.at(-1)!.thread_ts, command);
   assert.equal(issue.state.name, "Awaiting Listener");
-  assert.equal(issue.title, "testing autolinear `{event: Rogers BYOD deal, stop: 2026-12-01}`");
+  assert.equal(issue.title, "testing autolinear");
+  assert.deepEqual(issueWorkflow(issue), { event: "Rogers BYOD deal", stop: "2026-12-01" });
   assert.equal(t.slack.sectionOf(channel.id), "Awaiting Listener");
   assert.deepEqual(t.slack.reactions, [
     { channel: channel.id, ts: command, name: "white_check_mark", by: "autolinear" },
@@ -1768,15 +1801,21 @@ test("a command at the end of Hermes's answer moves the issue at once, title key
   assert.equal(issue.state.name, "Executing");
   await hermesCommands(t, channel.id, "move listener", "Not yet.");
   assert.equal(issue.state.name, "Awaiting Listener");
-  assert.equal(issue.title, "testing autolinear `{event: Rogers BYOD deal, stop: 2026-12-01}`");
+  assert.deepEqual(issueWorkflow(issue), { event: "Rogers BYOD deal", stop: "2026-12-01" });
 
-  // Leaving the listener drops its keys; Awaiting Others gets its [AWAITING: …] prefix.
+  // Changing who is responsible keeps the task's identity.
   await hermesCommands(t, channel.id, 'move "Awaiting Others" who="Rogers support"');
   assert.equal(issue.state.name, "Awaiting Others");
-  assert.equal(issue.title, "[AWAITING: Rogers support] testing autolinear");
+  assert.deepEqual(issueWorkflow(issue), { who: "Rogers support" });
+  await hermesCommands(t, channel.id, 'move others who="Rogers billing"');
+  assert.deepEqual(issueWorkflow(issue), { who: "Rogers billing" });
+  assert.deepEqual(JSON.parse(t.issueMetadata.snapshot())[0].meta, { who: "Rogers billing" });
+
   await hermesCommands(t, channel.id, "move date start=2026-12-01T09:00:00-05:00");
   assert.equal(issue.state.name, "Awaiting Date");
-  assert.equal(issue.title, 'testing autolinear `{start: "2026-12-01T09:00:00-05:00"}`');
+  assert.deepEqual(issueWorkflow(issue), { start: "2026-12-01T09:00:00-05:00" });
+  assert.equal(issue.title, "testing autolinear");
+  assert.equal(channel.name, "leon-427-testing-autolinear");
 
   // `move leon` mentions Leon, unless Hermes's message already did.
   t = setup();

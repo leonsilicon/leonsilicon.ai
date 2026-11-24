@@ -43,7 +43,7 @@ export interface SyncConfig {
    * plain-text `@Autolinear` line is read as a command.
    */
   autolinearUserId: string | null;
-  /** The status whose issue titles start with `[AWAITING: <who>]` (Leon's convention). */
+  /** The status whose issues are waiting on someone else and have a `who` value. */
   othersState: string;
   /** Time zone for bare dates in title metadata, and for Linear's own due dates, which have no time. */
   timeZone: string;

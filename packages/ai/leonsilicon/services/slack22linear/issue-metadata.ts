@@ -1,4 +1,4 @@
-import { parseTitle } from "#format";
+import { issueWorkflow, parseTitle } from "#format";
 import type { LinearIssue } from "#linear";
 import type { IssueRecord, Sql } from "#store";
 
@@ -37,7 +37,7 @@ export class IssueMetadata {
   }
 
   save(channelId: string, issue: LinearIssue): void {
-    const { name, meta } = parseTitle(issue.title);
+    const { name } = parseTitle(issue.title);
     this.#put({
       version: 1,
       channelId,
@@ -49,7 +49,7 @@ export class IssueMetadata {
       priority: issue.priority,
       url: issue.url,
       dueDate: issue.dueDate,
-      meta,
+      meta: issueWorkflow(issue),
     });
   }
 

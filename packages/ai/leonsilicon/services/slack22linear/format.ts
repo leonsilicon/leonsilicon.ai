@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "@-/com.npmjs.yaml";
+import { AWAITING_PREFIX, COMMAND_KEYS } from "#command";
 import type { LinearIssue, LinearProject } from "#linear";
 
 export type TitleMeta = Record<string, string>;
@@ -54,6 +55,51 @@ export function formatTitle(name: string, meta: TitleMeta): string {
   if (entries.length === 0) return name;
   const body = entries.map(([key, value]) => `${flowString(key)}: ${flowString(value)}`).join(", ");
   return `${name} \`{${body}}\``;
+}
+
+const WORKFLOW_HEADING = "### AutoLinear workflow";
+const WORKFLOW_BLOCK = /(?:^|\n\n)### AutoLinear workflow\n\n```json\n(\{[^\n]*\})\n```(?=\n|$)/;
+
+function legacyWorkflow(title: string): TitleMeta {
+  const { name, meta } = parseTitle(title);
+  const who = AWAITING_PREFIX.exec(name)?.[1]?.trim();
+  if (who) meta.who = who;
+  return meta;
+}
+
+/** Status details live in the issue description. Old titles still supply values. */
+export function issueWorkflow(issue: Pick<LinearIssue, "title" | "description">): TitleMeta {
+  const meta = legacyWorkflow(issue.title);
+  const block = WORKFLOW_BLOCK.exec(issue.description ?? "");
+  if (!block) return meta;
+  let values: Record<string, unknown>;
+  try {
+    values = JSON.parse(block[1]!) as Record<string, unknown>;
+  } catch {
+    return meta;
+  }
+  for (const key of COMMAND_KEYS) {
+    const value = values[key];
+    if (typeof value === "string") meta[key] = value;
+    else if (value === null) delete meta[key];
+  }
+  return meta;
+}
+
+export function issueDescription(description: string | null): string {
+  return (description ?? "").replace(WORKFLOW_BLOCK, "");
+}
+
+/** Writes only the overrides to legacy title data, using null to clear a legacy value. */
+export function workflowDescription(issue: LinearIssue, meta: TitleMeta): string {
+  const legacy = legacyWorkflow(issue.title);
+  const values = Object.fromEntries(
+    COMMAND_KEYS.filter((key) => legacy[key] !== meta[key]).map((key) => [key, meta[key] ?? null]),
+  );
+  const description = issueDescription(issue.description);
+  if (!Object.keys(values).length) return description;
+  const block = `${WORKFLOW_HEADING}\n\n\`\`\`json\n${JSON.stringify(values)}\n\`\`\``;
+  return description ? `${description}\n\n${block}` : block;
 }
 
 /**
