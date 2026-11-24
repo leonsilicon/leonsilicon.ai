@@ -47,11 +47,7 @@ They're read on every message, so removing the token turns the plugin off once H
 
 ## Install
 
-```sh
-hermes plugins install leonsilicon/leonsilicon.ai/packages/com/leonsilicon/hermes/plugins/autolinear --enable
-```
-
-For a manually copied install, follow the [migration steps](../../../../../../DEVELOPMENT.md#hermes-plugins) first. Restart the gateway. The gateway log shows `autolinear: direct Codex delegation for Leon's Slack messages`. It uses the [Beeper inbox installation](../../../../../../apps/beeper-inbox/README.md) at `$BEEPER_INBOX_HOME` (default `$HERMES_HOME/beeper-inbox`).
+Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/autolinear/` (`/opt/data` on Hermes Cloud), add `autolinear` to `plugins.enabled` in `config.yaml`, and restart the gateway. The gateway log shows `autolinear: direct Codex delegation for Leon's Slack messages`. It uses the [Beeper inbox installation](../../../../../../apps/beeper-inbox/README.md) at `$BEEPER_INBOX_HOME` (default `$HERMES_HOME/beeper-inbox`).
 
 The gateway finds the exact direct chat named `Silicon Dot` on Beeper's ChatGPT network. Set `AUTOLINEAR_DOT_ROOM_ID` in Hermes's environment if the chat has a different name or multiple rooms match.
 

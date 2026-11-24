@@ -70,7 +70,7 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 
 **The Workers deploy themselves.** A push to `main` runs CI's checks and then [Deploy](.github/workflows/deploy.yml), which deploys every Worker the push changed since the last successful run. The changed set is worked out by [deploy-targets](packages/ai/leonsilicon/configs/deploy-targets/README.md) from the workspace dependency graph: a Worker's app, every package it reaches, and the shared inputs (`www/`, the lockfile, root config, `.env.schema`). Docs and tests don't trigger it. A failed deploy is retried by the next push. The same workflow publishes the [Todoist Automations](packages/ai/leonsilicon/configs/todoist-automations/README.md) on every run, since the repo is their source of truth.
 
-**Ship by pushing.** A finished, tested change to anything the workflow deploys is committed and pushed to `main`; that is the deploy (Leon's rule, 2026-11-23). Don't deploy it by hand: production then drifts from `main`, and the next push deploys `main` over it. The commands below, and Actions → Deploy with `all` or a list of Workers, are for recovering when a push can't deploy. For services deployed outside the workflow, commit and push the changes so `main` remains the source of truth.
+**Ship by pushing.** A finished, tested change to anything the workflow deploys is committed and pushed to `main`; that is the deploy (Leon's rule, 2026-11-23). Don't deploy it by hand: production then drifts from `main`, and the next push deploys `main` over it. The commands below, and Actions → Deploy with `all` or a list of Workers, are for recovering when a push can't deploy. Everything else in the table is still deployed by hand, and its changes are committed and pushed too, so `main` matches what runs.
 
 | What                          | Command                                                                                                                                         |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -82,20 +82,16 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `gmail-feed` Worker           | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                                 |
 | `cronometer` Worker (Python)  | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
 | `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
-| Hermes plugins                | Install from the plugin's Git subdirectory and let Hermes check `main` for updates. See [Hermes plugins](#hermes-plugins).                      |
+| Hermes plugins                | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                              |
 | Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
 | Grok relay and Beeper Feed    | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
 The service Worker tasks build `www/` before deploying and need Infisical access for their configuration. The landing page deploy needs Cloudflare credentials. The retired Mac mini Orca bridge keeps its deploy script for reference.
 
-### Hermes plugins
+### Hermes plugin updates
 
-Each plugin is a Git install from its own subdirectory in this repository. Use the install command in its README on the Hermes host. Hermes records the source and installed revision, then follows GitHub's default branch, `main`. Leave the install unpinned to receive updates.
-
-To convert existing copies on Hermes Cloud, use the terminal on the intended profile. Keep a backup of each plugin directory outside the `plugins` directory and check any local changes against `main` before replacing it. Reinstall each copied plugin with its documented Git source and `--force`. Preserve its current enabled state by using `--enable` for an active plugin or `--no-enable` for a disabled one. Restart the gateway after replacing the Slack adapter plugins, and check their startup logs.
-
-Run `hermes plugins check-updates` to verify the Git sources. To apply eligible updates automatically, run `hermes plugins auto-update on` in that profile. The setting applies to all eligible plugins in the profile. Hermes checks daily by default and leaves updates that require review for manual approval. To apply an update by name, run `hermes plugins update <name>`. [Hermes plugin update docs](https://github.com/NousResearch/hermes-agent/blob/v0.23.2/website/docs/user-guide/features/plugins.md#update-checks-and-provenance)
+Use the plugin's README to install it on Hermes Cloud. Hermes 0.23.2 can install a plugin from a Git subdirectory, but the updater reports those installs as `provenance drift`. The installer copies the plugin folder and its source metadata, while the updater also requires a `.git` directory. The same check is present in 0.23.4. A Git install from the root of its own repository retains `.git` and is eligible for the profile's opt-in auto-updater. [Hermes updater source](https://github.com/NousResearch/hermes-agent/blob/v0.23.4/hermes_cli/plugins_provenance.py)
 
 ## Patching
 

@@ -18,11 +18,7 @@ autolinear's plugin calls `_session_thread_ts` for the copy of Leon's message it
 
 ## Install
 
-```sh
-hermes plugins install leonsilicon/leonsilicon.ai/packages/com/leonsilicon/hermes/plugins/slack-flat-replies --enable
-```
-
-For a manually copied install, follow the [migration steps](../../../../../../DEVELOPMENT.md#hermes-plugins) first. The plugin takes effect on the live adapter without a restart. The gateway log shows `slack-flat-replies: Hermes answers top-level channel messages in the channel, threads in their thread`.
+Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/slack-flat-replies/` (`/opt/data` on Hermes Cloud) and enable it (`hermes plugins enable slack-flat-replies`, or the dashboard). It takes effect on the live adapter without a restart. The gateway log shows `slack-flat-replies: Hermes answers top-level channel messages in the channel, threads in their thread`.
 
 ## Test
 
