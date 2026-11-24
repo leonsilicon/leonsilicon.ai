@@ -103,7 +103,7 @@ $B status                    # JSON health: device, crypto, sync, directory, rec
 $B restart                   # same device and store
 $B tool list_conversations '{"query":"note to self"}'
 $B journal                   # what sync delivered lately, without text; '{"after":N,"room_id":"!…"}' narrows it
-$B extension grok-relay grok_bots   # one of the Grok relay's tools, as Hermes would call it
+$B extension slack22grokbot grok_bots   # one of the Grok relay's tools, as Hermes would call it
 tail /opt/data/beeper-inbox/logs/daemon.log
 ```
 

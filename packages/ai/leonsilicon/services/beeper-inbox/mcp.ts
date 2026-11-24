@@ -18,7 +18,7 @@ import { INSTRUCTIONS, TOOLS } from "#tools";
  * every minute, so background sync survives gateway restarts and machine restarts.
  *
  * With an `extension` it serves that extension's tools instead (`mcp_servers.grok` runs
- * `beeper-inbox.mjs mcp grok-relay`), through the same daemon.
+ * `beeper-inbox.mjs mcp slack22grokbot`), through the same daemon.
  */
 export async function runMcpServer(
   launcher: DaemonLauncher,

@@ -40,7 +40,9 @@ export async function runCli(
     Boolean(extension.server),
   );
   const extensionNamed = (name: string): McpExtension => {
-    const found = mcpExtensions.find((extension) => extension.name === name);
+    const found = mcpExtensions.find(
+      (extension) => extension.name === name || extension.legacyName === name,
+    );
     if (!found)
       throw new Error(
         `no MCP extension "${name}"; this build has: ${mcpExtensions.map((extension) => extension.name).join(", ") || "none"}`,
@@ -126,9 +128,10 @@ export async function runCli(
       return 0;
     }
     case "extension": {
-      const [extension, name, json] = rest;
-      if (!extension || !name) throw new Error("extension needs an extension name and a tool name");
-      extensionNamed(extension);
+      const [extensionName, name, json] = rest;
+      if (!extensionName || !name)
+        throw new Error("extension needs an extension name and a tool name");
+      const extension = extensionNamed(extensionName).name;
       const args = json ? (JSON.parse(json) as unknown) : {};
       await ensureDaemon(paths, launcher);
       print(

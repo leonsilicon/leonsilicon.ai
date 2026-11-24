@@ -30,12 +30,12 @@ Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also 
 
 Services that run on Hermes Cloud's own machine without a public address.
 
-| What                                                                  | State                                                                                                                                   |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [OrcaHermes Device](https://orcahermes-device.leonsilicon.ai/)        | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge. [Runbook](apps/orcahermes-device/README.md) |
-| [Beeper inbox](apps/beeper-inbox/README.md)                           | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop                                     |
-| [Grok relay](packages/ai/leonsilicon/services/grok-relay/README.md)   | Live since 2026-11-21: Hermes messages Leon's Grok bots through the Beeper inbox. It replaced the mini's relay                          |
-| [Beeper Feed](packages/ai/leonsilicon/services/beeper-feed/README.md) | One-way mirror from Beeper to the per-platform Slack feeds.                                                                             |
+| What                                                                    | State                                                                                                                                   |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [OrcaHermes Device](https://orcahermes-device.leonsilicon.ai/)          | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge. [Runbook](apps/orcahermes-device/README.md) |
+| [Beeper inbox](apps/beeper-inbox/README.md)                             | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop                                     |
+| [slack22grokbot](packages/ai/leonsilicon/services/grok-relay/README.md) | Hermes delegates to Grok bots through the Beeper inbox and follows up in Slack task threads                                             |
+| [Beeper Feed](packages/ai/leonsilicon/services/beeper-feed/README.md)   | One-way mirror from Beeper to the per-platform Slack feeds.                                                                             |
 
 ## Also here
 

@@ -938,7 +938,7 @@ test("the Codex handoff names the session after the thread and tells it how to r
   assert.throws(() => slackThread("general", "1795280000.123456"), /channel ID/);
 });
 
-test("direct Grok sends are refused even on a directory miss; the in-process relay can send", async () => {
+test("only the in-process Grok relay can send, using either extension name", async () => {
   const { env, paths, server, pickle } = setup();
   const daemon = await startDaemon({
     env,
@@ -948,9 +948,13 @@ test("direct Grok sends are refused even on a directory miss; the in-process rel
     bridgeStatusWaitMs: 20,
     extensions: [
       {
-        name: "grok-relay",
+        name: "slack22grokbot",
+        legacyName: "grok-relay",
         server: { name: "test-relay", version: "1", instructions: "", tools: [] },
-        start: (context) => ({ callTool: (_name, args) => context.tool("send_message", args) }),
+        start: (context) => {
+          assert.equal(context.home, join(paths.home, "grok-relay"));
+          return { callTool: (_name, args) => context.tool("send_message", args) };
+        },
       },
     ],
   });
@@ -973,13 +977,17 @@ test("direct Grok sends are refused even on a directory miss; the in-process rel
     );
     assert.equal(server.sendPuts.length, 0);
 
-    const sent = (await callIpc(paths.socket, "extension", {
-      extension: "grok-relay",
-      name: "test_send",
-      arguments: args,
-    })) as Record<string, unknown>;
-    assert.equal(sent.status, "sent");
-    assert.equal(server.sendPuts.length, 1);
+    for (const extension of ["slack22grokbot", "grok-relay"]) {
+      const sent = (await callIpc(paths.socket, "extension", {
+        extension,
+        name: "test_send",
+        arguments: { ...args, text: `${args.text} via ${extension}` },
+      })) as Record<string, unknown>;
+      assert.equal(sent.status, "sent");
+    }
+    assert.equal(server.sendPuts.length, 2);
+    const status = (await callIpc(paths.socket, "status")) as { extensions: object };
+    assert.deepEqual(status.extensions, { slack22grokbot: { running: true } });
   } finally {
     await daemon.shutdown();
   }

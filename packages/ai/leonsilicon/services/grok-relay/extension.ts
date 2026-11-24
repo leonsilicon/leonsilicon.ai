@@ -8,18 +8,20 @@ import { createGrokRelay } from "#relay";
 import { Slack22GrokBot } from "#slack22grokbot";
 import { callTool, INSTRUCTIONS, TOOLS } from "#tools";
 
-export const VERSION = "1.5.0";
+export const VERSION = "1.5.1";
+const NAME = "slack22grokbot";
 const POLL_MS = 15_000;
 
 /**
- * The relay as an extension of Hermes's Beeper inbox daemon: `beeper-inbox.mjs mcp grok-relay` is its
+ * The relay as an extension of Hermes's Beeper inbox daemon: `beeper-inbox.mjs mcp slack22grokbot` is its
  * MCP server. It runs inside the daemon because the queue, the budget and the flusher need exactly
  * one owner, and Hermes starts an MCP server in several processes at once.
  */
 export function grokRelayExtension(): DaemonExtension {
   return {
-    name: "grok-relay",
-    server: { name: "leon-grok", version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS },
+    name: NAME,
+    legacyName: "grok-relay",
+    server: { name: NAME, version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS },
     start(context) {
       const backend = inboxBackend((name, args) => context.tool(name, args), context.journal);
       const log = ({ event, ...fields }: Record<string, unknown>) =>

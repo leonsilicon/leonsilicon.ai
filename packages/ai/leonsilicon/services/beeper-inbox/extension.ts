@@ -79,8 +79,10 @@ export interface RunningExtension {
  * expose tools through a separate stateless MCP adapter.
  */
 export interface DaemonExtension {
-  /** The extension's directory and status name. */
+  /** The extension's command and status name. */
   name: string;
+  /** Its former command name, also used to keep existing settings and state in place. */
+  legacyName?: string;
   server?: ExtensionServer;
   start(context: ExtensionContext): RunningExtension | Promise<RunningExtension>;
 }

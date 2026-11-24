@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.grok-relay
 
-The Grok Bot relay delivers each Hermes handoff in the bot's Beeper chat as Leon. `slack22grokbot` connects the resulting task bot to its Slack thread.
+The `slack22grokbot` MCP extension delivers each Hermes handoff in the bot's Beeper chat as Leon and connects the resulting task bot to its Slack thread.
 
 It runs on Hermes Cloud, inside the [Beeper inbox](../beeper-inbox/README.md) daemon, and reaches the bots over Matrix through that inbox, with none of Leon's computers involved. Hermes's `grok` MCP server has pointed at it since 2026-11-21. From 2026-11-06 until then the relay ran on the Mac mini and went through Beeper Desktop ([`configs/grok-relay-hermes`](../../configs/grok-relay-hermes/README.md), v1.2.0); that copy is stopped.
 
@@ -26,7 +26,9 @@ Every delegation carries the channel and root timestamp. Slack validates both be
 
 ### Enable on Hermes Cloud
 
-The Slack Worker deploys on push. After it serves the new endpoints, render `vpx _env-file slack22grokbot` into `/opt/data/beeper-inbox/grok-relay/slack22grokbot.env` with mode 600. Install the [Beeper inbox release](../../../../../apps/beeper-inbox/README.md#deploy) and check `status.extensions["grok-relay"].slack22grokbot`. Update the Slack guard to v1.2.0 and restart the Hermes gateway to load the thread routing and refresh the MCP tool list. The settings file uses the existing Slack-puppet and Grok Bot admin tokens.
+The Slack Worker deploys on push. After it serves the new endpoints, render `vpx _env-file slack22grokbot` into `/opt/data/beeper-inbox/grok-relay/slack22grokbot.env` with mode 600. Install the [Beeper inbox release](../../../../../apps/beeper-inbox/README.md#deploy) and check `status.extensions.slack22grokbot.slack22grokbot`. Update the Slack guard to v1.2.0 and restart the Hermes gateway to load the thread routing and refresh the MCP tool list. The settings file uses the existing Slack-puppet and Grok Bot admin tokens.
+
+Set `mcp_servers.grok` in Hermes to `command: node` with `args: [/opt/data/beeper-inbox/app/beeper-inbox.mjs, mcp, slack22grokbot]`. The previous command name `grok-relay` remains an alias. The extension reuses its settings and state in `/opt/data/beeper-inbox/grok-relay/`.
 
 ## Policy
 
@@ -39,7 +41,7 @@ Grok Bot bills by agent steps and tokens, so every message starts a costly run (
 ## How it works
 
 ```text
-Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp grok-relay ─unix socket─▶ beeper-inbox daemon ─▶ relay ─inbox tools─▶ matrix.beeper.com
+Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp slack22grokbot ─unix socket─▶ beeper-inbox daemon ─▶ relay ─inbox tools─▶ matrix.beeper.com
 ```
 
 - **An extension of the inbox daemon** (`extension.ts`). Hermes starts each MCP server in several processes (the gateway, cron runs, dashboard chats), and the queue, the budget and the flusher need exactly one owner. The daemon already is the one owner of the Beeper device, so the relay runs in it, and every MCP server process is a stateless client of its socket.
@@ -58,7 +60,7 @@ Differences from the Beeper Desktop version: `grok_bots` no longer shows each bo
 Hermes's log showed its Grok tools failing since the day before with "Beeper Desktop is not reachable on Leon's Mac mini": Beeper Desktop there froze about 20 seconds after every launch.
 
 - **Tested on Hermes Cloud first**, from the command line: `grok_bots` listed the 14 bots in 0.16 s. One message to an idle bot ("quick test, just reply with ok" to Orca Bot) was answered 12 s later, and the relay returned the reply from the journal.
-- **Config.** The old `grok` entry is saved in `/opt/data/backups/mcp-grok-relay-mini-20261121.json`. The new one is `command: node`, `args: [/opt/data/beeper-inbox/app/beeper-inbox.mjs, mcp, grok-relay]`.
+- **Config.** The old `grok` entry is saved in `/opt/data/backups/mcp-grok-relay-mini-20261121.json`. The Beeper inbox replaced it, originally with `grok-relay` as the extension argument.
 - **Gateway.** A running gateway keeps the old server, so it was restarted while idle (no active agents). Slack, the relay platform and the API server reconnected within a minute.
 - **From a Hermes session** (a one-off cron agent run): `grok_bots` returned 14 bots, and `grok_bot_read` showed the test exchange with Hermes's message as "Hermes (as Leon)".
 - **The mini.** Its queue was empty and its log showed no use since 2026-11-19. `com.leonsilicon.grok-relay-hermes` was stopped and disabled there. `com.leonsilicon.beeper-watchdog` stays on the mini to keep Tailscale up.
@@ -75,7 +77,7 @@ Under the extension's directory, `/opt/data/beeper-inbox/grok-relay/state/` on H
 | `budget.json`      | The last hour's sends and Leon's approvals                             |
 | `hermes-sent.json` | The last 2,000 message IDs Hermes sent, so reads can tell it from Leon |
 
-Events go to the inbox's `logs/daemon.log` tagged `grok-relay`: bot names, counts and reasons, never message text.
+Events go to the inbox's `logs/daemon.log` tagged `slack22grokbot`: bot names, counts and reasons, never message text.
 
 ## Test
 
