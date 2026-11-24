@@ -13,7 +13,6 @@ import type { SyncConfig } from "#config";
 import {
   channelName,
   channelNumber,
-  channelTopic,
   escapeSlack,
   formatTitle,
   hasTime,
@@ -161,8 +160,7 @@ interface StatusPost {
 export interface SyncDeps {
   config: SyncConfig;
   store: Store;
-  issueMetadata?: IssueMetadata;
-  matrixOnly?: boolean;
+  issueMetadata: IssueMetadata;
   linear: LinearApi;
   /** The sync's own Slack app. */
   bot: SlackCall;
@@ -312,8 +310,7 @@ interface Due {
 export class Sync {
   readonly #c: SyncConfig;
   readonly #store: Store;
-  readonly #issueMetadata?: IssueMetadata;
-  readonly #matrixOnly: boolean;
+  readonly #issueMetadata: IssueMetadata;
   readonly #linear: LinearApi;
   readonly #bot: SlackCall;
   readonly #session: SlackCall | null;
@@ -333,8 +330,7 @@ export class Sync {
   constructor(deps: SyncDeps) {
     this.#c = deps.config;
     this.#store = deps.store;
-    if (deps.issueMetadata) this.#issueMetadata = deps.issueMetadata;
-    this.#matrixOnly = deps.matrixOnly === true;
+    this.#issueMetadata = deps.issueMetadata;
     this.#linear = deps.linear;
     this.#bot = deps.bot;
     this.#session = deps.session;
@@ -389,7 +385,7 @@ export class Sync {
     if (hook.action === "remove") {
       this.#store.setTimer(issueTimer(hook.data.id), "timer", null, null, this.#now());
       const rec = this.#store.issue(hook.data.id);
-      if (rec) this.#issueMetadata?.remove(rec);
+      if (rec) this.#issueMetadata.remove(rec);
       if (rec && !rec.archived) {
         await this.#unplace(rec.channelId);
         await this.#archive(rec.channelId);
@@ -468,18 +464,10 @@ export class Sync {
     this.#planTimer(issue);
     const prev = this.#store.issue(issue.id);
     const title = parseTitle(issue.title);
-    const topic = this.#matrixOnly
-      ? null
-      : channelTopic(title, issue.state, issue.url, issue.priority);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
-      this.#issueMetadata?.save(prev.channelId, issue);
+      this.#issueMetadata.save(prev.channelId, issue);
       if (!prev.archived) {
-        if (topic !== null && prev.topic !== topic)
-          await tolerate(this.#bot("conversations.setTopic", { channel: prev.channelId, topic }), [
-            ...ARCHIVED,
-            "channel_not_found",
-          ]);
         if (mode === "live" && prev.stateName !== issue.state.name)
           await this.#postStatus(prev.channelId, prev.stateName, issue, post);
         await this.#unplace(prev.channelId);
@@ -489,7 +477,6 @@ export class Sync {
         ...prev,
         title: issue.title,
         stateName: issue.state.name,
-        topic: topic === null || prev.archived ? prev.topic : topic,
         archived: true,
         section: null,
       };
@@ -548,11 +535,7 @@ export class Sync {
         rec.channelName = wanted;
     }
 
-    this.#issueMetadata?.save(rec.channelId, issue);
-    if (topic !== null && rec.topic !== topic) {
-      await this.#bot("conversations.setTopic", { channel: rec.channelId, topic });
-      rec.topic = topic;
-    }
+    this.#issueMetadata.save(rec.channelId, issue);
 
     if (mode === "live" && prev && prev.stateName !== issue.state.name)
       await this.#postStatus(rec.channelId, prev.stateName, issue, post);
@@ -1519,18 +1502,10 @@ export class Sync {
     for (const listed of issues) {
       const issue = await this.#syncDue(listed);
       const rec = this.#store.issue(issue.id);
-      if (
-        !rec ||
-        rec.archived ||
-        rec.stateName !== issue.state.name ||
-        rec.title !== issue.title ||
-        (!this.#matrixOnly &&
-          rec.topic !==
-            channelTopic(parseTitle(issue.title), issue.state, issue.url, issue.priority))
-      )
+      if (!rec || rec.archived || rec.stateName !== issue.state.name || rec.title !== issue.title)
         await this.syncIssue(issue, "live");
       else {
-        this.#issueMetadata?.save(rec.channelId, issue);
+        this.#issueMetadata.save(rec.channelId, issue);
         this.#planTimer(issue);
       }
     }

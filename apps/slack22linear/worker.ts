@@ -60,7 +60,6 @@ interface Env {
   /** Bearer token for /admin/* (backfill, tick, status). */
   LINEAR_SYNC_ADMIN_TOKEN: string;
   LINEAR_ISSUE_METADATA_TOKEN?: string;
-  LINEAR_ISSUE_METADATA_MATRIX_ONLY?: string | boolean;
   [key: string]: unknown;
 }
 
@@ -260,21 +259,11 @@ export class SyncObject {
     return token && cookie ? sessionClient({ token, cookie }) : null;
   }
 
-  #matrixOnly(): boolean {
-    return (
-      Boolean(this.#env.LINEAR_ISSUE_METADATA_TOKEN) &&
-      String(this.#env.LINEAR_ISSUE_METADATA_MATRIX_ONLY) === "true"
-    );
-  }
-
   #sync(): Sync {
     return new Sync({
       config: loadConfig(this.#env as Record<string, string | undefined>),
       store: this.#store,
-      ...(this.#env.LINEAR_ISSUE_METADATA_TOKEN && {
-        issueMetadata: this.#issueMetadata,
-        matrixOnly: this.#matrixOnly(),
-      }),
+      issueMetadata: this.#issueMetadata,
       linear: new LinearClient(this.#env.LINEAR_API_KEY),
       bot: botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN),
       session: this.#session(),
@@ -373,11 +362,7 @@ export class SyncObject {
           checks.projects === "ok" &&
           checks.autolinear === "ok",
         ...checks,
-        issueMetadata: this.#matrixOnly()
-          ? "matrix"
-          : this.#env.LINEAR_ISSUE_METADATA_TOKEN
-            ? "matrix_and_slack"
-            : "slack",
+        issueMetadata: this.#env.LINEAR_ISSUE_METADATA_TOKEN ? "matrix" : "unconfigured",
         queued,
         dead: dead.length,
       });

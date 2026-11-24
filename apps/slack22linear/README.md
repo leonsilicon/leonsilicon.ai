@@ -40,6 +40,8 @@ It typechecks and builds `www/` first, then deploys with `varlock-wrangler`, whi
 
 Check `curl -s https://linear-slack.leonsilicon.ai/healthz`. It returns `{"ok":true,"bot":"ok","session":"ok","projects":"ok",…}`, or 503 when the bot token or the session fails, or when Linear has no Slack app for project channels (`projects: "off: …"`). Cloudflare 403s some default user agents on this zone, so send your own. Logs: `vpx wrangler tail linear-slack-sync`.
 
+`/healthz` reports `issueMetadata: "matrix"` when the Beeper publisher's read-only endpoint has a credential configured, or `"unconfigured"` when `LINEAR_ISSUE_METADATA_TOKEN` is missing from Infisical's `/linear-slack-sync` folder. The sync keeps collecting issue records in either case. The [Beeper inbox](../beeper-inbox/README.md#linear-metadata) reports room publishing status.
+
 ## Operating it
 
 With `T=$(vpx varlock load --filter LINEAR_SYNC_ADMIN_TOKEN --format json | jq -r .LINEAR_SYNC_ADMIN_TOKEN)` from the repository root:
