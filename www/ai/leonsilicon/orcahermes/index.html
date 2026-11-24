@@ -40,9 +40,9 @@
         <h2 id="verification">Deployment verification</h2>
         <p>
           The headless server runs on Nous under Orca’s built-in supervisor and s6. A live terminal
-          survived both a runtime crash and a supervisor crash. A paired client reached Orca over
-          private TLS, and Codex resumed a signed-in session on the server. Automatic startup after
-          a full host restart remains to be verified.
+          survived both a runtime crash and a supervisor crash. After a full Nous restart, Orca and
+          its private connection returned automatically. The paired client reached the same project,
+          and Codex resumed a signed-in session from persistent storage.
         </p>
       </section>
     </main>

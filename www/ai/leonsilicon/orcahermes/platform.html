@@ -27,18 +27,19 @@
         <p>
           The Nous-hosted image uses s6 to manage services. Orca’s foreground supervisor runs as a
           service in the existing Hermes service tree and uses a persistent profile. A Hermes
-          gateway startup hook restores the service registration. The service manager handles
-          supervisor failure and rotates the service logs.
+          gateway startup hook restores the service registration and starts the existing private
+          network link when needed. The service manager handles supervisor failure and rotates the
+          service logs.
         </p>
       </section>
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
           On Nous, s6 replaced the supervisor after a forced failure, and the replacement runtime
-          recovered the registered project and live terminal. Automatic startup, persistent pairing
-          identity, and private client access after a full host restart remain unverified. A
-          platform restart ends live terminal processes, so an agent session must resume from
-          durable state afterward.
+          recovered the registered project and live terminal. During a controlled stop and start of
+          the Nous instance, the Orca service and its private connection started automatically. The
+          MacBook’s saved pairing reached the same project over TLS. A full restart ends live
+          terminal processes. Codex resumed its session from durable state after the restart.
         </p>
         <p>
           <a href="https://skarnet.org/software/s6/s6-supervise.html"
