@@ -21,7 +21,7 @@ jobs:
       - run: vpr -w typecheck
       - run: vpr -w test
       - run: vpr -w build:hermes-plugins
-      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' 'apps/hermes-plugin-*/_pythonmonkey.py'
+      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs'
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Test Hermes plugins
         run: |

@@ -1,0 +1,1 @@
+../../packages/ai/leonsilicon/configs/hermes-mirrors/slack.ts

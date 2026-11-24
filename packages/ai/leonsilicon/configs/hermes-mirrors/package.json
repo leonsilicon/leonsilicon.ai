@@ -13,5 +13,8 @@
   },
   "exports": {
     ".": "./+.ts"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
   }
 }

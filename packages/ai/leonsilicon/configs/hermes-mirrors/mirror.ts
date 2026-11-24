@@ -1,14 +1,21 @@
 import { execFileSync } from "node:child_process";
 
 const APPS = "apps";
+const SHARED = "packages/ai/leonsilicon/configs/hermes-mirrors";
+const sharedFiles = new Map([
+  ["_pythonmonkey.py", "runtime/_pythonmonkey.py"],
+  ["slack.ts", "slack.ts"],
+  ["vite.config.ts", "plugin-config.ts"],
+]);
 const PLUGIN_APP_PREFIX = "hermes-plugin-";
 
-function git(args: string[], cwd: string, env = process.env): string {
+function git(args: string[], cwd: string, env = process.env, input?: string): string {
   return execFileSync("git", args, {
     cwd,
     env,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    input,
+    stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   }).trim();
 }
 
@@ -20,6 +27,24 @@ export function mirrorNames(source: string, cwd: string): string[] {
   return git(["ls-tree", "-d", "--name-only", `${source}:${APPS}`], cwd)
     .split("\n")
     .filter((name) => name.startsWith(PLUGIN_APP_PREFIX));
+}
+
+function standaloneTree(source: string, directory: string, cwd: string): string {
+  const entries = git(["ls-tree", "-z", directory], cwd)
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => {
+      if (!entry.startsWith("120000 ")) return entry;
+      const name = entry.slice(entry.indexOf("\t") + 1);
+      const shared = sharedFiles.get(name);
+      if (!shared) return entry;
+      const target = `${SHARED}/${shared}`;
+      if (git(["show", `${directory}/${name}`], cwd) !== `../../${target}`)
+        throw new Error(`Unexpected shared file target in ${directory}/${name}`);
+      const blob = git(["rev-parse", `${source}:${target}`], cwd);
+      return `100644 blob ${blob}\t${name}`;
+    });
+  return git(["mktree", "-z"], cwd, process.env, entries.join("\0") + "\0");
 }
 
 export function syncMirror({
@@ -39,7 +64,7 @@ export function syncMirror({
 }): string {
   const directory = `${source}:${APPS}/${name}`;
   git(["cat-file", "-e", `${directory}/plugin.yaml`], cwd);
-  const tree = git(["rev-parse", "--verify", directory], cwd);
+  const tree = standaloneTree(source, directory, cwd);
   const existing = mainRevision(fetchUrl, cwd);
   let parent: string | undefined;
   if (existing) {
