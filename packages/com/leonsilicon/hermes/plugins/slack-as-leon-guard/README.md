@@ -14,6 +14,8 @@ The messages stay in Slack, and Hermes's thread context still shows them (as Leo
 
 ## Delegated agents' posts
 
+Replies mirrored by `slack22grokbot` carry the third UUID group `4b22`. Hermes answers them in the original Slack thread so its replies go back to Grok. The turn prompt tells Hermes how to retire a finished task bot with `grok_task_complete`.
+
 Grok bots and Codex sessions post reports and questions through the same server. Their markers use `b075` and `c0de`, respectively. Hermes receives those events with a note identifying the author of the report.
 
 In `#leon-` task channels, Hermes reads the handoff thread for context and posts its automatic reply in the main channel conversation. If the delegated agent needs a question or instruction, Hermes can send it separately to the handoff thread. In other channels Hermes answers the report in its thread. When Leon writes directly in a thread, Hermes answers him there.

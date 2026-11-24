@@ -1,7 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { isTaskBotFor, slackIdentifier, slackThread, taskBotName } from "#handoff";
+import {
+  isTaskBotFor,
+  parseTaskBotName,
+  slackIdentifier,
+  slackThread,
+  taskBotName,
+} from "#handoff";
+import type { Slack22GrokBot } from "#slack22grokbot";
 import {
   budgetExceededMessage,
   budgetStatus,
@@ -65,6 +72,7 @@ export interface GrokRelayOptions {
   pollMs?: number;
   /** How long after a reply to keep waiting for more of it (default 20 s). */
   quietMs?: number;
+  bridge?: Pick<Slack22GrokBot, "validate" | "complete" | "retired">;
 }
 
 export interface ShapedMessage {
@@ -79,6 +87,7 @@ export interface GrokRelay {
   bots(): Promise<Array<GrokBot & { queued?: number }>>;
   send(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   read(args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  complete(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   flushOnce(now?: () => number): Promise<void>;
   budget(): BudgetStatus;
   stop(): void;
@@ -102,7 +111,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 const given = (value: unknown): boolean => value !== undefined && value !== null && value !== "";
 
 export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
-  const { backend, log } = options;
+  const { backend, log, bridge } = options;
   const { live } = backend;
   const pollMs = options.pollMs ?? POLL_MS;
   const quietMs = options.quietMs ?? QUIET_SECONDS * 1000;
@@ -133,6 +142,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   async function bots(refresh = false): Promise<Array<GrokBot & { queued?: number }>> {
     const all = await backend.bots(refresh ? { refresh: true } : {});
     return all
+      .filter((bot) => !bridge?.retired(bot.chatID))
       .filter((bot) => !allowed || allowed.has(bot.name.toLowerCase()))
       .map((bot) => {
         const waiting = outbox[bot.chatID]?.items.length ?? 0;
@@ -239,14 +249,32 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     const isUrgent = args.urgent === true;
     // Every task carries its Slack thread, and the bot makes a task bot that works there with
     // Hermes; the instructions for that go after Hermes's own text (see handoff.ts).
-    const thread = slackThread(args.slack_channel, args.slack_thread_ts);
+    const requested = slackThread(args.slack_channel, args.slack_thread_ts);
+    const thread = bridge ? await bridge.validate(requested) : requested;
 
     const asked = await resolve(args.bot);
     const why = guardBot(asked.name, args.needs_bot_because);
     if (why) log({ event: "grok_bot_justified", bot: asked.name, reason: why.slice(0, 300) });
-    // One task bot per Slack thread: once a bot exists for this thread (its name ends in the
-    // thread's ts, however the channel was written), the task goes to it, whichever bot was named.
-    const existing = (await bots()).find((bot) => isTaskBotFor(bot.name, thread));
+    // The complete Slack route is the identity, including the channel.
+    const all = await bots();
+    let existing = all.find((bot) => isTaskBotFor(bot.name, thread));
+    if (!existing) {
+      for (const bot of all) {
+        const named = parseTaskBotName(bot.name);
+        if (named?.threadTs !== thread.threadTs) continue;
+        if (
+          !bridge ||
+          isTaskBotFor(bot.name, requested) ||
+          (named.channel.startsWith("#") &&
+            (await bridge.validate(named).catch(() => undefined))?.channel === thread.channel)
+        ) {
+          existing = bot;
+          break;
+        }
+      }
+    }
+    if (!existing && parseTaskBotName(asked.name))
+      throw new Error("This Grok task bot belongs to a different Slack thread");
     const target = existing ?? asked;
     if (existing && existing.chatID !== asked.chatID)
       log({ event: "grok_task_bot_reused", asked: asked.name, bot: existing.name });
@@ -318,9 +346,14 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     // Taken before the send, so nothing that arrives while it is on its way is missed.
     const position = live ? await live.cursor() : 0;
     const sentAt = Date.now();
-    const messageID = await post(target.chatID, compose([item]), `send-${randomUUID()}`, {
-      urgent: isUrgent,
-    });
+    const messageID = await post(
+      target.chatID,
+      compose([item], Boolean(bridge)),
+      `send-${randomUUID()}`,
+      {
+        urgent: isUrgent,
+      },
+    );
     log({
       event: "grok_send",
       bot: target.name,
@@ -432,7 +465,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     flushing = true;
     try {
       for (const [chatID, box] of Object.entries(outbox)) {
-        if (!box.items.length) {
+        if (!box.items.length || bridge?.retired(chatID)) {
           delete outbox[chatID];
           saveOutbox();
           continue;
@@ -445,8 +478,8 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
           const { list, windowed } = await recent(chatID, now());
           const state = busy(list, now(), { windowed });
           if (state.busy && now() - Date.parse(first.at) < MAX_QUEUE_AGE_MS) continue;
-          const batch = takeBatch(threaded, MAX_TEXT);
-          const text = compose(batch);
+          const batch = takeBatch(threaded, MAX_TEXT, Boolean(bridge));
+          const text = compose(batch, Boolean(bridge));
           // The same batch always has the same key, so a flush retried after a lost answer can't
           // post it twice.
           const key = `flush-${createHash("sha256")
@@ -490,6 +523,10 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     bots: () => bots(),
     send,
     read,
+    async complete(args) {
+      if (!bridge) throw new Error("slack22grokbot is unavailable on this Beeper inbox");
+      return bridge.complete(slackThread(args.slack_channel, args.slack_thread_ts));
+    },
     flushOnce,
     budget: () => budgetStatus(budget),
     stop: () => {

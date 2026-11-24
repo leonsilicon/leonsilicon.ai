@@ -28,9 +28,14 @@ export const AGENT_GROUPS: Readonly<Record<Agent, string>> = { grok: "b075", cod
 /** The Grok bots' second group (`AGENT_GROUPS.grok`). */
 export const GROK_BOT_GROUP = AGENT_GROUPS.grok;
 
+/** Reserved UUID group for Grok messages delivered by slack22grokbot. */
+export const GROK_BRIDGE_GROUP = "4b22";
+
 /** A fresh UUID whose first group is the marker (and, for an agent's post, the second too). */
 export function newClientMsgId(poster: Poster = "hermes"): string {
   const rest = randomUUID().slice(8); // "-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
+  if (poster === "grok" && rest.slice(5).startsWith(`-${GROK_BRIDGE_GROUP}-`))
+    return newClientMsgId(poster);
   if (poster !== "hermes") return `${CLIENT_MSG_ID_PREFIX}-${AGENT_GROUPS[poster]}${rest.slice(5)}`;
   if (Object.values(AGENT_GROUPS).some((group) => rest.startsWith(`-${group}-`)))
     return newClientMsgId(poster);

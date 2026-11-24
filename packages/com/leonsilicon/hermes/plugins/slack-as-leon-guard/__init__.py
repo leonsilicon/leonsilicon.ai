@@ -16,8 +16,8 @@ One kind of marked post is let through: an agent's, posted through the same serv
 Hermes in the Slack thread of a task Hermes handed it, a Grok bot's (second group ``b075``) or a
 Codex session's that Silicon Dot started (``c0de``). Those posts are Leon's too as far as Slack can
 tell, so the plugin starts their text with a note saying who wrote it (``agent_note``), and Hermes
-answers them as the agent's report. In ``#leon-`` task channels the report's thread is read for
-context, while Hermes's automatic reply goes to the channel.
+answers them as the agent's report. In ``#leon-`` task channels manually posted reports use the
+channel's session. Messages mirrored by slack22grokbot keep their Slack thread as the reply target.
 
 It fails closed: if the adapter internals it relies on disappear, it logs a warning, so check the
 gateway log after a Hermes update.
@@ -36,6 +36,8 @@ MARKER = "de1e6a7e"
 AGENT_GROUPS = {"b075": "a Grok bot", "c0de": "a Codex session that Silicon Dot started"}
 #: The Grok bots' group.
 GROK_BOT_GROUP = "b075"
+#: Third group reserved by slack-as-leon for a mirrored Grok reply.
+GROK_BRIDGE_GROUP = "4b22"
 
 
 def agent_note(who: str) -> str:
@@ -147,6 +149,16 @@ def wire(native, adapter) -> None:
         if (not thread or thread == kwargs["ts"] or kwargs["is_dm"]
                 or kwargs["is_command_text"] or not is_agent_post(event)):
             return await build(event, *args, **kwargs)
+        if _client_msg_id(event).startswith(f"{MARKER}-{GROK_BOT_GROUP}-{GROK_BRIDGE_GROUP}-"):
+            turn = await build(event, *args, **kwargs)
+            if turn is not None:
+                instructions = (
+                    "A Slack reply in this thread goes directly to the Grok task bot. Respond here "
+                    "when the bot needs an answer or follow-up. Avoid acknowledgement-only messages. "
+                    "Once you verify the task is finished, call grok_task_complete with this exact "
+                    "channel and Slack thread root to retire the task bot before posting your final summary.")
+                turn.channel_prompt = "\n\n".join(filter(None, (turn.channel_prompt, instructions)))
+            return turn
         channel = kwargs["channel_id"]
         name = await resolve_name(channel, team_id=kwargs["team_id"])
         if not (name or "").startswith("leon-"):

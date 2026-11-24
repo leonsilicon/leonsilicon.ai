@@ -149,7 +149,7 @@ export function busy(
  * One item goes out unchanged; several become one numbered message, in Leon's lowercase voice.
  * Then the handoff block of each Slack thread the items carry, once per thread.
  */
-export function compose(items: ReadonlyArray<string | QueuedItem>): string {
+export function compose(items: ReadonlyArray<string | QueuedItem>, automatic = false): string {
   const kept = items
     .map((item) => (typeof item === "string" ? { text: item } : item))
     .map((item) => ({ ...item, text: item.text.trim() }))
@@ -169,16 +169,21 @@ export function compose(items: ReadonlyArray<string | QueuedItem>): string {
   });
   const blocks = [...threads.values()].map(({ thread, items: numbers, followUp }) =>
     followUp
-      ? followUpBlock(thread)
-      : handoffBlock(thread, kept.length > 1 && threads.size > 1 ? numbers : undefined),
+      ? followUpBlock(thread, automatic)
+      : handoffBlock(thread, kept.length > 1 && threads.size > 1 ? numbers : undefined, automatic),
   );
   return [body, ...blocks].join("\n\n");
 }
 
 /** The longest prefix of the queue whose composed message fits in `max` characters (at least one item). */
-export function takeBatch<T extends string | QueuedItem>(items: readonly T[], max: number): T[] {
+export function takeBatch<T extends string | QueuedItem>(
+  items: readonly T[],
+  max: number,
+  automatic = false,
+): T[] {
   let count = 1;
-  while (count < items.length && compose(items.slice(0, count + 1)).length <= max) count++;
+  while (count < items.length && compose(items.slice(0, count + 1), automatic).length <= max)
+    count++;
   return items.slice(0, count);
 }
 

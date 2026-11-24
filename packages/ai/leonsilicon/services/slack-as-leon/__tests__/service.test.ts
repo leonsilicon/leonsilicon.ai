@@ -132,6 +132,14 @@ function fakeSlack(clock: { t: number }) {
           ok: true,
           permalink: `https://leonsilicon.slack.com/archives/${params.channel}/p1`,
         };
+      case "chat.update": {
+        const message = messages
+          .get(String(params.channel))
+          ?.find((entry) => entry.ts === params.ts);
+        if (!message) throw new SlackError(method, "message_not_found");
+        message.text = String(params.text);
+        return { ok: true, ts: message.ts };
+      }
       case "conversations.replies": {
         const root = String(params.ts);
         const all = messages.get(String(params.channel)) ?? [];
@@ -222,6 +230,45 @@ test("send posts as Leon with the marker, then waits for the bot's answer in the
     result.waited_seconds >= 9 && result.waited_seconds <= 12,
     String(result.waited_seconds),
   );
+});
+
+test("slack22grokbot validates roots, deduplicates a lost post and skips its own Grok replies", async () => {
+  const { service, calls, messages } = setup();
+  const root = "1794500000.000000";
+  messages.get(TODO)!.push({ ts: root, user: LEON, text: "Task" });
+  const thread = { channel: TODO, threadTs: root };
+  const post = {
+    ...thread,
+    bot: `Task slack:${TODO}/${root}`,
+    text: "Done <!here>",
+    eventId: "$event",
+  };
+  assert.deepEqual(await service.grokThread(thread), { channel: TODO, cursor: root, replies: [] });
+  const first = await service.mirrorGrok(post);
+  await assert.rejects(service.grokThread({ ...thread, threadTs: first.ts }), Refused);
+  await assert.rejects(
+    service.mirrorGrok({ ...post, bot: `Task slack:C0OTHER01/${root}` }),
+    Refused,
+  );
+  const retry = await service.mirrorGrok({ ...post, text: "Edited", retrySince: root });
+  assert.deepEqual(retry, first);
+  assert.equal(calls.filter(({ method }) => method === "chat.postMessage").length, 1);
+  assert.match(
+    String(calls.find(({ method }) => method === "chat.postMessage")?.params.text),
+    /&lt;!here&gt;/,
+  );
+  messages.get(TODO)!.push({
+    ts: "1794500000.999999",
+    thread_ts: root,
+    user: LEON,
+    text: "Thanks from Slack",
+  });
+  const page = await service.grokThread({ ...thread, after: root });
+  assert.deepEqual(
+    page.replies.map(({ text, from }) => ({ text, from })),
+    [{ text: "Thanks from Slack", from: "leon" }],
+  );
+  assert.equal(page.cursor, "1794500000.999999");
 });
 
 test("a message to people returns at once, and replies in a thread keep their thread", async () => {

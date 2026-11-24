@@ -1,6 +1,16 @@
 import type { SlackAsLeonConfig } from "#config";
+import { createHash } from "node:crypto";
 import { Directory, linkBotMentions, type SlackUser } from "#directory";
-import { agentOf, isMarked, newClientMsgId, type Agent, type Poster } from "#marker";
+import {
+  agentOf,
+  CLIENT_MSG_ID_PREFIX,
+  GROK_BOT_GROUP,
+  GROK_BRIDGE_GROUP,
+  isMarked,
+  newClientMsgId,
+  type Agent,
+  type Poster,
+} from "#marker";
 import { SlackError, type SlackCall, type SlackResponse } from "#slack";
 
 /** A request the service won't carry out; the message says why and what to do instead. */
@@ -116,7 +126,7 @@ interface RawMessage {
   edited?: unknown;
   bot_profile?: { name?: string };
   username?: string;
-  files?: { name?: string; title?: string }[];
+  files?: { name?: string; title?: string; permalink?: string }[];
 }
 
 const CONVERSATION_ID = /^[CGD][A-Z0-9]{6,}$/;
@@ -331,6 +341,130 @@ export class SlackAsLeon {
     const dmUser = channel.startsWith("D") ? await this.#imUser(channel) : undefined;
     const wait = this.#waitSeconds(args.wait_seconds, 0);
     return { ok: true, channel, ts, ...(await this.#follow(record, after, wait, dmUser, poster)) };
+  }
+
+  /** Reads one page of replies for the server-side Grok bridge, or validates its root. */
+  async grokThread(args: { channel: string; threadTs: string; after?: string }) {
+    const { channel } = await this.#grokTarget(args.channel, args.threadTs);
+    if (args.after !== undefined && !TS.test(args.after))
+      throw new Refused("after must be a Slack timestamp");
+    const response = await this.#slack("conversations.replies", {
+      channel,
+      ts: args.threadTs,
+      oldest: args.after,
+      limit: args.after === undefined ? 1 : 100,
+    });
+    const raw = (response.messages as RawMessage[] | undefined) ?? [];
+    if (args.after === undefined) {
+      const root = raw[0];
+      if (root?.ts !== args.threadTs || (root.thread_ts && root.thread_ts !== root.ts))
+        throw new Refused("Use the exact timestamp of the Slack thread's first message");
+      return { channel, cursor: args.threadTs, replies: [] };
+    }
+    const leon = await this.leonId();
+    const replies = [];
+    let cursor = args.after;
+    for (const message of raw) {
+      if (!message.ts || message.thread_ts !== args.threadTs || !later(message.ts, args.after))
+        continue;
+      if (later(message.ts, cursor)) cursor = message.ts;
+      if (agentOf(message.client_msg_id) === "grok") continue;
+      if (
+        message.subtype &&
+        !["bot_message", "thread_broadcast", "file_share"].includes(message.subtype)
+      )
+        continue;
+      const shaped = await this.#shape(message, leon, false, "grok");
+      const files = (message.files ?? []).map(
+        (file) => file.permalink ?? file.title ?? file.name ?? "file",
+      );
+      replies.push({ ...shaped, files });
+    }
+    return { channel, cursor, replies: replies.sort((a, b) => (later(a.ts, b.ts) ? 1 : -1)) };
+  }
+
+  /** Mirrors an event under a stable ID and updates the same Slack message when Grok edits it. */
+  async mirrorGrok(args: {
+    channel: string;
+    threadTs: string;
+    bot: string;
+    text: string;
+    eventId: string;
+    retrySince?: string;
+    slackTs?: string;
+  }) {
+    const { channel } = await this.#grokTarget(args.channel, args.threadTs);
+    const bot = args.bot;
+    const separator = bot.lastIndexOf("/");
+    const sourceChannel = bot.slice("Task slack:".length, separator);
+    if (
+      !bot.startsWith("Task slack:") ||
+      bot.slice(separator + 1) !== args.threadTs ||
+      (await this.#grokTarget(sourceChannel, args.threadTs)).channel !== channel
+    )
+      throw new Refused("The Grok bot's name must point to this Slack thread");
+    if (
+      !args.eventId ||
+      args.eventId.length > 300 ||
+      !args.text.trim() ||
+      args.text.length > 30_000
+    )
+      throw new Refused("The bridge needs a Matrix event ID and up to 30,000 characters of text");
+    const hash = createHash("sha256")
+      .update(JSON.stringify([channel, args.threadTs, args.eventId]))
+      .digest("hex");
+    const clientMsgId = `${CLIENT_MSG_ID_PREFIX}-${GROK_BOT_GROUP}-${GROK_BRIDGE_GROUP}-8${hash.slice(0, 3)}-${hash.slice(3, 15)}`;
+    const text = `🤖 *${bot.replaceAll("*", "")}*: ${args.text.replace(/[&<>]/g, (value) =>
+      value === "&" ? "&amp;" : value === "<" ? "&lt;" : "&gt;",
+    )}`;
+    let slackTs = args.slackTs;
+    if (!slackTs && args.retrySince !== undefined) {
+      if (!TS.test(args.retrySince)) throw new Refused("Invalid retry timestamp");
+      let cursor: string | undefined;
+      do {
+        const page = await this.#slack("conversations.replies", {
+          channel,
+          ts: args.threadTs,
+          oldest: args.retrySince,
+          limit: 100,
+          cursor,
+        });
+        slackTs = ((page.messages as RawMessage[] | undefined) ?? []).find(
+          (message) => message.client_msg_id === clientMsgId,
+        )?.ts;
+        cursor =
+          (page.response_metadata as { next_cursor?: string } | undefined)?.next_cursor ||
+          undefined;
+      } while (cursor && !slackTs);
+    }
+    if (slackTs) {
+      if (!TS.test(slackTs)) throw new Refused("Invalid Slack message timestamp");
+      const record = await this.#lookup(channel, slackTs);
+      if (record?.threadTs !== args.threadTs || record.clientMsgId !== clientMsgId)
+        throw new Refused("This Slack reply does not belong to the Grok message");
+      await this.#slack("chat.update", { channel, ts: slackTs, text, parse: "none" });
+      return { ts: slackTs };
+    }
+    const posted = await this.#slack("chat.postMessage", {
+      channel,
+      text,
+      thread_ts: args.threadTs,
+      client_msg_id: clientMsgId,
+      parse: "none",
+      unfurl_links: false,
+      unfurl_media: false,
+    });
+    if (!TS.test(str(posted.ts)))
+      throw new Error("Slack returned no timestamp for the mirrored reply");
+    return { ts: str(posted.ts) };
+  }
+
+  async #grokTarget(channel: string, threadTs: string): Promise<{ channel: string }> {
+    if (!/^(?:[CG][A-Z0-9]{6,}|#[a-z0-9][a-z0-9._-]{0,79})$/.test(channel) || !TS.test(threadTs))
+      throw new Refused("Use a Slack channel and its exact thread timestamp");
+    const target = await this.#resolve(channel);
+    if (!/^[CG]/.test(target.channel)) throw new Refused("Grok tasks require a channel thread");
+    return target;
   }
 
   /** The bots in the workspace, with Leon's DM channel with each. */

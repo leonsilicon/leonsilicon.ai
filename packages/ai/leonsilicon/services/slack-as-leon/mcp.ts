@@ -3,7 +3,7 @@ import type { Agent, Poster } from "#marker";
 import { Refused, type SlackAsLeon } from "#service";
 import { SlackError } from "#slack";
 
-export const VERSION = "2.3.1";
+export const VERSION = "2.4.0";
 
 export const instructions = `This server is a double puppet of Leon's real Slack account: it posts in Leon's Slack workspace (leonsilicon, LLC) as Leon himself, through his own Slack session, held by a Cloudflare Worker. The messages carry no app or bot marker, so other bots treat them exactly as if Leon had typed them. That is the point: Leon's Grok Bot bots in Slack (Task Bot, Google Bot, UofT Bot, GitHub Bot, X Bot, Pine Bot, …) ignore anything a bot posts, including your own Hermes posts and Composio posts in his name, and answer only Leon.
 
@@ -323,7 +323,10 @@ export function createHandler(
         session: health.session,
       });
     }
-    if (path !== "/" && path !== "/mcp") return reply(404, { error: "not_found" });
+    const bridgeRead = path === "/slack22grokbot/thread";
+    const bridgeWrite = path === "/slack22grokbot/message";
+    if (!bridgeRead && !bridgeWrite && path !== "/" && path !== "/mcp")
+      return reply(404, { error: "not_found" });
     const authorization = request.headers.get("authorization") ?? "";
     const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
     // Hermes's token, or an agent's (Grok bots, Codex sessions), which gets only the thread tools.
@@ -341,6 +344,36 @@ export function createHandler(
 
     const raw = await request.text();
     if (raw.length > 256 * 1024) return reply(413, { error: "request_too_large" });
+    if (bridgeRead || bridgeWrite) {
+      if (poster !== "hermes") return reply(403, { error: "forbidden" });
+      let args: Args;
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          return reply(400, { error: "invalid_json" });
+        args = parsed as Args;
+      } catch {
+        return reply(400, { error: "invalid_json" });
+      }
+      const target = { channel: text(args.channel), threadTs: text(args.threadTs) };
+      try {
+        const value = bridgeRead
+          ? await service.grokThread({ ...target, after: optionalText(args.after) })
+          : await service.mirrorGrok({
+              ...target,
+              bot: text(args.bot),
+              text: text(args.text),
+              eventId: text(args.eventId),
+              retrySince: optionalText(args.retrySince),
+              slackTs: optionalText(args.slackTs),
+            });
+        return reply(200, value);
+      } catch (error) {
+        return reply(error instanceof Refused ? 400 : 502, {
+          error: error instanceof Error ? error.message : "Slack request failed",
+        });
+      }
+    }
     let rpc: RpcRequest;
     try {
       rpc = JSON.parse(raw) as RpcRequest;
