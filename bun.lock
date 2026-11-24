@@ -133,6 +133,13 @@
         "varlock": "catalog:",
       },
     },
+    "packages/ai/leonsilicon/configs/hermes-mirrors": {
+      "name": "@-/ai.leonsilicon.configs.hermes-mirrors",
+      "version": "1.0.0",
+      "bin": {
+        "_sync-hermes-mirrors": "./_sync-hermes-mirrors.ts",
+      },
+    },
     "packages/ai/leonsilicon/configs/patching/codemods/unsnooze": {
       "name": "@-/ai.leonsilicon.configs.patching.codemods.unsnooze",
       "version": "0.0.0",
@@ -412,6 +419,8 @@
     "@-/ai.leonsilicon.configs.deploy-targets": ["@-/ai.leonsilicon.configs.deploy-targets@workspace:packages/ai/leonsilicon/configs/deploy-targets"],
 
     "@-/ai.leonsilicon.configs.env-file": ["@-/ai.leonsilicon.configs.env-file@workspace:packages/ai/leonsilicon/configs/env-file"],
+
+    "@-/ai.leonsilicon.configs.hermes-mirrors": ["@-/ai.leonsilicon.configs.hermes-mirrors@workspace:packages/ai/leonsilicon/configs/hermes-mirrors"],
 
     "@-/ai.leonsilicon.configs.patching.codemods.unsnooze": ["@-/ai.leonsilicon.configs.patching.codemods.unsnooze@workspace:packages/ai/leonsilicon/configs/patching/codemods/unsnooze"],
 

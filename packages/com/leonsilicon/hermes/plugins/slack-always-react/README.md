@@ -10,7 +10,11 @@ A Grok bot's post in a task thread (slack-as-leon's marker with second group `b0
 
 ## Install
 
-Copy this directory without `__tests__/` to `$HERMES_HOME/plugins/slack-always-react/`, add `slack-always-react` to `plugins.enabled` in `config.yaml`, and restart the gateway. On Hermes Cloud, `$HERMES_HOME` is `/opt/data`, the persistent volume, so the plugin survives restarts and image updates.
+```sh
+hermes plugins install leonsiliconAI/slack-always-react --enable
+```
+
+See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway.
 
 ## Test
 

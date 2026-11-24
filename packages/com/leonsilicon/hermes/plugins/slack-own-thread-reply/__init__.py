@@ -158,6 +158,16 @@ def _error(message: str) -> str:
     return json.dumps({"success": False, "error": message})
 
 
+def _send_module():
+    try:
+        from gateway.outbound import send
+    except ModuleNotFoundError as exc:
+        if exc.name != "gateway.outbound":
+            raise
+        from tools import send_message_tool as send
+    return send
+
+
 def handle(args: dict, **_kw) -> str:
     channel = str(args.get("channel") or "").strip()
     thread_ts = str(args.get("thread_ts") or "").strip()
@@ -196,8 +206,7 @@ def handle(args: dict, **_kw) -> str:
             f"already sent {_max_per_hour()} replies to this thread in the last hour; "
             "wait for an answer instead of pinging again")
 
-    from tools.send_message_tool import send_message_tool
-    raw = send_message_tool({"action": "send", "target": f"slack:{channel}:{thread_ts}", "message": text})
+    raw = _send_module().send_message_tool({"action": "send", "target": f"slack:{channel}:{thread_ts}", "message": text})
     try:
         result = json.loads(raw)
     except Exception:

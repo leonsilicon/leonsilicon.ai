@@ -1,0 +1,16 @@
+{
+  "name": "@-/ai.leonsilicon.configs.hermes-mirrors",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Publish standalone Git mirrors of the workspace's Hermes plugins.",
+  "bin": {
+    "_sync-hermes-mirrors": "./_sync-hermes-mirrors.ts"
+  },
+  "type": "module",
+  "imports": {
+    "#mirror": "./mirror.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  }
+}

@@ -26,7 +26,11 @@ This doesn't let Hermes post anywhere it couldn't before. A gateway turn's `send
 
 ## Install
 
-Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/slack-own-thread-reply/`, add `slack-own-thread-reply` to `plugins.enabled` in `config.yaml`, and restart the gateway. On Hermes Cloud, `$HERMES_HOME` is `/opt/data`. The gateway log then shows `slack-own-thread-reply: slack_reply_own_thread registered`. Plugin toolsets are on for every platform unless `known_plugin_toolsets` names them, so cron jobs with no `enabled_toolsets` of their own get the tool too.
+```sh
+hermes plugins install leonsiliconAI/slack-own-thread-reply --enable
+```
+
+See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-own-thread-reply: slack_reply_own_thread registered`. Plugin toolsets are on for every platform unless `known_plugin_toolsets` names them, so cron jobs with no `enabled_toolsets` of their own get the tool too.
 
 Then tell Hermes when to use it. The `coding-task-routing` skill on Captain Claude says to use it for follow-ups in its own handoff threads, instead of `hermes send`.
 

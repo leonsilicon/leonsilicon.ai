@@ -82,16 +82,22 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `gmail-feed` Worker           | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                                 |
 | `cronometer` Worker (Python)  | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
 | `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
-| Hermes plugins                | Copy into `$HERMES_HOME/plugins/<name>/`; see each plugin's README                                                                              |
+| Hermes plugins                | Install from the standalone `leonsiliconAI/<name>` Git repository. See [Hermes plugin mirrors](#hermes-plugin-mirrors).                         |
 | Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
 | Grok relay and Beeper Feed    | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
 The service Worker tasks build `www/` before deploying and need Infisical access for their configuration. The landing page deploy needs Cloudflare credentials. The retired Mac mini Orca bridge keeps its deploy script for reference.
 
-### Hermes plugin updates
+### Hermes plugin mirrors
 
-Use the plugin's README to install it on Hermes Cloud. Hermes 0.23.2 can install a plugin from a Git subdirectory, but the updater reports those installs as `provenance drift`. The installer copies the plugin folder and its source metadata, while the updater also requires a `.git` directory. The same check is present in 0.23.4. A Git install from the root of its own repository retains `.git` and is eligible for the profile's opt-in auto-updater. [Hermes updater source](https://github.com/NousResearch/hermes-agent/blob/v0.23.4/hermes_cli/plugins_provenance.py)
+The plugin sources live under `packages/com/leonsilicon/hermes/plugins/`. Each matching repository in [leonsiliconAI](https://github.com/leonsiliconAI) mirrors that plugin directory at its Git root. The [mirror workflow](.github/workflows/sync-hermes-plugins.yml) runs after successful CI on `main`. It links each mirror commit to its source and advances the mirror by fast-forward only when the plugin files change, so Hermes can pull an update into an existing checkout.
+
+Install from the mirror using the command in the plugin's README. For existing copies on Hermes Cloud, back up each installed plugin directory outside `$HERMES_HOME/plugins`, compare its files with the mirror, and reinstall from Git with `--force`. Use `--enable` or `--no-enable` to keep its current enabled state. Restart the gateway after replacing the Slack adapter plugins. Run `hermes plugins check-updates` to verify the installs and `hermes plugins auto-update on` to opt the profile into automatic updates.
+
+The workflow uses a fine-grained GitHub token from the `HERMES_MIRROR_TOKEN` Actions secret in this repository. Scope it to `leonsiliconAI` and the plugin mirrors with Contents read and write. Create a corresponding mirror repository and add it to the token's scope when adding a plugin.
+
+Hermes 0.23.2 through 0.23.4 reports Git subdirectory installs as `provenance drift` because those installs omit `.git`. Installing from a mirror's repository root makes it eligible for automatic updates. [Hermes updater source](https://github.com/NousResearch/hermes-agent/blob/v0.23.4/hermes_cli/plugins_provenance.py)
 
 ## Patching
 

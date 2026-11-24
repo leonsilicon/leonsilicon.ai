@@ -81,7 +81,7 @@ def sent(monkeypatch):
         calls.append(args)
         return json.dumps({"success": True, "message_id": "1794361999.000100"})
 
-    monkeypatch.setattr("tools.send_message_tool.send_message_tool", fake_send)
+    monkeypatch.setattr(plugin._send_module(), "send_message_tool", fake_send)
     return calls
 
 
@@ -154,7 +154,7 @@ def test_hourly_cap_per_thread(live_gateway, slack, sent):
 
 
 def test_failed_send_does_not_spend_budget(live_gateway, slack, monkeypatch):
-    monkeypatch.setattr("tools.send_message_tool.send_message_tool",
+    monkeypatch.setattr(plugin._send_module(), "send_message_tool",
                         lambda args, **_kw: json.dumps({"error": "Slack down"}))
     for _ in range(plugin.DEFAULT_MAX_PER_HOUR + 1):
         assert _call()["error"] == "Slack down"
@@ -163,7 +163,7 @@ def test_failed_send_does_not_spend_budget(live_gateway, slack, monkeypatch):
 
 def test_full_send_path_in_gateway(live_gateway, slack, monkeypatch):
     """Through the real send_message tool: in the gateway the relay guard lets the thread through."""
-    import tools.send_message_tool as smt
+    smt = plugin._send_module()
 
     delivered = []
 

@@ -1,6 +1,6 @@
 # @-/com.leonsilicon.hermes.plugins.slack-as-leon-guard
 
-Hermes plugin that stops Hermes from answering the Slack messages it posted as Leon through the [slack-as-leon](../../../../../ai/leonsilicon/services/slack-as-leon/README.md) MCP server.
+Hermes plugin that stops Hermes from answering the Slack messages it posted as Leon through the [slack-as-leon](https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/ai/leonsilicon/services/slack-as-leon/README.md) MCP server.
 
 ## Why
 
@@ -22,7 +22,11 @@ In `#leon-` task channels, Hermes reads the handoff thread for context and posts
 
 ## Install
 
-Copy `plugin.yaml` and `__init__.py` to `$HERMES_HOME/plugins/slack-as-leon-guard/` (`/opt/data` on Hermes Cloud), add `slack-as-leon-guard` to `plugins.enabled`, and restart the gateway. The gateway log then shows `slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon`.
+```sh
+hermes plugins install leonsiliconAI/slack-as-leon-guard --enable
+```
+
+See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon`.
 
 ## Test
 

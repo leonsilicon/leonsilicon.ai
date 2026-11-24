@@ -58,6 +58,7 @@ export default defineConfig({
           `${ai}/configs/cloudflare/__tests__/*.test.ts`,
           `${ai}/configs/deploy-targets/__tests__/*.test.ts`,
           `${ai}/configs/env-file/__tests__/*.test.ts`,
+          `${ai}/configs/hermes-mirrors/__tests__/*.test.ts`,
           `${ai}/configs/patching/codemods/unsnooze/__tests__/*.test.ts`,
           `${ai}/configs/patching/generator/__tests__/*.test.ts`,
           `${ai}/configs/silicon-dot/agents-vault/__tests__/*.test.ts`,
