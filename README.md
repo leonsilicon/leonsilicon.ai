@@ -53,6 +53,8 @@ Services that run on Hermes Cloud's own machine without a public address.
 | Unsnooze connection-loss fix    | [Codemod](packages/ai/leonsilicon/configs/patching/codemods/unsnooze/README.md) · [generator and apply commands](packages/ai/leonsilicon/configs/patching/generator/README.md) · [generated diffs](patches.gen/)                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Todoist Automations             | [Linear → Todoist mirror and Todoist → Linear completion, published on every deploy](packages/ai/leonsilicon/configs/todoist-automations/README.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
+[hermes22muse](apps/hermes-plugin-hermes22muse/README.md) hands off Hermes Slack requests to Muse side chats and keeps both threads in sync.
+
 Personal prefs that aren't part of the setup (agent personas and memory, for example) stay in the private `leonsilicon/ai` workspace.
 
 ## Commands
