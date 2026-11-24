@@ -5,6 +5,7 @@
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+    "@-/ai.leonsilicon.services.autotrigger": "workspace:*",
     "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
     "@-/ai.leonsilicon.services.slack22linear": "workspace:*"
   },

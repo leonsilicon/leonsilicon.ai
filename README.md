@@ -20,6 +20,8 @@ Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker o
 | [Grok Bot Admin](https://grokbot-admin.leonsilicon.ai/) | Lists and deletes bots through MCP                                  |
 | [Gmail Feed](https://gmail-feed.leonsilicon.ai/)        | Mirrors incoming email into Slack                                   |
 
+[Autotrigger](packages/ai/leonsilicon/services/autotrigger/README.md) routes relevant Slack feed messages to Awaiting Trigger issue channels.
+
 [Slack Puppet migration](https://slack-as-leon.leonsilicon.ai/) covers the temporary `slack-as-leon` hostname. Each live service page links its source and deployment runbook.
 
 Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also served `orca`, `grok`, `beeper` and `watch` here, and `cronometer` ran there too. What they did now runs on Hermes Cloud (below) or as a Worker, so those four names and all three pieces were removed, and the mini serves nothing public. The git history has them.

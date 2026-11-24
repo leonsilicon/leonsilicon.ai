@@ -19,6 +19,8 @@ export {
   formatTitle,
   hasTime,
   intakeTitle,
+  issueDescription,
+  issueWorkflow,
   linearToSlack,
   localDay,
   localLabel,

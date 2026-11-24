@@ -1,4 +1,11 @@
 import {
+  Autotrigger,
+  feedEvent,
+  feedMessage,
+  type FeedMessage,
+  type TriggerDelivery,
+} from "@-/ai.leonsilicon.services.autotrigger";
+import {
   botClient,
   commandLine,
   IssueMetadata,
@@ -41,7 +48,23 @@ interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
 }
 
+interface TriggerStorage {
+  get<T>(key: string): Promise<T | undefined>;
+  put(key: string, value: unknown): Promise<void>;
+  setAlarm(time: number): Promise<void>;
+}
+interface TriggerState {
+  storage: TriggerStorage & {
+    transaction<T>(run: (transaction: TriggerStorage) => Promise<T>): Promise<T>;
+    deleteAll(): Promise<void>;
+  };
+}
+
 interface Env {
+  AUTOTRIGGER: DurableObjectNamespace;
+  OPENAI_API_KEY?: string;
+  FEED_FLAGGED_CHANNEL?: string;
+  FEED_SPAM_CHANNEL?: string;
   SYNC: DurableObjectNamespace;
   /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/linear-slack/index.html. */
   ASSETS: Assets;
@@ -70,6 +93,13 @@ const log = (event: string, fields: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ event, ...fields }));
 
 const stub = (env: Env) => env.SYNC.get(env.SYNC.idFromName("sync"));
+async function enqueueTrigger(env: Env, event: Record<string, unknown>): Promise<void> {
+  const response = await stub(env).fetch(
+    new Request("https://sync/autotrigger", { method: "POST", body: JSON.stringify(event) }),
+  );
+  if (!response.ok) throw new Error(`Autotrigger enqueue failed: ${response.status}`);
+}
+
 const slackArchiveEvents = new Set([
   "channel_archive",
   "channel_unarchive",
@@ -151,6 +181,7 @@ export default {
         type: string;
         challenge?: string;
         event_id?: string;
+        is_ext_shared_channel?: boolean;
         event?: Record<string, unknown>;
       };
       // Before the signing secret is set, answer only Slack's URL check, so the app can be created.
@@ -171,10 +202,17 @@ export default {
       const config = loadConfig(env as Record<string, string | undefined>);
       if (payload.type === "event_callback" && payload.event) {
         const { type, subtype } = payload.event;
-        if (slackArchiveEvents.has(String(type === "message" ? subtype : type)))
-          await enqueue(env, `slack:${payload.event_id}`, "project-visibility", {});
-        else if (wantedSlackEvent(payload.event, config))
-          await enqueue(env, `slack:${payload.event_id}`, "slack", payload.event);
+        const event = payload.event;
+        const feed = !payload.is_ext_shared_channel && feedEvent(event);
+        const sync = slackArchiveEvents.has(String(type === "message" ? subtype : type))
+          ? enqueue(env, `slack:${payload.event_id}`, "project-visibility", {})
+          : wantedSlackEvent(payload.event, config)
+            ? enqueue(env, `slack:${payload.event_id}`, "slack", payload.event)
+            : undefined;
+        await Promise.all([
+          sync,
+          feed && env.OPENAI_API_KEY ? enqueueTrigger(env, event) : undefined,
+        ]);
       }
       return json({ ok: true });
     }
@@ -241,6 +279,7 @@ export class SyncObject {
   readonly #issueMetadata: IssueMetadata;
   #teamId?: string;
   #draining = false;
+  readonly #feedChannels: Parameters<typeof feedMessage>[2] = new Map();
   /** The bot's Slack user ID, once `auth.test` has said it. */
   #botUserId: string | undefined;
 
@@ -292,6 +331,30 @@ export class SyncObject {
       return json({ queued });
     }
     if (url.pathname === "/status") return json(this.#store.stats());
+    // Internal only, through the binding from AutoLinear or the signed Slack events handler.
+    if (request.method === "POST" && url.pathname === "/autotrigger") {
+      if (!this.#env.OPENAI_API_KEY) return json({ queued: false });
+      const event = feedEvent((await request.json()) as Record<string, unknown>);
+      if (!event || this.#store.issueByChannel(event.channel)) return json({ queued: false });
+      const reader = this.#session() ?? botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN);
+      const source = await feedMessage(event, reader, this.#feedChannels, [
+        this.#env.FEED_FLAGGED_CHANNEL,
+        this.#env.FEED_SPAM_CHANNEL,
+      ]);
+      if (!source) return json({ queued: false });
+      const binding = this.#env.AUTOTRIGGER;
+      return binding.get(binding.idFromName(`${source.channel}:${source.ts}`)).fetch(
+        new Request("https://autotrigger/enqueue", {
+          method: "POST",
+          body: JSON.stringify(source),
+        }),
+      );
+    }
+    if (request.method === "POST" && url.pathname === "/autotrigger-channel") {
+      const { issueId } = (await request.json()) as { issueId: string };
+      const issue = this.#store.issue(issueId);
+      return json({ channel: issue && !issue.archived ? issue.channelId : null });
+    }
     if (url.pathname === "/issue-metadata") {
       if (!this.#teamId) {
         const { team_id } = await botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN)("auth.test");
@@ -359,6 +422,7 @@ export class SyncObject {
         } catch (error) {
           checks.autolinear = String(error);
         }
+      checks.autotrigger = this.#env.OPENAI_API_KEY ? "configured" : "unconfigured";
       const { queued, dead } = this.#store.stats();
       return json({
         ok:
@@ -403,5 +467,90 @@ export class SyncObject {
       this.#draining = false;
       await this.#schedule();
     }
+  }
+}
+
+type TriggerJob = { source: FeedMessage; delivery?: TriggerDelivery } | "done";
+const TRIGGER_KEEP_MS = 3 * 24 * 3600_000;
+
+/** One alarm-backed delivery per source message, shared by both Slack subscriptions. */
+export class AutotriggerObject {
+  readonly #storage: TriggerState["storage"];
+  readonly #env: Env;
+
+  constructor(state: TriggerState, env: Env) {
+    this.#storage = state.storage;
+    this.#env = env;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const source = (await request.json()) as FeedMessage;
+    const queued = await this.#storage.transaction(async (txn) => {
+      if (await txn.get<TriggerJob>("job")) return false;
+      await txn.put("job", { source });
+      await txn.setAlarm(Date.now());
+      return true;
+    });
+    return json({ queued });
+  }
+
+  async alarm({ retryCount }: { retryCount: number }): Promise<void> {
+    const job = await this.#storage.get<TriggerJob>("job");
+    if (job === "done") return this.#storage.deleteAll();
+    if (!job) return;
+    try {
+      await this.#run(job);
+    } catch (error) {
+      log("autotrigger_failed", {
+        channel: job.source.channel,
+        ts: job.source.ts,
+        attempt: retryCount + 1,
+        error: error instanceof Error ? error.name : "unknown",
+        ...(error instanceof Error && "status" in error ? { status: error.status } : {}),
+      });
+      // Cloudflare retries a thrown alarm up to six times.
+      if (retryCount < 6) throw new Error("Autotrigger delivery failed");
+    }
+    await this.#storage.transaction(async (txn) => {
+      await txn.put("job", "done");
+      await txn.setAlarm(Date.now() + TRIGGER_KEEP_MS);
+    });
+  }
+
+  async #run(job: Exclude<TriggerJob, "done">): Promise<void> {
+    const env = this.#env;
+    if (!env.OPENAI_API_KEY) return;
+    const config = loadConfig(env as Record<string, string | undefined>);
+    const trigger = new Autotrigger({
+      apiKey: env.OPENAI_API_KEY,
+      linear: new LinearClient(env.LINEAR_API_KEY),
+      channelFor: async (issueId) => {
+        const response = await stub(env).fetch(
+          new Request("https://sync/autotrigger-channel", {
+            method: "POST",
+            body: JSON.stringify({ issueId }),
+          }),
+        );
+        if (!response.ok) throw new Error(`Issue channel lookup failed: ${response.status}`);
+        const { channel } = (await response.json()) as { channel: string | null };
+        return channel;
+      },
+      session:
+        env.SLACK_SESSION_TOKEN && env.SLACK_SESSION_COOKIE
+          ? sessionClient({ token: env.SLACK_SESSION_TOKEN, cookie: env.SLACK_SESSION_COOKIE })
+          : null,
+      bot: botClient(env.LINEAR_SYNC_SLACK_BOT_TOKEN),
+      hermesUserId: config.hermesUserId,
+      teamKey: config.teamKey,
+      state: config.triggerState,
+      timeZone: config.timeZone,
+    });
+    const delivery = job.delivery ?? (await trigger.select(job.source));
+    if (!delivery) return;
+    if (!job.delivery) {
+      delivery.startedAt = Date.now();
+      await this.#storage.put("job", { source: job.source, delivery });
+    }
+    await trigger.deliver(job.source, delivery, Boolean(job.delivery));
   }
 }

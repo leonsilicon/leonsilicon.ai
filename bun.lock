@@ -104,6 +104,7 @@
       "name": "@-apps/slack22linear",
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+        "@-/ai.leonsilicon.services.autotrigger": "workspace:*",
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
@@ -183,6 +184,13 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/autotrigger": {
+      "name": "@-/ai.leonsilicon.services.autotrigger",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/beeper-feed": {
       "name": "@-/ai.leonsilicon.services.beeper-feed",
       "dependencies": {
@@ -224,7 +232,7 @@
     },
     "packages/ai/leonsilicon/services/grok-relay": {
       "name": "@-/ai.leonsilicon.services.grok-relay",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
       },
@@ -408,6 +416,8 @@
     "@-/ai.leonsilicon.configs.todoist-automations": ["@-/ai.leonsilicon.configs.todoist-automations@workspace:packages/ai/leonsilicon/configs/todoist-automations"],
 
     "@-/ai.leonsilicon.services.autolinear": ["@-/ai.leonsilicon.services.autolinear@workspace:packages/ai/leonsilicon/services/autolinear"],
+
+    "@-/ai.leonsilicon.services.autotrigger": ["@-/ai.leonsilicon.services.autotrigger@workspace:packages/ai/leonsilicon/services/autotrigger"],
 
     "@-/ai.leonsilicon.services.beeper-feed": ["@-/ai.leonsilicon.services.beeper-feed@workspace:packages/ai/leonsilicon/services/beeper-feed"],
 

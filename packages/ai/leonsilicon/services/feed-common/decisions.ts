@@ -286,6 +286,14 @@ export interface DecisionsClient {
   decisions: { create(body: DecisionCreateParams): PromiseLike<Decision> };
 }
 
+export function decisionsClient(
+  apiKey: string | undefined,
+  timeout: number,
+  maxRetries: number,
+): DecisionsClient {
+  return new OpenAI({ apiKey, timeout, maxRetries });
+}
+
 export interface DecisionsScreenerOptions {
   /** An OpenAI API key, or a client to use instead. */
   apiKey?: string;
@@ -303,8 +311,7 @@ const round = (value: number | undefined): number | undefined =>
 /** The screener, through OpenAI's Decisions API. */
 export function decisionsScreener(options: DecisionsScreenerOptions): Screener {
   const client: DecisionsClient =
-    options.client ??
-    new OpenAI({ apiKey: options.apiKey, timeout: options.timeoutMs, maxRetries: 2 });
+    options.client ?? decisionsClient(options.apiKey, options.timeoutMs, 2);
   const thresholds = options.thresholds ?? DEFAULT_THRESHOLDS;
   return {
     async screen(input) {

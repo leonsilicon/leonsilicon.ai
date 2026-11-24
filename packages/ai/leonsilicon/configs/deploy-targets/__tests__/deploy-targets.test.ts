@@ -92,6 +92,10 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   ]);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/feed-common/decisions.ts"), [
     "gmail-feed",
+    "slack22linear",
+  ]);
+  assert.deepEqual(affected("packages/ai/leonsilicon/services/autotrigger/trigger.ts"), [
+    "slack22linear",
   ]);
   // Things that don't run on Cloudflare: the mini, Hermes, docs and tests.
   assert.deepEqual(affected("apps/beeper-inbox/_beeper-inbox.ts"), []);

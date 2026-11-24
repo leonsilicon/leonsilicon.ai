@@ -58,6 +58,10 @@ Other tasks:
 - **Project channel missing:** `/healthz` says `projects: off…` when Linear's Slack app is gone or Project channels are off; otherwise `/admin/status` shows a failed `project` or `tick` job. If Linear's Slack app was disconnected or Project channels turned off, the sync logs `project_channels_off` and requests nothing. Reconnect it in Linear → Settings → Integrations → Slack.
 - **Turn it off:** `vpx wrangler delete --config apps/slack22linear/wrangler.jsonc`, then delete the Linear webhook and API key (Linear → Settings → API) and the Slack app (api.slack.com/apps → slack22linear). Project channels stay connected to their projects through Linear's own Slack app.
 
+## Autotrigger
+
+[Autotrigger](../../packages/ai/leonsilicon/services/autotrigger/README.md) matches new Slack feed messages against Awaiting Trigger issues. It uses this Worker's issue-channel map and posts a link to the source message as the slack22linear bot. Its decisions and delivery retries run outside the sync queue.
+
 ## autolinear
 
 [autolinear](../autolinear/README.md) creates an issue and opens its channel itself, as Leon, so both appear at once, then hands the channel over through a binding to this Worker's Durable Object (`/adopt`; the Worker's public routes never reach it). The Durable Object invites the bot and Hermes, records the channel, and queues the rest (intro, issue metadata, section, project, thread quote) as an `adopted` job. An autolinear issue (ID starting `a7011ea7`) whose webhook comes first waits up to two minutes for the hand-over instead of getting a second channel. The details are in the [service README](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-issues). Deploy this Worker before autolinear when `/adopt` changes.

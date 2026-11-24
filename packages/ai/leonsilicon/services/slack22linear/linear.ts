@@ -12,6 +12,8 @@ export interface LinearIssue {
   url: string;
   description: string | null;
   priority: number;
+  archivedAt?: string | null;
+  trashed?: boolean | null;
   state: LinearState & { color?: string };
   teamKey: string;
   /** Linear's own due date, `YYYY-MM-DD`: a day with no time. */
@@ -129,7 +131,7 @@ export class LinearError extends Error {
   }
 }
 
-const ISSUE_FIELDS = `id identifier number title url description priority dueDate state { id name type color } team { key }`;
+const ISSUE_FIELDS = `id identifier number title url description priority archivedAt trashed dueDate state { id name type color } team { key }`;
 
 interface IssueNode {
   id: string;
@@ -139,6 +141,8 @@ interface IssueNode {
   url: string;
   description: string | null;
   priority: number;
+  archivedAt: string | null;
+  trashed: boolean | null;
   dueDate: string | null;
   state: LinearIssue["state"];
   team: { key: string };
@@ -152,6 +156,8 @@ const toIssue = (node: IssueNode): LinearIssue => ({
   url: node.url,
   description: node.description,
   priority: node.priority,
+  archivedAt: node.archivedAt,
+  trashed: node.trashed,
   state: node.state,
   teamKey: node.team.key,
   dueDate: node.dueDate ?? null,
@@ -350,6 +356,27 @@ export class LinearClient implements LinearApi {
       authorName,
       authorAvatar: bot?.avatarUrl ?? c.user?.avatarUrl ?? c.externalUser?.avatarUrl ?? null,
     };
+  }
+
+  async issuesInState(teamKey: string, stateName: string): Promise<LinearIssue[]> {
+    const issues: LinearIssue[] = [];
+    let after: string | null = null;
+    do {
+      const data: {
+        issues: {
+          nodes: IssueNode[];
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        };
+      } = await this.gql(
+        `query($team: String!, $state: String!, $after: String) {
+          issues(first: 100, after: $after, filter: { team: { key: { eq: $team } }, state: { name: { eq: $state } } }) {
+            nodes { ${ISSUE_FIELDS} } pageInfo { hasNextPage endCursor } } }`,
+        { team: teamKey, state: stateName, after },
+      );
+      issues.push(...data.issues.nodes.map(toIssue));
+      after = data.issues.pageInfo.hasNextPage ? data.issues.pageInfo.endCursor : null;
+    } while (after);
+    return issues;
   }
 
   async openIssues(teamKey: string, closedTypes: string[]) {

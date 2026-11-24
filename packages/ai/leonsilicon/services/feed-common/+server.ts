@@ -1,4 +1,5 @@
 export {
+  decisionsClient,
   decisionsScreener,
   DEFAULT_THRESHOLDS,
   FAIL_CLOSED,

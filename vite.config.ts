@@ -65,6 +65,7 @@ export default defineConfig({
           `${ai}/configs/todoist-automations/__tests__/*.test.ts`,
           ...[
             "autolinear",
+            "autotrigger",
             "beeper-feed",
             "beeper-inbox",
             "dailylinear",

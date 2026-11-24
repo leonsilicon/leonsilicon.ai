@@ -1,0 +1,16 @@
+{
+  "name": "@-/ai.leonsilicon.services.autotrigger",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#events": "./events.ts",
+    "#trigger": "./trigger.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/ai.leonsilicon.services.feed-common": "workspace:*",
+    "@-/ai.leonsilicon.services.slack22linear": "workspace:*"
+  }
+}

@@ -8,8 +8,16 @@
   "preview_urls": false,
   // A Custom Domain per hostname; Cloudflare issues its certificate.
   "routes": [{ "pattern": "linear-slack.leonsilicon.ai", "custom_domain": true }],
-  "durable_objects": { "bindings": [{ "name": "SYNC", "class_name": "SyncObject" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncObject"] }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SYNC", "class_name": "SyncObject" },
+      { "name": "AUTOTRIGGER", "class_name": "AutotriggerObject" },
+    ],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SyncObject"] },
+    { "tag": "v2", "new_sqlite_classes": ["AutotriggerObject"] },
+  ],
   // Once a day (08:00 UTC, 03:00 or 04:00 in Toronto), the safety net: repairs anything a missed webhook
   // left behind and resets every issue's timer. Times themselves go off on the Durable Object's alarm.
   "triggers": { "crons": ["0 8 * * *"] },

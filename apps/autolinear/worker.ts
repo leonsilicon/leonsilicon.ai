@@ -284,6 +284,22 @@ export default {
             },
           ),
         );
+        // The user subscription also sees feed bots in channels the sync bot hasn't joined.
+        const event = payload.event;
+        if (
+          event?.type === "message" &&
+          (event.channel_type === "channel" || event.channel_type === "group")
+        ) {
+          const response = await env.SYNC.get(env.SYNC.idFromName("sync")).fetch(
+            new Request("https://sync/autotrigger", {
+              method: "POST",
+              body: JSON.stringify(event),
+            }),
+          );
+          // During a rolling deploy the existing SyncObject may not serve this route yet.
+          if (!response.ok && response.status !== 404)
+            return json({ error: "could not queue feed event" }, 503);
+        }
       }
       return json({ ok: true });
     }
