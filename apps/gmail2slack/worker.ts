@@ -6,8 +6,8 @@ import {
   loadConfig,
   slackBot,
   Store,
-} from "@-/ai.leonsilicon.services.gmail-feed";
-import type { Logger, Sql, SqlValue } from "@-/ai.leonsilicon.services.gmail-feed";
+} from "@-/ai.leonsilicon.services.gmail2slack";
+import type { Logger, Sql, SqlValue } from "@-/ai.leonsilicon.services.gmail2slack";
 import { serveSite, type Assets } from "@-/ai.leonsilicon.configs.cloudflare";
 
 // Just the Durable Object surface used here. Cloudflare's full type packages redefine globals such
@@ -34,7 +34,7 @@ interface ExecutionContext {
 
 interface Env {
   FEED: DurableObjectNamespace;
-  /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/gmail-feed/index.html. */
+  /** The Vite build of www/ (dist/www): this Worker's page is www/ai/leonsilicon/gmail2slack/index.html. */
   ASSETS: Assets;
   /** Bearer token for /admin/* (status, tick, backfill). */
   GMAIL_FEED_ADMIN_TOKEN?: string;

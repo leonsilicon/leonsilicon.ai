@@ -1,5 +1,5 @@
 {
-  "name": "@-/ai.leonsilicon.services.gmail-feed",
+  "name": "@-/ai.leonsilicon.services.gmail2slack",
   "version": "1.0.0",
   "private": true,
   "description": "Screens and copies Leon's incoming Gmail to Slack: safe mail in #feed-gmail, unsafe mail in #feed-flagged and spam in #feed-spam.",

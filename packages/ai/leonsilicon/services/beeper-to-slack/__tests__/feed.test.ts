@@ -15,23 +15,25 @@ import {
   type Route,
   type SlackPoster,
 } from "@-/ai.leonsilicon.services.feed-common";
-import { beeperFeedExtension } from "#extension";
+import { beeperToSlackExtension } from "#extension";
 import { BeeperFeed } from "#feed";
 
 const NOW = Date.parse("2026-11-21T21:00:00Z");
-const rooms = ["whatsapp", "instagram", "slack", "beeper"].map((network): RoomInfo => ({
-  roomId: `!${network}:example.test`,
-  name: `${network} contact`,
-  network,
-  networkName: null,
-  protocolId: network === "slack" ? "slackgo" : null,
-  networkId: null,
-  isDirect: true,
-  isMuted: false,
-}));
+const rooms = ["whatsapp", "instagram", "slack", "beeper", "telegram", "other-group"].map(
+  (id): RoomInfo => ({
+    roomId: `!${id}:example.test`,
+    network: id === "other-group" ? "whatsapp" : id,
+    name: `${id} contact`,
+    networkName: null,
+    protocolId: id === "slack" ? "slackgo" : null,
+    networkId: null,
+    isDirect: true,
+    isMuted: false,
+  }),
+);
 
 function setup(t: TestContext) {
-  const home = mkdtempSync(join(tmpdir(), "beeper-feed-"));
+  const home = mkdtempSync(join(tmpdir(), "beeper-to-slack-"));
   const db = new DatabaseSync(":memory:");
   t.after(() => {
     db.close();
@@ -57,8 +59,10 @@ function setup(t: TestContext) {
       return { ts: String(posts.length) };
     },
   };
-  const make = () =>
+  const make = (network = "whatsapp", roomIds?: ReadonlySet<string>) =>
     new BeeperFeed({
+      network,
+      roomIds,
       source: {
         journal: {
           head: async () => journal.head(),
@@ -90,7 +94,7 @@ function setup(t: TestContext) {
       flaggedChannel: "feed-flagged",
       spamChannel: "feed-spam",
       invite: [],
-      stateFile: join(home, "state.json"),
+      stateFile: join(home, `${network}.json`),
       log: () => {},
       now: () => now,
     });
@@ -129,22 +133,30 @@ function setup(t: TestContext) {
   };
 }
 
-test("mirrors new messages by platform, routes held copies, and leaves Slack bridges out", async (t) => {
+test("keeps the two feeds independent and screens messages only from the selected network", async (t) => {
   const h = setup(t);
   h.record("old", "already in the journal");
-  const feed = h.make();
-  await feed.tick();
+  const whatsapp = h.make();
+  const instagram = h.make("instagram");
+  await whatsapp.tick();
+  await instagram.tick();
   h.record("backfill", "older history", "whatsapp", { ts: NOW - 1 });
   h.record("new", "hello <!channel> and <@U123>");
-  h.record("own", "my message", "beeper", { isMe: true });
+  h.record("own", "my message", "instagram", { isMe: true });
   h.record("spam", "spam: sale", "instagram");
   h.record("unsafe", "unsafe: scam", "instagram");
   h.record("slack", "already on Slack", "slack");
-  await feed.tick();
-  await feed.tick();
+  h.record("beeper", "Beeper message", "beeper");
+  h.record("telegram", "Telegram message", "telegram");
+
+  await whatsapp.tick();
+  await instagram.tick();
+  await whatsapp.tick();
+  await instagram.tick();
+
   assert.deepEqual(
     h.posts.map(({ channel }) => channel),
-    ["feed-whatsapp", "feed-beeper", "feed-spam", "feed-flagged"],
+    ["feed-whatsapp", "feed-instagram", "feed-spam", "feed-flagged"],
   );
   assert.deepEqual(
     h.destinations.map(({ create }) => create),
@@ -153,9 +165,41 @@ test("mirrors new messages by platform, routes held copies, and leaves Slack bri
   assert.match(h.posts[0].text, /whatsapp contact · whatsapp · Alice/);
   assert.match(h.posts[0].text, /&lt;!channel&gt; and &lt;@U123&gt;/);
   assert.doesNotMatch(h.posts[0].text, /<[@!]/);
-  assert.match(h.posts[1].text, /beeper · Leon/);
-  assert.equal(h.screened.length, 4);
-  assert.equal(feed.status().posted, 4);
+  assert.match(h.posts[1].text, /instagram · Leon/);
+  assert.deepEqual(h.screened, [
+    "hello <!channel> and <@U123>",
+    "my message",
+    "spam: sale",
+    "unsafe: scam",
+  ]);
+  assert.equal(whatsapp.status().posted, 1);
+  assert.equal(instagram.status().posted, 3);
+});
+
+test("restricts a feed to configured rooms and rechecks queued messages on restart", async (t) => {
+  const h = setup(t);
+  const allowed = new Set(["!whatsapp:example.test", "!instagram:example.test"]);
+  const feed = h.make("whatsapp", allowed);
+  await feed.tick();
+  h.failures.add("feed-whatsapp");
+  h.record("selected", "selected WhatsApp chat");
+  h.record("other-chat", "unselected WhatsApp chat", "other-group");
+  h.record("other-network", "Instagram chat on the WhatsApp allowlist", "instagram");
+  await feed.tick();
+  assert.deepEqual(h.screened, ["selected WhatsApp chat"]);
+  assert.equal(feed.status().pending, 1);
+  assert.equal(h.posts.length, 0);
+
+  h.failures.clear();
+  h.advance(31_000);
+  const narrowed = h.make("whatsapp", new Set(["!other-group:example.test"]));
+  await narrowed.tick();
+  assert.equal(narrowed.status().pending, 0);
+  assert.equal(h.posts.length, 0);
+  h.record("new-selected", "new in selected group", "other-group");
+  await narrowed.tick();
+  assert.equal(h.posts.length, 1);
+  assert.match(h.posts[0].text, /new in selected group/);
 });
 
 test("restarts retry Slack with the saved verdict and apply edits and redactions to pending copies", async (t) => {
@@ -205,7 +249,7 @@ test("newly joined rooms are resolved before messages are routed", async (t) => 
   );
 });
 
-test("Beeper Feed asks only about safety and cannot start an MCP adapter or CLI tool", async () => {
+test("Slack feeds screen for safety and expose neither MCP nor CLI tools", async () => {
   const request = screenRequest(
     { chat: { title: "Beeper", network: "beeper", type: "direct" }, messages: [] },
     "gpt-6-luna",
@@ -216,14 +260,14 @@ test("Beeper Feed asks only about safety and cannot start an MCP adapter or CLI 
     ["safety"],
   );
 
-  const extensions = [beeperFeedExtension()];
+  const extensions = [beeperToSlackExtension({ name: "instagram2slack", network: "instagram" })];
   assert.equal(extensions[0].server, undefined);
   await assert.rejects(
-    runCli(["mcp", "beeper-feed"], "test", {}, { extensions }),
+    runCli(["mcp", "instagram2slack"], "test", {}, { extensions }),
     /no MCP extension/,
   );
   await assert.rejects(
-    runCli(["extension", "beeper-feed", "register"], "test", {}, { extensions }),
+    runCli(["extension", "instagram2slack", "register"], "test", {}, { extensions }),
     /no MCP extension/,
   );
 });

@@ -1,6 +1,6 @@
 name: Deploy
 
-# Deploys the Cloudflare Workers (autolinear, cronometer, dailylinear, gmail-feed,
+# Deploys the Cloudflare Workers (autolinear, cronometer, dailylinear, gmail2slack,
 # grok-bot-roster, landing, slack-as-leon / slack-puppet, slack22linear) whose code
 # changed since the last successful run on main, and publishes the Todoist Automations on every run. CI
 # calls this after its checks pass on a push to main; it can also be run by hand (Actions → Deploy → Run
@@ -10,7 +10,7 @@ name: Deploy
 # Secrets live in the `production` environment, which only main can use: CLOUDFLARE_API_TOKEN (an
 # account-owned token: Workers Scripts edit, Workers Routes edit on leonsilicon.ai, Account Settings read; its Connectivity
 # Directory bind permission was for the edge Worker removed on 2026-11-21 and is unused), INFISICAL_CLIENT_ID and
-# INFISICAL_CLIENT_SECRET (varlock resolves #slack-as-leon / #slack22linear / #autolinear / #dailylinear / #gmail-feed / #cronometer / #grok-bot-roster / #todoist-automations,
+# INFISICAL_CLIENT_SECRET (varlock resolves #slack-as-leon / #slack22linear / #autolinear / #dailylinear / #gmail2slack / #cronometer / #grok-bot-roster / #todoist-automations,
 # Todoist's API token included, from Infisical), and the CLOUDFLARE_ACCOUNT_ID variable.
 
 on:
@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, landing, orcahermes-reference, slack-as-leon, slack22linear)"
+        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail2slack, grok-bot-roster, landing, orcahermes-reference, slack-as-leon, slack22linear)"
         required: true
         default: all
 

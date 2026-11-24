@@ -12,7 +12,7 @@ import {
   type SlackPoster,
   type Verdict,
 } from "@-/ai.leonsilicon.services.feed-common";
-import { feedChannel, MAX_TEXT, mirrorText } from "#format";
+import { MAX_TEXT, mirrorText } from "#format";
 
 const SCREEN_RETRY_MS = 15 * 60_000;
 const MAX_RETRY_MS = 10 * 60_000;
@@ -38,6 +38,8 @@ interface State {
 }
 
 interface FeedOptions {
+  network: string;
+  roomIds?: ReadonlySet<string>;
   source: Pick<ExtensionContext, "rooms" | "senderNames"> & {
     journal: Pick<ExtensionJournal, "head" | "changes">;
     refreshRooms(): Promise<void>;
@@ -56,6 +58,7 @@ interface FeedOptions {
 export class BeeperFeed {
   readonly #options: FeedOptions;
   readonly #now: () => number;
+  readonly #destination: string;
   readonly #channels = new Map<string, string>();
   #state: State | null;
   #lastTick: number | null = null;
@@ -64,6 +67,7 @@ export class BeeperFeed {
   constructor(options: FeedOptions) {
     this.#options = options;
     this.#now = options.now ?? Date.now;
+    this.#destination = `feed-${options.network}`;
     this.#state = this.#load();
   }
 
@@ -88,22 +92,28 @@ export class BeeperFeed {
     const page = await source.journal.changes({ after: state.cursor, limit: BATCH_SIZE });
     if (page.cursor > state.cursor) {
       const pending = { ...state.pending };
-      for (const message of page.entries) {
-        const id = message.eventId;
+      const candidates = page.entries.filter((message) => {
+        const previous = pending[message.eventId];
         if (message.redacted) {
-          delete pending[id];
-          continue;
+          delete pending[message.eventId];
+          return false;
         }
-        const previous = pending[id];
-        if (
-          message.ts < state.since ||
-          (!previous && message.edited && message.seq <= state.cursor)
-        )
-          continue;
+        return (
+          this.#includesRoom(message.roomId) &&
+          message.ts >= state.since &&
+          (previous || !message.edited || message.seq > state.cursor)
+        );
+      });
+      const ids = [...new Set(candidates.map((message) => message.roomId))];
+      const rooms = new Map((await source.rooms(ids)).map((room) => [room.roomId, room]));
+      for (const message of candidates) {
+        const room = rooms.get(message.roomId);
+        // Keep unresolved rooms pending until their bridge metadata can be checked.
+        if (room && room.network !== this.#options.network) continue;
         // Keep the current revision until it's posted. A newly decrypted event can have an older seq.
-        pending[id] = {
+        pending[message.eventId] = {
           message: { ...message, text: message.text.slice(0, MAX_TEXT), html: null },
-          queuedAt: previous?.queuedAt ?? this.#now(),
+          queuedAt: pending[message.eventId]?.queuedAt ?? this.#now(),
           attempts: 0,
           retryAt: 0,
         };
@@ -116,37 +126,43 @@ export class BeeperFeed {
       .filter((item) => item.retryAt <= now)
       .slice(0, POSTS_PER_TICK);
     if (due.length && !stopped()) {
-      const rooms = await this.#rooms([...new Set(due.map(({ message }) => message.roomId))]);
-      const senders = await source.senderNames(
-        due
-          .filter(({ message }) => !message.isMe && rooms.has(message.roomId))
-          .map(({ message }) => message.sender),
-      );
+      const ids = due.map(({ message }) => message.roomId).filter((id) => this.#includesRoom(id));
+      const rooms = await this.#rooms([...new Set(ids)]);
+      const senderIds = due
+        .filter(
+          ({ message }) =>
+            !message.isMe && rooms.get(message.roomId)?.network === this.#options.network,
+        )
+        .map(({ message }) => message.sender);
+      const senders = senderIds.length ? await source.senderNames(senderIds) : {};
       for (const item of due) {
         if (stopped()) break;
         const { message } = item;
         const room = rooms.get(message.roomId);
-        if (now - item.queuedAt >= RETRY_LIFETIME_MS) {
+        if (
+          !this.#includesRoom(message.roomId) ||
+          (room && room.network !== this.#options.network)
+        ) {
+          this.#finish(item);
+        } else if (now - item.queuedAt >= RETRY_LIFETIME_MS) {
           this.#finish(item, "expired");
           this.#options.log("warn", "message expired before Slack delivery");
         } else if (!room) {
           this.#retry(item);
         } else {
-          const channel = feedChannel(room);
-          if (!channel) {
-            this.#finish(item);
-            continue;
-          }
           await this.#post(
             item,
             room,
-            channel,
             message.isMe ? "Leon" : senders[message.sender] || message.sender,
           );
         }
       }
     }
     this.#lastTick = this.#now();
+  }
+
+  #includesRoom(id: string): boolean {
+    return this.#options.roomIds?.has(id) ?? true;
   }
 
   async #rooms(ids: string[]): Promise<Map<string, RoomInfo>> {
@@ -165,7 +181,7 @@ export class BeeperFeed {
     return new Map(rooms.map((room) => [room.roomId, room]));
   }
 
-  async #post(item: Pending, room: RoomInfo, platform: string, sender: string): Promise<void> {
+  async #post(item: Pending, room: RoomInfo, sender: string): Promise<void> {
     const { message } = item;
     let verdict = item.verdict;
     if (!verdict) {
@@ -192,7 +208,7 @@ export class BeeperFeed {
 
     const destination =
       verdict.route === "safe"
-        ? platform
+        ? this.#destination
         : verdict.route === "spam"
           ? this.#options.spamChannel
           : this.#options.flaggedChannel;
@@ -212,7 +228,7 @@ export class BeeperFeed {
     } catch {
       this.#channels.delete(destination);
       this.#retry(item);
-      this.#options.log("warn", "Slack delivery will retry", { platform, route: verdict.route });
+      this.#options.log("warn", "Slack delivery will retry", { route: verdict.route });
       return;
     }
     this.#finish(item, "posted");
@@ -248,7 +264,7 @@ export class BeeperFeed {
         !Number.isSafeInteger(state.posted) ||
         !Number.isSafeInteger(state.expired)
       )
-        throw new Error("invalid Beeper Feed state");
+        throw new Error("invalid Slack feed state");
       return state;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;

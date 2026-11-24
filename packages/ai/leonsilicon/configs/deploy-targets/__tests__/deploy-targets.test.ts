@@ -13,7 +13,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
     "autolinear",
     "cronometer",
     "dailylinear",
-    "gmail-feed",
+    "gmail2slack",
     "grok-bot-roster",
     "landing",
     "orcahermes-reference",
@@ -28,7 +28,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
 test("a change deploys exactly the Workers whose build it reaches", () => {
   const affected = (...files: string[]) => affectedWorkers(workspace, files);
   // Its own app and service.
-  assert.deepEqual(affected("apps/gmail-feed/worker.ts"), ["gmail-feed"]);
+  assert.deepEqual(affected("apps/gmail2slack/worker.ts"), ["gmail2slack"]);
   assert.deepEqual(affected("apps/landing/wrangler.jsonc"), ["landing"]);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/grok-bot-roster/roster.ts"), [
     "grok-bot-roster",
@@ -61,7 +61,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "autolinear",
     "cronometer",
     "dailylinear",
-    "gmail-feed",
+    "gmail2slack",
     "grok-bot-roster",
     "landing",
     "orcahermes-reference",
@@ -72,7 +72,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "autolinear",
     "cronometer",
     "dailylinear",
-    "gmail-feed",
+    "gmail2slack",
     "grok-bot-roster",
     "landing",
     "orcahermes-reference",
@@ -83,7 +83,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "autolinear",
     "cronometer",
     "dailylinear",
-    "gmail-feed",
+    "gmail2slack",
     "grok-bot-roster",
     "landing",
     "orcahermes-reference",
@@ -91,7 +91,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "slack22linear",
   ]);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/feed-common/decisions.ts"), [
-    "gmail-feed",
+    "gmail2slack",
     "slack22linear",
   ]);
   assert.deepEqual(affected("packages/ai/leonsilicon/services/autotrigger/trigger.ts"), [

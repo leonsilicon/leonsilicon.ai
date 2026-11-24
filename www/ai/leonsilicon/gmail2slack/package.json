@@ -1,5 +1,5 @@
 {
-  "name": "@-apps/ai.leonsilicon.gmail-feed",
+  "name": "@-apps/ai.leonsilicon.gmail2slack",
   "private": true,
   "type": "module",
   "exports": {},

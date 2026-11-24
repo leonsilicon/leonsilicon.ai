@@ -1,12 +1,12 @@
 {
   "display_information": {
-    "name": "Beeper Feed",
-    "description": "Screens and copies Beeper messages and incoming Gmail to Slack.",
+    "name": "Slack Feeds",
+    "description": "Screens and copies selected Instagram and WhatsApp conversations and incoming Gmail to Slack.",
     "background_color": "#1f2933"
   },
   "features": {
     "bot_user": {
-      "display_name": "Beeper Feed",
+      "display_name": "Slack Feeds",
       "always_online": true
     }
   },

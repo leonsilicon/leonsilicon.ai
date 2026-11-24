@@ -52,7 +52,7 @@ export const FEED_LIMITS = {
 };
 
 const PURPOSE =
-  "Every email that reaches Leon's Gmail, copied by the Gmail feed (gmail-feed.leonsilicon.ai). Screened first: unsafe ones are held in #feed-flagged and spam in #feed-spam.";
+  "Every email that reaches Leon's Gmail, copied by the Gmail2Slack (gmail2slack.leonsilicon.ai). Screened first: unsafe ones are held in #feed-flagged and spam in #feed-spam.";
 
 /** Inbound mail: not a draft, not chat, and not something Leon sent unless it also reached a folder. */
 export function isInbound(labelIds: string[]): boolean {

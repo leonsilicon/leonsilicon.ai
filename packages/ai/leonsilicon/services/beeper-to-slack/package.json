@@ -1,5 +1,5 @@
 {
-  "name": "@-/ai.leonsilicon.services.beeper-feed",
+  "name": "@-/ai.leonsilicon.services.beeper-to-slack",
   "private": true,
   "type": "module",
   "imports": {

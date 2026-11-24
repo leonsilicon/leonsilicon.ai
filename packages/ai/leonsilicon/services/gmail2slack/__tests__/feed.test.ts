@@ -294,7 +294,7 @@ test("expired history catches up by date; a long Gmail outage is announced once,
   advance(FEED_LIMITS.outageNoticeMs + 1);
   await assert.rejects(feed.poll());
   await assert.rejects(feed.poll());
-  const notices = () => slack.posts.filter((p) => /Gmail feed can/.test(p.text));
+  const notices = () => slack.posts.filter((p) => /Gmail2Slack can/.test(p.text));
   assert.equal(notices().length, 1);
   assert.match(notices()[0].text, /invalid_grant/);
   assert.equal(feed.status().ok, false);

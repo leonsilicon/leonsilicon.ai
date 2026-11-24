@@ -48,9 +48,15 @@ Install the dedicated read-only publisher credential with `vpx _env-file linear-
 
 The publisher checks for changes every 10 seconds and refreshes its Slack-to-Matrix room map every minute. It publishes issue records and project colors and icons as room account data, and closed Slack project channels as account-wide `ai.leonsilicon.linear.project_visibility`. It uses the inbox's existing Matrix session and reads back each changed record. `status.extensions["linear-issue-metadata"]` shows the last successful pass, verified issue and project rooms, unmapped channels, and whether project visibility was published.
 
-## Beeper Feed
+## Slack feeds
 
-[Beeper Feed](../../packages/ai/leonsilicon/services/beeper-feed/README.md) runs in the inbox daemon. Render its settings with `vpx _env-file beeper-feed` and install them as `/opt/data/beeper-inbox/beeper-feed/env` (mode 600), then install the release or restart the daemon. Check `status.extensions["beeper-feed"]` for the latest pass, pending work and Slack deliveries. Removing the settings file and restarting pauses copying.
+[instagram2slack](../../packages/ai/leonsilicon/services/instagram2slack/README.md) and [whatsapp2slack](../../packages/ai/leonsilicon/services/whatsapp2slack/README.md) ship with the inbox. Install this inbox release to retire `beeper-feed`. The new daemon ignores the old extension's settings and delivery queue.
+
+1. For each platform to enable, run `vpx _env-file instagram2slack` or `vpx _env-file whatsapp2slack`. Install the generated settings as `/opt/data/beeper-inbox/<name>/env` (mode 600).
+2. To limit a feed to particular chats, add `BEEPER_ROOM_IDS` to that file as a comma-separated list of exact Matrix room IDs. Use `list_conversations` with `network: "instagram"` or `network: "whatsapp"` to find the `room_id` values. Omit the setting to copy all conversations on the chosen network.
+3. Restart the inbox daemon and check `status.extensions` under the feed's name. Each feed starts with new messages the first time it runs. The status shows the latest pass, pending work and delivery counts.
+
+Move a feed's settings file out of its directory and restart the daemon to pause it. Restoring the file resumes from its saved cursor. Keep room IDs and settings on Hermes Cloud.
 
 ## Sign-in (once per device)
 

@@ -8,9 +8,15 @@ import { MAX_TEXT } from "#format";
 
 const INTERVAL_MS = 5_000;
 
-export function beeperFeedExtension(): DaemonExtension {
+export function beeperToSlackExtension({
+  name,
+  network,
+}: {
+  name: string;
+  network: string;
+}): DaemonExtension {
   return {
-    name: "beeper-feed",
+    name,
     start(context) {
       const file = join(context.home, "env");
       let settings: ReturnType<typeof parseEnv>;
@@ -22,14 +28,20 @@ export function beeperFeedExtension(): DaemonExtension {
       }
       const required = (key: string): string => {
         const value = settings[key]?.trim();
-        if (!value) throw new Error(`Beeper Feed needs ${key}`);
+        if (!value) throw new Error(`${name} needs ${key}`);
         return value;
       };
+      const roomIds = settings.BEEPER_ROOM_IDS?.split(",").map((id) => id.trim());
+      if (roomIds?.some((id) => !/^![^\s,]+$/.test(id))) {
+        throw new Error(`${name} needs comma-separated Matrix room IDs in BEEPER_ROOM_IDS`);
+      }
       const feed = new BeeperFeed({
+        network,
+        roomIds: roomIds && new Set(roomIds),
         source: {
           journal: context.journal,
-          rooms: context.rooms,
-          senderNames: context.senderNames,
+          rooms: (ids) => context.rooms(ids),
+          senderNames: (ids) => context.senderNames(ids),
           async refreshRooms() {
             await context.tool("list_conversations", { refresh: true, limit: 1 });
           },
@@ -68,7 +80,7 @@ export function beeperFeedExtension(): DaemonExtension {
             },
             () => {
               failed = true;
-              context.log("warn", "Beeper Feed cycle failed; will retry");
+              context.log("warn", "Slack feed cycle failed; will retry");
             },
           )
           .finally(() => {

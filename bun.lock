@@ -34,9 +34,10 @@
         "_build-beeper-inbox": "./_build-beeper-inbox.ts",
       },
       "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-feed": "workspace:*",
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
         "@-/ai.leonsilicon.services.grok-relay": "workspace:*",
+        "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
+        "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*",
       },
     },
     "apps/cronometer": {
@@ -51,11 +52,11 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
-    "apps/gmail-feed": {
-      "name": "@-apps/gmail-feed",
+    "apps/gmail2slack": {
+      "name": "@-apps/gmail2slack",
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
-        "@-/ai.leonsilicon.services.gmail-feed": "workspace:*",
+        "@-/ai.leonsilicon.services.gmail2slack": "workspace:*",
       },
     },
     "apps/grok-bot-roster": {
@@ -198,18 +199,18 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/beeper-feed": {
-      "name": "@-/ai.leonsilicon.services.beeper-feed",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/beeper-inbox": {
       "name": "@-/ai.leonsilicon.services.beeper-inbox",
       "version": "0.1.0",
       "dependencies": {
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
+      },
+    },
+    "packages/ai/leonsilicon/services/beeper-to-slack": {
+      "name": "@-/ai.leonsilicon.services.beeper-to-slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/dailylinear": {
@@ -225,8 +226,8 @@
         "@-/com.npmjs.openai": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/gmail-feed": {
-      "name": "@-/ai.leonsilicon.services.gmail-feed",
+    "packages/ai/leonsilicon/services/gmail2slack": {
+      "name": "@-/ai.leonsilicon.services.gmail2slack",
       "version": "1.0.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.feed-common": "workspace:*",
@@ -242,6 +243,12 @@
       "version": "1.5.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+      },
+    },
+    "packages/ai/leonsilicon/services/instagram2slack": {
+      "name": "@-/ai.leonsilicon.services.instagram2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/orca-bridge": {
@@ -272,6 +279,12 @@
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
         "@-/com.npmjs.citty": "workspace:*",
         "@-/com.npmjs.yaml": "workspace:*",
+      },
+    },
+    "packages/ai/leonsilicon/services/whatsapp2slack": {
+      "name": "@-/ai.leonsilicon.services.whatsapp2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
     "packages/com/leonsilicon/hermes/plugins/autolinear": {
@@ -359,8 +372,8 @@
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
       },
     },
-    "www/ai/leonsilicon/gmail-feed": {
-      "name": "@-apps/ai.leonsilicon.gmail-feed",
+    "www/ai/leonsilicon/gmail2slack": {
+      "name": "@-apps/ai.leonsilicon.gmail2slack",
       "dependencies": {
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
       },
@@ -439,19 +452,21 @@
 
     "@-/ai.leonsilicon.services.autotrigger": ["@-/ai.leonsilicon.services.autotrigger@workspace:packages/ai/leonsilicon/services/autotrigger"],
 
-    "@-/ai.leonsilicon.services.beeper-feed": ["@-/ai.leonsilicon.services.beeper-feed@workspace:packages/ai/leonsilicon/services/beeper-feed"],
-
     "@-/ai.leonsilicon.services.beeper-inbox": ["@-/ai.leonsilicon.services.beeper-inbox@workspace:packages/ai/leonsilicon/services/beeper-inbox"],
+
+    "@-/ai.leonsilicon.services.beeper-to-slack": ["@-/ai.leonsilicon.services.beeper-to-slack@workspace:packages/ai/leonsilicon/services/beeper-to-slack"],
 
     "@-/ai.leonsilicon.services.dailylinear": ["@-/ai.leonsilicon.services.dailylinear@workspace:packages/ai/leonsilicon/services/dailylinear"],
 
     "@-/ai.leonsilicon.services.feed-common": ["@-/ai.leonsilicon.services.feed-common@workspace:packages/ai/leonsilicon/services/feed-common"],
 
-    "@-/ai.leonsilicon.services.gmail-feed": ["@-/ai.leonsilicon.services.gmail-feed@workspace:packages/ai/leonsilicon/services/gmail-feed"],
+    "@-/ai.leonsilicon.services.gmail2slack": ["@-/ai.leonsilicon.services.gmail2slack@workspace:packages/ai/leonsilicon/services/gmail2slack"],
 
     "@-/ai.leonsilicon.services.grok-bot-roster": ["@-/ai.leonsilicon.services.grok-bot-roster@workspace:packages/ai/leonsilicon/services/grok-bot-roster"],
 
     "@-/ai.leonsilicon.services.grok-relay": ["@-/ai.leonsilicon.services.grok-relay@workspace:packages/ai/leonsilicon/services/grok-relay"],
+
+    "@-/ai.leonsilicon.services.instagram2slack": ["@-/ai.leonsilicon.services.instagram2slack@workspace:packages/ai/leonsilicon/services/instagram2slack"],
 
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
 
@@ -460,6 +475,8 @@
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
 
     "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
+
+    "@-/ai.leonsilicon.services.whatsapp2slack": ["@-/ai.leonsilicon.services.whatsapp2slack@workspace:packages/ai/leonsilicon/services/whatsapp2slack"],
 
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
 
@@ -495,7 +512,7 @@
 
     "@-apps/ai.leonsilicon.dailylinear": ["@-apps/ai.leonsilicon.dailylinear@workspace:www/ai/leonsilicon/dailylinear"],
 
-    "@-apps/ai.leonsilicon.gmail-feed": ["@-apps/ai.leonsilicon.gmail-feed@workspace:www/ai/leonsilicon/gmail-feed"],
+    "@-apps/ai.leonsilicon.gmail2slack": ["@-apps/ai.leonsilicon.gmail2slack@workspace:www/ai/leonsilicon/gmail2slack"],
 
     "@-apps/ai.leonsilicon.grokbot-admin": ["@-apps/ai.leonsilicon.grokbot-admin@workspace:www/ai/leonsilicon/grokbot-admin"],
 
@@ -519,7 +536,7 @@
 
     "@-apps/dailylinear": ["@-apps/dailylinear@workspace:apps/dailylinear"],
 
-    "@-apps/gmail-feed": ["@-apps/gmail-feed@workspace:apps/gmail-feed"],
+    "@-apps/gmail2slack": ["@-apps/gmail2slack@workspace:apps/gmail2slack"],
 
     "@-apps/grok-bot-roster": ["@-apps/grok-bot-roster@workspace:apps/grok-bot-roster"],
 

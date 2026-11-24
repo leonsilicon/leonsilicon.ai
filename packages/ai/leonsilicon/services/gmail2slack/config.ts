@@ -22,7 +22,7 @@ const number = (value: string | undefined, fallback: number): number => {
 };
 
 /**
- * Reads the Worker's env: the `#gmail-feed` items of the root .env.schema (Gmail's OAuth client and
+ * Reads the Worker's env: the `#gmail2slack` items of the root .env.schema (Gmail's OAuth client and
  * refresh token, the admin token), plus the feed bot's Slack token, the OpenAI key and the held channels.
  */
 export function loadConfig(env: Record<string, string | undefined>): GmailFeedConfig {

@@ -1,12 +1,13 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Keep the deployed script name so redeploys reuse FeedObject and its stored Gmail state.
   "name": "gmail-feed",
   "main": "worker.ts",
   "compatibility_date": "2026-11-08",
   "workers_dev": false,
   "preview_urls": false,
   // A Custom Domain per hostname; Cloudflare issues its certificate.
-  "routes": [{ "pattern": "gmail-feed.leonsilicon.ai", "custom_domain": true }],
+  "routes": [{ "pattern": "gmail2slack.leonsilicon.ai", "custom_domain": true }],
   "durable_objects": { "bindings": [{ "name": "FEED", "class_name": "FeedObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FeedObject"] }],
   // Every minute: poll Gmail's history and post what arrived.
@@ -20,7 +21,7 @@
     "html_handling": "none",
     "not_found_handling": "none",
   },
-  // No vars here: every var and secret comes from the root .env.schema (#gmail-feed, values in
+  // No vars here: every var and secret comes from the root .env.schema (#gmail2slack, values in
   // Infisical), uploaded by `varlock-wrangler deploy`, which replaces whatever the Worker had.
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 }

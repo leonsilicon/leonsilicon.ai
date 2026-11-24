@@ -3,17 +3,6 @@ import { escapeSlack, reasonLabel, type Verdict } from "@-/ai.leonsilicon.servic
 
 export const MAX_TEXT = 3_800;
 
-export function feedChannel(room: RoomInfo): string | null {
-  const network = room.network.toLowerCase();
-  if (
-    network.startsWith("$") ||
-    [network, room.protocolId?.toLowerCase()].some((id) => id === "slack" || id === "slackgo")
-  )
-    return null;
-  const platform = network === "matrix" ? "beeper" : network.replace(/[^a-z0-9_-]+/g, "-");
-  return `feed-${platform || "other"}`.slice(0, 80);
-}
-
 function excerpt(value: string, limit: number): string {
   const escaped = escapeSlack(value.slice(0, limit));
   if (escaped.length <= limit && value.length <= limit) return escaped;

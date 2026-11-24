@@ -8,7 +8,7 @@
       name="description"
       content="Mirrors Leon’s incoming Gmail into Slack, with separate channels for flagged messages and spam."
     />
-    <title>Gmail Feed · gmail-feed.leonsilicon.ai</title>
+    <title>Gmail2Slack · gmail2slack.leonsilicon.ai</title>
   </head>
   <body>
     <header class="shell site-header">
@@ -22,8 +22,8 @@
     <main class="shell">
       <div class="hero">
         <div>
-          <p class="host">gmail-feed.leonsilicon.ai</p>
-          <h1>Gmail Feed</h1>
+          <p class="host">gmail2slack.leonsilicon.ai</p>
+          <h1>Gmail2Slack</h1>
           <p class="summary">
             Mirrors Leon’s incoming Gmail into Slack, with separate channels for flagged messages
             and spam.
@@ -72,7 +72,7 @@
             <li>
               <strong>Configure delivery.</strong> Install the feed bot and add it to the flagged
               and spam channels. Set the Google OAuth credentials, Slack bot token and channel IDs,
-              OpenAI API key, Hermes user ID and admin token in the <code>#gmail-feed</code> group
+              OpenAI API key, Hermes user ID and admin token in the <code>#gmail2slack</code> group
               of the
               <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/.env.schema"
                 >environment schema</a
@@ -83,7 +83,7 @@
               Send a test email and check the Slack feed. Use the runbook’s authenticated backfill
               command to import older mail.
               <div class="snippet">
-                <code id="deploy-command">vpr -w deploy:gmail-feed</code>
+                <code id="deploy-command">vpr -w deploy:gmail2slack</code>
                 <button
                   type="button"
                   aria-describedby="deploy-command"
@@ -101,7 +101,7 @@
     </main>
 
     <footer class="shell site-footer">
-      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/gmail-feed/README.md"
+      <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/gmail2slack/README.md"
         >Source and runbook</a
       >
       <a href="https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#deploying"

@@ -277,9 +277,9 @@ export function emailPost(email: Email, options: PostOptions): Post {
 
 /** Posted once in the feed channel when Gmail has been unreachable for a while, and on recovery. */
 export function outageText(since: number, error: string): string {
-  return `⚠️ *The Gmail feed can't read Gmail* since ${when(since)} (${escapeSlack(error.slice(0, 200))}). Emails that arrive meanwhile will be copied once it can. If Gmail access was revoked, Hermes's own Gmail access is down too.`;
+  return `⚠️ *The Gmail2Slack can't read Gmail* since ${when(since)} (${escapeSlack(error.slice(0, 200))}). Emails that arrive meanwhile will be copied once it can. If Gmail access was revoked, Hermes's own Gmail access is down too.`;
 }
 
 export function recoveredText(since: number): string {
-  return `✅ *The Gmail feed can read Gmail again* (it couldn't since ${when(since)}), and is copying what arrived meanwhile.`;
+  return `✅ *The Gmail2Slack can read Gmail again* (it couldn't since ${when(since)}), and is copying what arrived meanwhile.`;
 }

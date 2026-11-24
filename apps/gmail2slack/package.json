@@ -1,14 +1,14 @@
 {
-  "name": "@-apps/gmail-feed",
+  "name": "@-apps/gmail2slack",
   "private": true,
   "type": "module",
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
-    "@-/ai.leonsilicon.services.gmail-feed": "workspace:*"
+    "@-/ai.leonsilicon.services.gmail2slack": "workspace:*"
   },
   "varlock": {
     "loadPath": "../../",
-    "filter": "#gmail-feed"
+    "filter": "#gmail2slack"
   }
 }

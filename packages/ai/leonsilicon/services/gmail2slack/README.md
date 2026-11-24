@@ -1,6 +1,6 @@
-# @-/ai.leonsilicon.services.gmail-feed
+# @-/ai.leonsilicon.services.gmail2slack
 
-Copies every email that reaches Leon's Gmail into Slack. Added 2026-11-19 at Leon's request: "forward every single email i receive into slack… the point of slack is to be a complete data dump for all inbound messages in my personal life". It runs as a Cloudflare Worker, deployed from [`apps/gmail-feed`](../../../../../apps/gmail-feed/README.md).
+Copies every email that reaches Leon's Gmail into Slack. Added 2026-11-19 at Leon's request: "forward every single email i receive into slack… the point of slack is to be a complete data dump for all inbound messages in my personal life". It runs as a Cloudflare Worker, deployed from [`apps/gmail2slack`](../../../../../apps/gmail2slack/README.md).
 
 ## What it does
 
