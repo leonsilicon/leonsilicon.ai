@@ -87,6 +87,12 @@
         "@-/ai.leonsilicon.services.orca-device": "workspace:*",
       },
     },
+    "apps/orcahermes-reference": {
+      "name": "@-apps/orcahermes-reference",
+      "dependencies": {
+        "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
+      },
+    },
     "apps/slack-as-leon": {
       "name": "@-apps/slack-as-leon",
       "dependencies": {
@@ -349,6 +355,12 @@
         "@-/ai.leonsilicon.configs.cloudflare": "workspace:*",
       },
     },
+    "www/ai/leonsilicon/orcahermes": {
+      "name": "@-apps/ai.leonsilicon.orcahermes",
+    },
+    "www/ai/leonsilicon/orcahermes-supervisor": {
+      "name": "@-apps/ai.leonsilicon.orcahermes-supervisor",
+    },
     "www/ai/leonsilicon/slack-as-leon": {
       "name": "@-apps/ai.leonsilicon.slack-as-leon",
       "dependencies": {
@@ -457,6 +469,10 @@
 
     "@-apps/ai.leonsilicon.linear-slack": ["@-apps/ai.leonsilicon.linear-slack@workspace:www/ai/leonsilicon/linear-slack"],
 
+    "@-apps/ai.leonsilicon.orcahermes": ["@-apps/ai.leonsilicon.orcahermes@workspace:www/ai/leonsilicon/orcahermes"],
+
+    "@-apps/ai.leonsilicon.orcahermes-supervisor": ["@-apps/ai.leonsilicon.orcahermes-supervisor@workspace:www/ai/leonsilicon/orcahermes-supervisor"],
+
     "@-apps/ai.leonsilicon.slack-as-leon": ["@-apps/ai.leonsilicon.slack-as-leon@workspace:www/ai/leonsilicon/slack-as-leon"],
 
     "@-apps/ai.leonsilicon.slack-puppet": ["@-apps/ai.leonsilicon.slack-puppet@workspace:www/ai/leonsilicon/slack-puppet"],
@@ -478,6 +494,8 @@
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
 
     "@-apps/orca-device": ["@-apps/orca-device@workspace:apps/orca-device"],
+
+    "@-apps/orcahermes-reference": ["@-apps/orcahermes-reference@workspace:apps/orcahermes-reference"],
 
     "@-apps/slack-as-leon": ["@-apps/slack-as-leon@workspace:apps/slack-as-leon"],
 

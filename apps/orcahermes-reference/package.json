@@ -1,0 +1,9 @@
+{
+  "name": "@-apps/orcahermes-reference",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.configs.cloudflare": "workspace:*"
+  }
+}

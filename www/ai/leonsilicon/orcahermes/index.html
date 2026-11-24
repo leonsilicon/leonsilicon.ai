@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A reference for running Orca independently on the Nous-hosted Hermes instance."
+    />
+    <title>OrcaHermes</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="https://orcahermes.leonsilicon.ai/" aria-current="page">Overview</a>
+      <a href="https://orcahermes.leonsilicon.ai/server.html">Server</a>
+      <a href="https://orcahermes-supervisor.leonsilicon.ai/">Supervisor</a>
+      <a href="https://orcahermes.leonsilicon.ai/platform.html">Platform</a>
+    </nav>
+    <main>
+      <header>
+        <h1>OrcaHermes</h1>
+        <p>A reference for running Orca independently on the Nous-hosted Hermes instance.</p>
+      </header>
+      <section aria-labelledby="services">
+        <h2 id="services">Service responsibilities</h2>
+        <dl>
+          <dt><a href="/server.html">Headless Orca server</a></dt>
+          <dd>Owns the remote projects, workspaces, terminals, and agent sessions.</dd>
+          <dt><a href="https://orcahermes-supervisor.leonsilicon.ai/">Orca supervisor</a></dt>
+          <dd>
+            Restarts the Orca runtime and lets the replacement reconnect to a surviving terminal
+            daemon.
+          </dd>
+          <dt><a href="/platform.html">Platform service manager</a></dt>
+          <dd>Starts the Orca supervisor at boot and replaces it if it exits unexpectedly.</dd>
+        </dl>
+      </section>
+      <section aria-labelledby="verification">
+        <h2 id="verification">Deployment verification</h2>
+        <p>
+          The isolated Hermes audit exercised Orca's local CLI and runtime restart. A separate Linux
+          test recovered a live terminal after both a runtime crash and a supervisor crash.
+          Permanent startup, private client pairing, and authenticated Codex still require
+          verification on the deployment host.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

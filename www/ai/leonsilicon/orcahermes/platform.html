@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="The platform manager starts the Orca supervisor and watches the supervisor process."
+    />
+    <title>Platform service manager · OrcaHermes</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="https://orcahermes.leonsilicon.ai/">Overview</a>
+      <a href="https://orcahermes.leonsilicon.ai/server.html">Server</a>
+      <a href="https://orcahermes-supervisor.leonsilicon.ai/">Supervisor</a>
+      <a href="https://orcahermes.leonsilicon.ai/platform.html" aria-current="page">Platform</a>
+    </nav>
+    <main>
+      <header>
+        <h1>Platform service manager</h1>
+        <p>The platform manager starts the Orca supervisor and watches the supervisor process.</p>
+      </header>
+      <section aria-labelledby="boot">
+        <h2 id="boot">Boot and shutdown</h2>
+        <p>
+          The Nous-hosted image uses s6 to manage services. The intended integration runs Orca’s
+          foreground supervisor under s6 with a persistent profile. The service manager is
+          responsible for startup, supervisor failure, and service log retention.
+        </p>
+      </section>
+      <section aria-labelledby="evidence">
+        <h2 id="evidence">Verification</h2>
+        <p>
+          The isolated audit recovered a registered project after stopping and relaunching Orca.
+          Automatic startup, persistent pairing identity, and private client access after a provider
+          restart remain unverified. A platform restart also ends live terminal processes, so an
+          agent session must resume from durable state afterward.
+        </p>
+        <p>
+          <a href="https://skarnet.org/software/s6/s6-supervise.html"
+            >s6 service supervision documentation</a
+          >
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

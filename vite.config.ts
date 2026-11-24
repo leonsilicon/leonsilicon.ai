@@ -7,9 +7,10 @@ const www = fileURLToPath(new URL("www", import.meta.url));
 const ai = "packages/ai/leonsilicon";
 
 // Build each site's HTML entrypoint at its reverse-hostname path in dist/www.
-const pages = globSync("**/index.html", { cwd: www, exclude: ["**/node_modules/**"] }).map(
-  (page) => `${www}/${page}`,
-);
+const pages = globSync("**/*.html", {
+  cwd: www,
+  exclude: ["**/node_modules/**"],
+}).map((page) => `${www}/${page}`);
 
 export default defineConfig({
   root: www,
@@ -135,6 +136,10 @@ export default defineConfig({
           "cd apps/landing",
           "wrangler deploy -c wrangler.jsonc",
         ].join(" && "),
+      },
+      "deploy:orcahermes-reference": {
+        cache: false,
+        command: "vp build && wrangler deploy -c apps/orcahermes-reference/wrangler.jsonc",
       },
       "deploy:slack-as-leon": {
         cache: false,

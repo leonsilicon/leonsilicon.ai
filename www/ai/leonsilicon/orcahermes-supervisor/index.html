@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Orca’s built-in supervisor runs the headless runtime and starts a replacement when it fails."
+    />
+    <title>Orca supervisor · OrcaHermes</title>
+    <link rel="stylesheet" href="../orcahermes/style.css" />
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="https://orcahermes.leonsilicon.ai/">Overview</a>
+      <a href="https://orcahermes.leonsilicon.ai/server.html">Server</a>
+      <a href="https://orcahermes-supervisor.leonsilicon.ai/" aria-current="page">Supervisor</a>
+      <a href="https://orcahermes.leonsilicon.ai/platform.html">Platform</a>
+    </nav>
+    <main>
+      <header>
+        <h1>Orca supervisor</h1>
+        <p>
+          Orca’s built-in supervisor runs the headless runtime and starts a replacement when it
+          fails.
+        </p>
+      </header>
+      <section aria-labelledby="recovery">
+        <h2 id="recovery">Runtime recovery</h2>
+        <p>
+          <code>orca serve --supervise</code> runs in the foreground under the platform service
+          manager. Orca delays repeated starts and stops retrying after too many failures. A
+          replacement runtime can reconnect to the terminal daemon if the daemon survived the
+          failure.
+        </p>
+      </section>
+      <section aria-labelledby="evidence">
+        <h2 id="evidence">Verification</h2>
+        <p>
+          In the isolated Hermes audit, killing the runtime triggered a restart while the same
+          terminal daemon and heartbeat process stayed alive. Killing the supervisor left its
+          runtime running. In a separate Linux test, s6 replaced the killed supervisor after
+          stopping the abandoned runtime. Orca reattached to the same terminal daemon and live
+          workload. Recovery under the Nous-hosted service manager still requires verification.
+        </p>
+        <p>
+          <a href="https://orca.dev/docs/remote-servers#orca-serve-as-a-service"
+            >Orca service documentation</a
+          >
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

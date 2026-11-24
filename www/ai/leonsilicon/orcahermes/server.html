@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="The server owns the workspace and executes terminal and agent work on the machine that hosts it."
+    />
+    <title>Headless Orca server · OrcaHermes</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="https://orcahermes.leonsilicon.ai/">Overview</a>
+      <a href="https://orcahermes.leonsilicon.ai/server.html" aria-current="page">Server</a>
+      <a href="https://orcahermes-supervisor.leonsilicon.ai/">Supervisor</a>
+      <a href="https://orcahermes.leonsilicon.ai/platform.html">Platform</a>
+    </nav>
+    <main>
+      <header>
+        <h1>Headless Orca server</h1>
+        <p>
+          The server owns the workspace and executes terminal and agent work on the machine that
+          hosts it.
+        </p>
+      </header>
+      <section aria-labelledby="clients">
+        <h2 id="clients">Clients and workspaces</h2>
+        <p>
+          Paired clients connect over a private network and receive revocable Orca access.
+          Repositories, worktrees, terminal state, and provider sign-ins belong to the server
+          profile. The private connection and the HTTPS certificate for these reference pages are
+          configured separately.
+        </p>
+        <p>
+          Codex runs with a provider sign-in on the server. A paired desktop can disconnect while
+          the server continues working.
+        </p>
+      </section>
+      <section aria-labelledby="evidence">
+        <h2 id="evidence">Verification</h2>
+        <p>
+          The isolated Hermes audit ran real project-list requests and checked terminal daemon
+          health. Authenticated access from another device, denial of unpaired access, and Codex
+          sign-in and resume still require a deployment test.
+        </p>
+        <p><a href="https://orca.dev/docs/remote-servers">Orca remote server documentation</a></p>
+      </section>
+    </main>
+  </body>
+</html>

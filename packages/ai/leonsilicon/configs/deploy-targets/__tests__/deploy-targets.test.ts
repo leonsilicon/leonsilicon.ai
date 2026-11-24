@@ -16,6 +16,7 @@ test("the Workers are the apps with a wrangler.jsonc, each with a deploy task", 
     "gmail-feed",
     "grok-bot-roster",
     "landing",
+    "orcahermes-reference",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -63,6 +64,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "gmail-feed",
     "grok-bot-roster",
     "landing",
+    "orcahermes-reference",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -73,6 +75,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "gmail-feed",
     "grok-bot-roster",
     "landing",
+    "orcahermes-reference",
     "slack-as-leon",
     "slack22linear",
   ]);
@@ -83,6 +86,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
     "gmail-feed",
     "grok-bot-roster",
     "landing",
+    "orcahermes-reference",
     "slack-as-leon",
     "slack22linear",
   ]);

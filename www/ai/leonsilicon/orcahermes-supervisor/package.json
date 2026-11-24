@@ -1,0 +1,6 @@
+{
+  "name": "@-apps/ai.leonsilicon.orcahermes-supervisor",
+  "private": true,
+  "type": "module",
+  "exports": {}
+}

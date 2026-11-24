@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, landing, slack-as-leon, slack22linear)"
+        description: "Workers to deploy: all, or a comma-separated list (autolinear, cronometer, dailylinear, gmail-feed, grok-bot-roster, landing, orcahermes-reference, slack-as-leon, slack22linear)"
         required: true
         default: all
 
