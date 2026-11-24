@@ -146,6 +146,18 @@ python3 /opt/data/orcahermes/orcahermes.py network my-orcahermes</pre>
           setup. An unrecognized OrcaHermes installation is left in place.
         </p>
       </section>
+      <section aria-labelledby="hermes-skill">
+        <h2 id="hermes-skill">Teach Hermes about OrcaHermes</h2>
+        <p>
+          Add the skill to the Hermes profile you use to manage this host. It explains which service
+          to check, how to verify private access, and where to find the installation guide.
+        </p>
+        <div class="command">
+          <button type="button" data-copy="skill-command" hidden>Copy</button>
+          <pre id="skill-command">
+hermes skills install leonsilicon/leonsilicon.ai/packages/com/leonsilicon/hermes/skills/orcahermes</pre>
+        </div>
+      </section>
     </main>
   </body>
 </html>

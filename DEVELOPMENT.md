@@ -11,6 +11,7 @@ This workspace follows the [Flatcap convention](https://github.com/leonsilicon/f
 | `packages/ai/leonsilicon/configs/cloudflare/`     | Serves the built pages from Workers, plus the script and styles the pages share                                                                                                                               |
 | `packages/ai/leonsilicon/services/<name>/`        | The services behind `*.leonsilicon.ai` and on Hermes Cloud                                                                                                                                                    |
 | `packages/ai/leonsilicon/configs/<name>/`         | The Grok relay and Cronometer as they ran on the Mac mini until 2026-11-21 (kept for reference), the env-file renderer, Unsnooze patching, Silicon Dot's agents-vault, and the Todoist Automations' manifests |
+| `packages/com/leonsilicon/hermes/skills/<name>/`  | Agent Skills folders installable with the Hermes skills CLI                                                                                                                                                   |
 | `packages/com/leonsilicon/hermes/plugins/<name>/` | Hermes plugins, installed to `$HERMES_HOME/plugins/<name>/` on Hermes Cloud                                                                                                                                   |
 | `packages/com/npmjs/`                             | Wrappers for upstream runtime dependencies                                                                                                                                                                    |
 | `patches.gen/`                                    | Committed versioned diffs generated from codemods                                                                                                                                                             |
@@ -82,12 +83,23 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `gmail-feed` Worker           | Automatic on push to `main`; by hand `vpr -w deploy:gmail-feed`                                                                                 |
 | `cronometer` Worker (Python)  | Automatic on push to `main`; by hand `vpr -w deploy:cronometer`, which needs uv 0.13.4 or newer                                                 |
 | `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
+| Hermes skills                 | Install a skill from its repository path. See [Hermes skills](#hermes-skills).                                                                  |
 | Hermes plugins                | Install from the standalone `leonsiliconAI/<name>` Git repository. See [Hermes plugin mirrors](#hermes-plugin-mirrors).                         |
 | Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
 | Grok relay and Beeper Feed    | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
 The service Worker tasks build `www/` before deploying and need Infisical access for their configuration. The landing page deploy needs Cloudflare credentials. The retired Mac mini Orca bridge keeps its deploy script for reference.
+
+### Hermes skills
+
+Put each Hermes skill under `packages/com/leonsilicon/hermes/skills/<name>/`. The directory name matches the `name` field in its `SKILL.md`. Use the standard `name` and `description` frontmatter and add supporting files when the skill needs them. [Agent Skills specification](https://agentskills.io/specification)
+
+Install an individual skill from its GitHub directory into the intended Hermes profile. Hermes runs its normal skill scan and tracks its source. Use `hermes skills list --source hub` to confirm the installation. [Hermes skills documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)
+
+```sh
+hermes skills install leonsilicon/leonsilicon.ai/packages/com/leonsilicon/hermes/skills/orcahermes
+```
 
 ### Hermes plugin mirrors
 
