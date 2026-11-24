@@ -36,9 +36,7 @@
           </div>
         </div>
         <ol class="flow" role="list" aria-label="Service flow">
-          <li>
-            <strong>Gmail history</strong><small>Read-only access, polled every minute</small>
-          </li>
+          <li><strong>Gmail history</strong><small>Read-only mailbox history</small></li>
           <li><strong>Screening and routing</strong><small>Safety and urgency checks</small></li>
           <li><strong>Slack feeds</strong><small>Gmail, flagged mail, or spam</small></li>
         </ol>
@@ -48,9 +46,10 @@
         <h2>How it works</h2>
         <div class="guide-body">
           <p>
-            A Cloudflare Durable Object polls Gmail history and queues new messages in SQLite. Gmail
-            spam goes straight to the spam feed. Other messages go through safety and urgency checks
-            using OpenAI before the feed bot posts them.
+            Gmail can notify the feed of mailbox changes through Pub/Sub. A Cloudflare Durable
+            Object reads the new history and queues messages in SQLite. Gmail spam goes straight to
+            the spam feed. Other messages go through safety and urgency checks using OpenAI before
+            the feed bot posts them.
           </p>
           <p>
             Slack receives the message as plain text with a link back to Gmail. Attachments stay in
@@ -67,7 +66,8 @@
             <li>
               <strong>Authorize Gmail.</strong> Enable the Gmail API in your Google Cloud project
               and authorize an OAuth client with the <code>gmail.readonly</code> scope. Obtain a
-              refresh token for the mailbox you want to mirror.
+              refresh token for the mailbox you want to mirror. Set up the Pub/Sub push subscription
+              using the runbook.
             </li>
             <li>
               <strong>Configure delivery.</strong> Install the feed bot and add it to the flagged
@@ -79,7 +79,7 @@
               >. Set <code>GMAIL_FEED_WAKE=none</code> for a silent feed.
             </li>
             <li>
-              <strong>Deploy and confirm delivery.</strong> The first poll records a starting point.
+              <strong>Deploy and confirm delivery.</strong> The first sync records a starting point.
               Send a test email and check the Slack feed. Use the runbook’s authenticated backfill
               command to import older mail.
               <div class="snippet">

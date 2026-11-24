@@ -43,3 +43,20 @@ test("a revoked token fails with Google's reason", async () => {
   const impl = (async () => reply(400, { error: "invalid_grant" })) as unknown as typeof fetch;
   await assert.rejects(new GmailClient(credentials, impl).profile(), /token: 400 invalid_grant/);
 });
+
+test("registers a watch for the whole mailbox with the read-only Gmail token", async () => {
+  const topic = "projects/example/topics/gmail";
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : input.toString());
+    if (url.hostname === "oauth2.googleapis.com") return reply(200, { access_token: "at" });
+    assert.equal(url.pathname, "/gmail/v1/users/me/watch");
+    assert.equal(init?.method, "POST");
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer at");
+    assert.equal(init?.body, JSON.stringify({ topicName: topic }));
+    return reply(200, { historyId: "90071992547409931", expiration: "1795597200000" });
+  }) as typeof fetch;
+  assert.deepEqual(await new GmailClient(credentials, impl).watch(topic), {
+    historyId: "90071992547409931",
+    expiration: 1795597200000,
+  });
+});

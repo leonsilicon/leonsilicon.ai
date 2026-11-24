@@ -10,6 +10,8 @@
     "#feed": "./feed.ts",
     "#format": "./format.ts",
     "#gmail": "./gmail.ts",
+    "#pubsub": "./pubsub.ts",
+    "#push": "./push.ts",
     "#mime": "./mime.ts",
     "#screen": "./screen.ts",
     "#store": "./store.ts"
@@ -19,6 +21,7 @@
   },
   "dependencies": {
     "@-/ai.leonsilicon.services.feed-common": "workspace:*",
+    "@-/com.npmjs.jose": "workspace:*",
     "@-/com.npmjs.openai": "workspace:*"
   }
 }

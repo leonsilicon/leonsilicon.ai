@@ -10,8 +10,8 @@
   "routes": [{ "pattern": "gmail2slack.leonsilicon.ai", "custom_domain": true }],
   "durable_objects": { "bindings": [{ "name": "FEED", "class_name": "FeedObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FeedObject"] }],
-  // Every minute: poll Gmail's history and post what arrived.
-  "triggers": { "crons": ["* * * * *"] },
+  // Hourly backstop if the Durable Object loses its alarm.
+  "triggers": { "crons": ["0 * * * *"] },
   // The Vite build of www/ (vp build). The Worker runs first and serves a page only to browsers; see
   // @-/ai.leonsilicon.configs.cloudflare.
   "assets": {

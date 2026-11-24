@@ -270,6 +270,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.feed-common": "workspace:*",
+        "@-/com.npmjs.jose": "workspace:*",
         "@-/com.npmjs.openai": "workspace:*",
       },
     },
@@ -354,6 +355,12 @@
       "name": "@-/com.npmjs.citty",
       "dependencies": {
         "citty": "catalog:",
+      },
+    },
+    "packages/com/npmjs/jose": {
+      "name": "@-/com.npmjs.jose",
+      "dependencies": {
+        "jose": "catalog:",
       },
     },
     "packages/com/npmjs/krzysztofkobra__orca-mcp": {
@@ -456,6 +463,7 @@
     "@varlock/infisical-plugin": "2.1.3",
     "citty": "0.1.6",
     "eslint-plugin-flatcap": "0.1.0",
+    "jose": "6.2.17",
     "openai": "7.45.1",
     "typescript": "7.0.2",
     "varlock": "1.24.0",
@@ -538,6 +546,8 @@
     "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:apps/hermes-plugin-slack-own-thread-reply"],
 
     "@-/com.npmjs.citty": ["@-/com.npmjs.citty@workspace:packages/com/npmjs/citty"],
+
+    "@-/com.npmjs.jose": ["@-/com.npmjs.jose@workspace:packages/com/npmjs/jose"],
 
     "@-/com.npmjs.krzysztofkobra__orca-mcp": ["@-/com.npmjs.krzysztofkobra__orca-mcp@workspace:packages/com/npmjs/krzysztofkobra__orca-mcp"],
 

@@ -27,11 +27,11 @@ The [screener](../feed-common/decisions.ts) asks OpenAI's Decisions API (`gpt-6-
 ## How it works
 
 - **Gmail access** is read-only (`gmail.readonly`), with the OAuth client and refresh token of the grant Hermes's own Gmail access uses. That client is an Internal app in Leon's Google Workspace, so the token doesn't expire weekly. Revoking the app in Leon's Google account stops both.
-- **Polling.** The Durable Object's alarm runs every minute and re-arms itself; a cron tick every minute only restarts it if the chain ever breaks (the first live cron ticks didn't arrive, 2026-11-19). The alarm reads Gmail's history since the last poll (`history.list`, `messageAdded`) and queues the new message IDs in SQLite, then fetches, screens and posts the queue. Alarms never overlap, and message IDs dedupe, so overlapping history or a backfill never posts twice.
-- **The first poll** only records where to start; mail from before it isn't copied unless backfilled.
-- **Gaps.** Gmail keeps about a week of history. A poll whose start has expired catches up with a search from an hour before the last good poll instead.
+- **Push notifications.** Gmail sends a mailbox history ID through Pub/Sub. The Worker verifies the Google token, then the Durable Object records the highest notified history ID before acknowledging. The alarm catches up from the saved cursor using `history.list` with `messageAdded`, queues new IDs in SQLite, and processes the queue. Delivery retries have their own due times.
+- **Startup and renewal.** The first sync establishes a starting point. Existing installations continue from their saved cursor. The watch covers the whole mailbox and renews daily. Its response provides a history ID for catching any changes whose notification was dropped.
+- **Gaps.** If the saved history ID has expired, a search starts an hour before the last successful read. Message IDs deduplicate repeat notifications, history reads and backfills.
 - **Retries.** A failed post is retried with backoff (30 s doubling, up to every 10 minutes) and given up after a day, which `/admin/status` lists. A post that got up records its ts, and each thread reply its count, so a retry continues where it stopped.
-- **Outages.** When Gmail can't be read for 30 minutes (a revoked token, say), the bot posts one notice in `#feed-gmail`, and another when it recovers and catches up. `/healthz` turns 503 when the last good poll is over 5 minutes old or an email has waited over 30.
+- **Outages.** When Gmail can't be read for 30 minutes (a revoked token, say), the bot posts one notice in `#feed-gmail`, and another when it recovers and catches up. `/healthz` tracks watch expiry and the age of pending work.
 
 ## API
 

@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.jose",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "jose": "catalog:"
+  }
+}

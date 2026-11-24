@@ -51,6 +51,10 @@ export interface GmailApi {
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
+export function isHistoryId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9]{1,20}$/.test(value);
+}
+
 export class GmailClient implements GmailApi {
   readonly #credentials: GmailCredentials;
   readonly #fetch: typeof fetch;
@@ -89,13 +93,22 @@ export class GmailClient implements GmailApi {
     return data.access_token;
   }
 
-  async #get<T>(what: string, path: string, params: Record<string, string | string[]> = {}) {
+  async #request<T>(
+    what: string,
+    path: string,
+    params: Record<string, string | string[]> = {},
+    payload?: Record<string, string>,
+  ) {
     const url = new URL(`${API}${path}`);
     for (const [key, value] of Object.entries(params))
       for (const one of Array.isArray(value) ? value : [value]) url.searchParams.append(key, one);
     for (let attempt = 0; ; attempt++) {
       const response = await this.#fetch(url, {
-        headers: { authorization: `Bearer ${await this.#accessToken()}` },
+        headers: {
+          authorization: `Bearer ${await this.#accessToken()}`,
+          ...(payload && { "content-type": "application/json" }),
+        },
+        ...(payload && { method: "POST", body: JSON.stringify(payload) }),
         signal: AbortSignal.timeout(30_000),
       });
       if (response.ok) return (await response.json()) as T;
@@ -119,15 +132,28 @@ export class GmailClient implements GmailApi {
   }
 
   async profile() {
-    const data = await this.#get<{ emailAddress: string; historyId: string }>(
+    const data = await this.#request<{ emailAddress: string; historyId: string }>(
       "profile",
       "/profile",
     );
     return { emailAddress: data.emailAddress, historyId: String(data.historyId) };
   }
 
+  async watch(topicName: string): Promise<{ historyId: string; expiration: number }> {
+    const data = await this.#request<{ historyId?: unknown; expiration?: string }>(
+      "watch",
+      "/watch",
+      {},
+      { topicName },
+    );
+    const expiration = Number(data.expiration);
+    if (!isHistoryId(data.historyId) || !Number.isSafeInteger(expiration) || expiration <= 0)
+      throw new Error("invalid Gmail watch response");
+    return { historyId: data.historyId, expiration };
+  }
+
   async history(startHistoryId: string, pageToken?: string): Promise<HistoryPage> {
-    const data = await this.#get<{
+    const data = await this.#request<{
       historyId: string;
       nextPageToken?: string;
       history?: Array<{ messagesAdded?: Array<{ message: { id: string } }> }>;
@@ -148,7 +174,7 @@ export class GmailClient implements GmailApi {
   }
 
   async list(query: string, pageToken?: string) {
-    const data = await this.#get<{ messages?: Array<{ id: string }>; nextPageToken?: string }>(
+    const data = await this.#request<{ messages?: Array<{ id: string }>; nextPageToken?: string }>(
       "list",
       "/messages",
       {
@@ -165,13 +191,13 @@ export class GmailClient implements GmailApi {
   }
 
   message(id: string) {
-    return this.#get<GmailMessage>("message", `/messages/${encodeURIComponent(id)}`, {
+    return this.#request<GmailMessage>("message", `/messages/${encodeURIComponent(id)}`, {
       format: "full",
     });
   }
 
   async attachment(messageId: string, attachmentId: string) {
-    const data = await this.#get<{ data?: string }>(
+    const data = await this.#request<{ data?: string }>(
       "attachment",
       `/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
     );
@@ -179,7 +205,7 @@ export class GmailClient implements GmailApi {
   }
 
   async labels() {
-    const data = await this.#get<{ labels?: GmailLabel[] }>("labels", "/labels");
+    const data = await this.#request<{ labels?: GmailLabel[] }>("labels", "/labels");
     return data.labels ?? [];
   }
 }
