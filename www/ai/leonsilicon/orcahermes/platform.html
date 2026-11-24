@@ -25,18 +25,19 @@
       <section aria-labelledby="boot">
         <h2 id="boot">Boot and shutdown</h2>
         <p>
-          The Nous-hosted image uses s6 to manage services. The intended integration runs Orca’s
-          foreground supervisor under s6 with a persistent profile. The service manager is
-          responsible for startup, supervisor failure, and service log retention.
+          The Nous-hosted image uses s6 to manage services. Orca’s foreground supervisor runs as a
+          service in the existing Hermes service tree and uses a persistent profile. A Hermes
+          gateway startup hook restores the service registration. The service manager handles
+          supervisor failure and rotates the service logs.
         </p>
       </section>
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
-          The isolated audit recovered a registered project after stopping and relaunching Orca.
-          Automatic startup, persistent pairing identity, and private client access after a provider
-          restart remain unverified. A platform restart also ends live terminal processes, so an
-          agent session must resume from durable state afterward.
+          Service registration and local runtime startup were verified on Nous. Automatic startup,
+          persistent pairing identity, and private client access after a full host restart remain
+          unverified. A platform restart ends live terminal processes, so an agent session must
+          resume from durable state afterward.
         </p>
         <p>
           <a href="https://skarnet.org/software/s6/s6-supervise.html"

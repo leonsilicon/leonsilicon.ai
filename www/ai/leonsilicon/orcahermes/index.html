@@ -39,10 +39,10 @@
       <section aria-labelledby="verification">
         <h2 id="verification">Deployment verification</h2>
         <p>
-          The isolated Hermes audit exercised Orca's local CLI and runtime restart. A separate Linux
-          test recovered a live terminal after both a runtime crash and a supervisor crash.
-          Permanent startup, private client pairing, and authenticated Codex still require
-          verification on the deployment host.
+          The headless server runs on Nous under Orca’s built-in supervisor and s6. A local Orca
+          client listed projects, and the terminal daemon passed its startup check. Automatic
+          startup after a full host restart, private client pairing, and authenticated Codex require
+          further verification.
         </p>
       </section>
     </main>

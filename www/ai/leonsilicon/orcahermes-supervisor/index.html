@@ -37,11 +37,11 @@
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
-          In the isolated Hermes audit, killing the runtime triggered a restart while the same
-          terminal daemon and heartbeat process stayed alive. Killing the supervisor left its
-          runtime running. In a separate Linux test, s6 replaced the killed supervisor after
-          stopping the abandoned runtime. Orca reattached to the same terminal daemon and live
-          workload. Recovery under the Nous-hosted service manager still requires verification.
+          On Nous, killing the runtime triggered a restart. The service log recorded that Orca
+          preserved the running terminal daemon and that the replacement runtime reached ready
+          state. In a separate Linux test, s6 replaced a killed supervisor after stopping its
+          abandoned runtime, and Orca reattached to the same terminal workload. Hosted terminal
+          readback across both failures requires further testing.
         </p>
         <p>
           <a href="https://orca.dev/docs/remote-servers#orca-serve-as-a-service"

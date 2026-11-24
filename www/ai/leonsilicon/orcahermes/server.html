@@ -34,16 +34,16 @@
           configured separately.
         </p>
         <p>
-          Codex runs with a provider sign-in on the server. A paired desktop can disconnect while
-          the server continues working.
+          Codex is installed on the server and uses a server-side provider sign-in. A paired desktop
+          can disconnect while the server continues working.
         </p>
       </section>
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
-          The isolated Hermes audit ran real project-list requests and checked terminal daemon
-          health. Authenticated access from another device, denial of unpaired access, and Codex
-          sign-in and resume still require a deployment test.
+          The deployed server answered a local project-list request, registered a repository on
+          persistent storage, and created a live terminal. Authenticated access from another device,
+          denial of unpaired access, and Codex sign-in and resume require further testing.
         </p>
         <p><a href="https://orca.dev/docs/remote-servers">Orca remote server documentation</a></p>
       </section>
