@@ -37,9 +37,9 @@ When Hermes's 👀 or a command in a Hermes message changes an issue's status, L
 
 ## Issue metadata for Zami
 
-The sync stores a full record per mapped Slack issue channel with its status, title, priority, URL, due date and parsed title metadata. A protected, read-only endpoint serves the current records to the Beeper inbox. The publisher matches the Slack workspace and channel to a joined Matrix room and writes `ai.leonsilicon.linear.issue` as room account data. Closed issues keep their final status and deleted issues get a deletion marker so Zami can ignore stale topics.
+The sync stores a full record per mapped Slack issue channel with its status, title, priority, URL, due date and parsed title metadata. A protected, read-only endpoint serves the current records to the Beeper inbox. The publisher matches the Slack workspace and channel to a joined Matrix room and writes `ai.leonsilicon.linear.issue` as room account data. Closed issues keep their final status and deleted issues get a deletion marker.
 
-During rollout, Linear Sync can also update legacy Slack topics. `LINEAR_ISSUE_METADATA_MATRIX_ONLY` stops those issue topic writes after the publisher has been verified. Existing topics provide a fallback when Zami has yet to receive account data. Project topics still carry project colors and icons.
+With `LINEAR_ISSUE_METADATA_MATRIX_ONLY` enabled, issue updates go to Matrix room account data. Zami displays issue details as soon as the room account data arrives. Project topics carry project colors and icons.
 
 ## Title metadata
 
