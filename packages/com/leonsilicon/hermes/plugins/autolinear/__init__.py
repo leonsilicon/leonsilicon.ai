@@ -133,7 +133,7 @@ def _handoff_prompt(*, agent_report: bool = False) -> str:
         f"{_ISSUE_SCOPE_PROMPT} {instructions}Start that line with {mention}, "
         "written exactly so, then one of: "
         "`move done` (nothing is left for anyone, even after a thanks), "
-        "`move leon` (Leon needs to see, decide or do something; Autolinear pings him), "
+        "`move leon` (Leon needs to see, decide or do something; mention him in your message), "
         "`move others who=\"<who>\"` (waiting on someone else), "
         "`move listener event=\"<what>\" stop=YYYY-MM-DD` (waiting for something to happen), "
         "`move date start=<RFC 3339 time or YYYY-MM-DD>` (work starts later), "

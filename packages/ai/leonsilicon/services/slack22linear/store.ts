@@ -53,8 +53,17 @@ export interface AckRecord {
   issueId: string;
   fromState: string;
   at: number | null;
-  /** The parent of the Slack message Hermes took up, null for acknowledgements made before threading. */
-  threadTs: string | null;
+  /** The message Hermes took up, or its thread parent for acknowledgements saved by older versions. */
+  messageTs: string | null;
+}
+
+/** A command that changes state, saved before the Linear write so a webhook can finish the sync. */
+export interface CommandMove {
+  issueId: string;
+  ts: string;
+  by: "hermes" | "leon";
+  fromState: string;
+  toState: string;
 }
 
 export interface Job {
@@ -87,6 +96,9 @@ const MIGRATIONS = [
     id INTEGER PRIMARY KEY CHECK (id = 1), closed_channel_ids TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fired (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS acks (issue_id TEXT PRIMARY KEY, from_state TEXT NOT NULL, at INTEGER, thread_ts TEXT)`,
+  `CREATE TABLE IF NOT EXISTS command_moves (
+    issue_id TEXT PRIMARY KEY, ts TEXT NOT NULL, caller TEXT NOT NULL,
+    from_state TEXT NOT NULL, to_state TEXT NOT NULL)`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -371,11 +383,12 @@ export class Store {
       issueId,
       fromState: row.from_state as string,
       at: row.at === null || row.at === undefined ? null : Number(row.at),
-      threadTs: (row.thread_ts as string | null) ?? null,
+      messageTs: (row.thread_ts as string | null) ?? null,
     };
   }
 
   putAck(ack: AckRecord): void {
+    // Older versions wrote the thread parent to this column. It still gives pending moves a target.
     this.#sql.exec(
       `INSERT INTO acks (issue_id, from_state, at, thread_ts) VALUES (?, ?, ?, ?)
        ON CONFLICT (issue_id) DO UPDATE SET from_state = excluded.from_state, at = excluded.at,
@@ -383,12 +396,41 @@ export class Store {
       ack.issueId,
       ack.fromState,
       ack.at,
-      ack.threadTs,
+      ack.messageTs,
     );
   }
 
   dropAck(issueId: string): void {
     this.#sql.exec(`DELETE FROM acks WHERE issue_id = ?`, issueId);
+  }
+
+  commandMove(issueId: string): CommandMove | null {
+    const row = this.#sql.exec(`SELECT * FROM command_moves WHERE issue_id = ?`, issueId)[0];
+    return row
+      ? {
+          issueId,
+          ts: row.ts as string,
+          by: row.caller as CommandMove["by"],
+          fromState: row.from_state as string,
+          toState: row.to_state as string,
+        }
+      : null;
+  }
+
+  putCommandMove(move: CommandMove): void {
+    this.#sql.exec(
+      `INSERT OR REPLACE INTO command_moves (issue_id, ts, caller, from_state, to_state)
+       VALUES (?, ?, ?, ?, ?)`,
+      move.issueId,
+      move.ts,
+      move.by,
+      move.fromState,
+      move.toState,
+    );
+  }
+
+  dropCommandMove(issueId: string, ts: string): void {
+    this.#sql.exec(`DELETE FROM command_moves WHERE issue_id = ? AND ts = ?`, issueId, ts);
   }
 
   markFired(key: string, now: number): void {

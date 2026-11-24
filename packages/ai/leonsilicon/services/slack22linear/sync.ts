@@ -138,18 +138,7 @@ export interface CommandJob {
 interface Outcome {
   ok: boolean;
   text: string;
-}
-
-/** Extras for a live status post. */
-interface StatusPost {
-  /** The parent message for a status change triggered by a Slack message. */
-  threadTs?: string;
-  /** Said after the move, e.g. why it happened. */
-  note?: string;
-  /** Leaves Leon unmentioned, when he was just pinged. */
-  quietLeon?: boolean;
-  /** Leaves Hermes unpinged, when it already has the issue. */
-  quietHermes?: boolean;
+  statusChanged?: boolean;
 }
 
 export interface SyncDeps {
@@ -261,6 +250,20 @@ export function excerptQuote(text: string, max: number): string {
 }
 
 const ARCHIVED = ["is_archived", "already_archived"];
+const STATUS_REACTIONS = new Map([
+  ["Awaiting Init", "seedling"],
+  ["Awaiting Clarification", "grey_question"],
+  ["Awaiting Date", "calendar"],
+  ["Awaiting Start", "checkered_flag"],
+  ["Awaiting Hermes", "robot_face"],
+  ["Awaiting Leon", "bust_in_silhouette"],
+  ["Awaiting Others", "busts_in_silhouette"],
+  ["Awaiting Listener", "bell"],
+  ["Executing", "gear"],
+  ["Done", "white_check_mark"],
+  ["Canceled", "x"],
+  ["Duplicate", "repeat"],
+]);
 
 /**
  * How long a new project is left alone before the sync asks for its channel. Linear's own "Create
@@ -447,15 +450,10 @@ export class Sync {
   }
 
   /**
-   * Brings an issue's channel and timer in line with the issue. `live` posts what changed (the
-   * intro for a new channel, status moves, mentions); `quiet` only fixes state, for backfills.
-   * `post` shapes the status post, when there is one.
+   * Brings an issue's channel and timer in line with the issue. `live` announces what changed;
+   * `quiet` only fixes state, for backfills.
    */
-  async syncIssue(
-    issue: LinearIssue,
-    mode: "live" | "quiet",
-    post: StatusPost = {},
-  ): Promise<IssueRecord | null> {
+  async syncIssue(issue: LinearIssue, mode: "live" | "quiet"): Promise<IssueRecord | null> {
     this.#planTimer(issue);
     const prev = this.#store.issue(issue.id);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
@@ -463,7 +461,7 @@ export class Sync {
       this.#issueMetadata.save(prev.channelId, issue);
       if (!prev.archived) {
         if (mode === "live" && prev.stateName !== issue.state.name)
-          await this.#postStatus(prev.channelId, prev.stateName, issue, post);
+          await this.#notifyStatus(prev.channelId, prev.stateName, issue);
         await this.#unplace(prev.channelId);
         await this.#archive(prev.channelId);
       }
@@ -521,7 +519,7 @@ export class Sync {
     this.#issueMetadata.save(rec.channelId, issue);
 
     if (mode === "live" && prev && prev.stateName !== issue.state.name)
-      await this.#postStatus(rec.channelId, prev.stateName, issue, post);
+      await this.#notifyStatus(rec.channelId, prev.stateName, issue);
 
     if (rec.section !== issue.state.name && (await this.#place(rec.channelId, issue.state.name)))
       rec.section = issue.state.name;
@@ -838,8 +836,7 @@ export class Sync {
       if (!event.item_user || !this.#c.pingHermesStates.includes(rec.stateName)) return;
       if (event.item_user !== (await this.#botUser())) return;
       const ping = await this.#reactionMessage(channel, ts);
-      if (ping?.text && mentions(ping.text, this.#c.hermesUserId))
-        await this.onHermesAck(rec, ts, ping.thread_ts ?? ts);
+      if (ping?.text && mentions(ping.text, this.#c.hermesUserId)) await this.onHermesAck(rec, ts);
       return;
     }
     const now = this.#now();
@@ -858,7 +855,7 @@ export class Sync {
    * sidebar moves alongside the issue. The previous status and title keys stay available so
    * Hermes can restore the issue with a command.
    */
-  async onHermesAck(rec: IssueRecord, ts: string, threadTs?: string): Promise<void> {
+  async onHermesAck(rec: IssueRecord, ts: string): Promise<void> {
     const issue = await this.#openIssueIn(rec.channelId);
     if (!issue) return;
     const to = this.#c.hermesAckState;
@@ -866,13 +863,13 @@ export class Sync {
     const prior = this.#store.ack(issue.id);
     // Already Hermes's: from an earlier 👀 (whose `from` still counts), or by someone's choice.
     if (from === to && prior?.at !== null) return;
-    // Record the source before moving so a retry or the Linear webhook can post in the same thread.
+    // Keep the message timestamp so a retry or the Linear webhook can react to the same message.
     const pending = from === to ? prior : null;
     const ack = {
       issueId: issue.id,
       fromState: pending?.fromState ?? from,
       at: null,
-      threadTs: pending?.threadTs ?? threadTs ?? (await this.#messageThread(rec.channelId, ts)),
+      messageTs: pending?.messageTs ?? ts,
     };
     this.#store.putAck(ack);
     const [placed] = await Promise.all([
@@ -885,13 +882,6 @@ export class Sync {
     if (moved) await this.syncIssue(moved, "live");
     this.#store.putAck({ ...ack, at: this.#now() });
     this.#log("hermes_ack", { issue: issue.identifier, from });
-  }
-
-  /** Resolve a message's parent when only the message timestamp is available. */
-  async #messageThread(channel: string, ts: string): Promise<string> {
-    const known = this.#store.commentBySlack(channel, ts);
-    if (known) return known.threadTs ?? ts;
-    return (await this.#reactionMessage(channel, ts))?.thread_ts ?? ts;
   }
 
   async #reactionMessage(channel: string, ts: string): Promise<SlackMessage | undefined> {
@@ -968,38 +958,45 @@ export class Sync {
   /**
    * A command for Autolinear (Leon's rule, 2026-11-23; `#command`): from the last line of Hermes's
    * message that starts with Autolinear's mention, or from Leon's `/autolinear`. `move` goes through
-   * at once, with its workflow details, and the channel follows; `stay` keeps the status. Autolinear marks
-   * Hermes's message ✅ once it's done, and when a command doesn't work, says why, mentioning Hermes,
-   * so it tries again. Leon's slash command gets its answer privately. Each message acts once.
+   * at once, with its workflow details, and the channel follows; `stay` keeps the status. Autolinear
+   * reacts to successful commands and explains failures to Hermes so it can try again. Leon's slash
+   * command gets its answer privately. Each message acts once.
    */
   async onCommand(job: CommandJob): Promise<void> {
     const done = doneKey(job.channel, job.ts);
     if (this.#store.fired(done)) return;
     const words = job.by === "leon" ? job.text : commandLine(job.text, this.#c.autolinearUserId);
-    const issue = await this.#openIssueIn(job.channel);
+    const rec = this.#store.issueByChannel(job.channel);
+    const pending = rec && this.#store.commandMove(rec.issueId);
+    const move = pending?.ts === job.ts ? pending : null;
+    const issue = rec && (!rec.archived || move) ? await this.#linear.issue(rec.issueId) : null;
+    const moved = issue !== null && issue.state.name === move?.toState;
+    const open = issue && !this.#c.closedStateTypes.includes(issue.state.type);
     if (job.by === "leon") this.#store.markFired(saidKey(job.channel, job.ts), this.#now());
-    if (words !== null && (issue || job.by === "leon")) {
-      const outcome = issue
-        ? await this.#command(issue, words, job)
-        : { ok: false, text: "This isn't the channel of an open issue." };
+    if (words !== null && (moved || open || job.by === "leon")) {
+      let outcome: Outcome;
+      if (moved) {
+        // A previous attempt wrote to Linear. Finish syncing even if the command closed the issue.
+        await this.syncIssue(issue, "live");
+        outcome = {
+          ok: true,
+          text: `${issue.identifier} is now *${move.toState}*.`,
+          statusChanged: true,
+        };
+      } else if (open) outcome = await this.#command(issue, words, job);
+      else outcome = { ok: false, text: "This isn't the channel of an open issue." };
       if (job.by === "leon") {
         if (job.responseUrl) await this.#respond(job.responseUrl, outcome.text);
       } else if (!outcome.ok)
         await this.#askHermes(issue!, job.channel, outcome.text, job.threadTs ?? job.ts);
-      else if (this.#autolinear)
-        await tolerate(
-          this.#autolinearCall("reactions.add", {
-            channel: job.channel,
-            timestamp: job.ts,
-            name: this.#c.hermesAnsweredReaction,
-          }),
-          ["already_reacted", "message_not_found", ...ARCHIVED],
-        );
+      else if (!outcome.statusChanged)
+        await this.#react(job.channel, job.ts, [this.#c.hermesAnsweredReaction]);
       if (outcome.ok && issue) {
         this.#store.markFired(workedKey(job.channel, job.ts), this.#now());
         this.#store.dropAck(issue.id);
       }
     }
+    if (rec) this.#store.dropCommandMove(rec.issueId, job.ts);
     this.#store.markFired(done, this.#now());
   }
 
@@ -1023,9 +1020,7 @@ export class Sync {
   /**
    * `move <status> [keys]`: the status, with the keys it needs (`start` for Awaiting Date, `event`
    * and `stop` for Awaiting Listener, `who` for Awaiting Others), from the command or already
-   * on the issue. Keys of other statuses are cleared. The status post names the caller
-   * and doesn't ping them, nor Leon when
-   * Hermes's message already did.
+   * on the issue. Keys of other statuses are cleared.
    */
   async #commandMove(
     issue: LinearIssue,
@@ -1066,22 +1061,21 @@ export class Sync {
     }
     if (!Object.keys(update).length)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
-    const threadTs =
-      job.by === "hermes"
-        ? (job.threadTs ?? (await this.#messageThread(job.channel, job.ts)))
-        : undefined;
+    const statusChanged = update.stateId !== undefined;
+    if (statusChanged)
+      this.#store.putCommandMove({
+        issueId: issue.id,
+        ts: job.ts,
+        by: job.by,
+        fromState: issue.state.name,
+        toState: to,
+      });
     await this.#linear.updateIssue(issue.id, update);
     const moved = await this.#linear.issue(issue.id);
     const by = job.by === "leon" ? "Leon" : "Hermes";
-    if (moved)
-      await this.syncIssue(moved, "live", {
-        note: `(${by} told Autolinear)`,
-        threadTs,
-        quietHermes: job.by === "hermes",
-        quietLeon: job.by === "leon" || mentions(job.text, this.#c.leonUserId),
-      });
+    if (moved) await this.syncIssue(moved, "live");
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
-    return { ok: true, text: `${issue.identifier} is now *${to}*.` };
+    return { ok: true, text: `${issue.identifier} is now *${to}*.`, statusChanged };
   }
 
   /**
@@ -1792,12 +1786,12 @@ export class Sync {
     await this.#sidebar?.release(channelId, this.#order());
   }
 
-  #mentions(issue: LinearIssue, post: StatusPost = {}): string {
+  #mentions(issue: LinearIssue, quietLeon = false): string {
     const status = issue.state.name;
     const lines: string[] = [];
-    if (this.#c.mentionLeonStates.includes(status) && !post.quietLeon)
+    if (this.#c.mentionLeonStates.includes(status) && !quietLeon)
       lines.push(`<@${this.#c.leonUserId}>`);
-    if (this.#c.pingHermesStates.includes(status) && !post.quietHermes)
+    if (this.#c.pingHermesStates.includes(status))
       lines.push(
         `<@${this.#c.hermesUserId}> ${issue.identifier} is now ${status}: ${
           status === AWAITING_HERMES ? "please continue this task." : "please pick it up."
@@ -1806,32 +1800,48 @@ export class Sync {
     return lines.join(" ");
   }
 
-  async #postStatus(
-    channelId: string,
-    from: string,
-    issue: LinearIssue,
-    post: StatusPost = {},
-  ): Promise<void> {
-    if (!post.note && issue.state.name === this.#c.hermesAckState) {
+  async #notifyStatus(channelId: string, from: string, issue: LinearIssue): Promise<void> {
+    const to = issue.state.name;
+    const command = this.#store.commandMove(issue.id);
+    const move = command?.toState === to ? command : null;
+    if (move?.by === "hermes") return this.#reactToMove(channelId, move.ts, move.fromState, to);
+    if (!move && to === this.#c.hermesAckState) {
       const ack = this.#store.ack(issue.id);
-      if (ack?.at === null && ack.fromState === from)
-        post = {
-          threadTs: ack.threadTs ?? undefined,
-          note: `(Hermes reacted :${this.#c.hermesAckReaction}:)`,
-          quietHermes: true,
-        };
+      if (ack?.at === null) {
+        if (ack.messageTs) await this.#reactToMove(channelId, ack.messageTs, ack.fromState, to);
+        return;
+      }
     }
-    const mentions = this.#mentions(issue, post);
-    const move = `*${from}* → *${issue.state.name}*${post.note ? ` ${post.note}` : ""}`;
+    const mentions = this.#mentions(issue, move?.by === "leon");
+    const status = `*${move?.fromState ?? from}* → *${to}*${move ? " (Leon told Autolinear)" : ""}`;
     await tolerate(
       this.#bot("chat.postMessage", {
         channel: channelId,
-        thread_ts: post.threadTs,
-        text: `${move}${mentions ? `\n${mentions}` : ""}`,
+        text: `${status}${mentions ? `\n${mentions}` : ""}`,
         unfurl_links: false,
       }),
-      post.threadTs ? [...ARCHIVED, "message_not_found", "thread_not_found"] : ARCHIVED,
+      ARCHIVED,
     );
+  }
+
+  #reactToMove(channel: string, timestamp: string, from: string, to: string): Promise<void> {
+    return this.#react(channel, timestamp, [
+      STATUS_REACTIONS.get(from) ?? "white_circle",
+      "arrow_right",
+      STATUS_REACTIONS.get(to) ?? "black_circle",
+    ]);
+  }
+
+  async #react(channel: string, timestamp: string, names: string[]): Promise<void> {
+    if (!this.#autolinear) return;
+    for (const name of names) {
+      // Slack displays reactions in the order they were added. On retry, skip those already there.
+      await tolerate(this.#autolinearCall("reactions.add", { channel, timestamp, name }), [
+        "already_reacted",
+        "message_not_found",
+        ...ARCHIVED,
+      ]);
+    }
   }
 
   /** `lead` replaces the description's excerpt; `quiet` mentions no one. */
