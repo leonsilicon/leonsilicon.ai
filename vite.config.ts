@@ -74,7 +74,7 @@ export default defineConfig({
             "grok-bot-roster",
             "grok-relay",
             "orca-bridge",
-            "orca-device",
+            "orcahermes-device",
             "slack-as-leon",
             "slack22linear",
           ].map((service) => `${ai}/services/${service}/__tests__/*.test.ts`),

@@ -10,8 +10,8 @@ OrcaHermes keeps projects, terminals, and agents on the Hermes host. Orca's buil
 ## Choose the right target
 
 - Identify the Hermes instance and Orca environment before running commands. When using a paired Orca client, explicitly select `--environment OrcaHermes` or the display name assigned to that host. Verify the project path and host before modifying a workspace.
-- The separate `orca-device` bridge can target existing desktop Orca installations. Its reachability or tools alone do not establish that the hosted Orca runtime is healthy.
-- The two public HTTPS sites explain the services. Client pairing uses the host's private Tailscale endpoint and Orca authentication. [Server reference](https://orcahermes.leonsilicon.ai/server.html)
+- OrcaHermes Device connects Hermes to existing desktop Orca installations. Check the hosted Orca runtime with the status commands below. [Device reference](https://orcahermes-device.leonsilicon.ai/)
+- The public HTTPS sites explain the services. Client pairing uses the host's private Tailscale endpoint and Orca authentication. [Server reference](https://orcahermes.leonsilicon.ai/server.html)
 
 ## Onboard a new host
 

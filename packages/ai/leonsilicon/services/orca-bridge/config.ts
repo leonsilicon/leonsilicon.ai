@@ -18,7 +18,7 @@ export interface OrcaBridgeConfig {
   env: NodeJS.ProcessEnv;
   /**
    * Where these tools run: on the mini (this bridge, the default), or on Hermes Cloud's own Orca
-   * device (`@-/ai.leonsilicon.services.orca-device`), which reaches both Macs directly.
+   * device (`@-/ai.leonsilicon.services.orcahermes-device`), which reaches both Macs directly.
    */
   host?: "mini" | "hermes-cloud";
 }

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Builds dist/orca-device.tgz for Hermes Cloud from the Orca.app installed on this Mac: Orca's Linux
+ * Builds dist/orcahermes-device.tgz for Hermes Cloud from the Orca.app installed on this Mac: Orca's Linux
  * runtime bundle (the `linux-x64-glibc` target of its `orcad-template`, every file checked against
  * `orcad-template.json`), this app bundled with bun, the `orca` wrapper and the installer. Node and
  * Tailscale are fetched on Hermes by `install.sh`, checked against the hashes recorded in BUILD.json.
  *
- *   node apps/orca-device/_build-orca-device.ts
+ *   node apps/orcahermes-device/_build-orcahermes-device.ts
  *
  * Rebuild and reinstall after Orca updates on the Macs, so Hermes's CLI keeps their version.
  */
@@ -26,13 +26,14 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const SERVICE = "orcahermes-device";
 const TARGET = "linux-x64-glibc";
 const TAILSCALE_VERSION = "1.104.7";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const resources = process.env.ORCA_RESOURCES ?? "/Applications/Orca.app/Contents/Resources";
 const template = join(resources, "orcad-template");
-const out = join(root, "dist", "orca-device");
+const out = join(root, "dist", SERVICE);
 const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 const manifest = JSON.parse(readFileSync(join(template, "orcad-template.json"), "utf8")) as {
@@ -82,7 +83,7 @@ execFileSync(
   "bun",
   [
     "build",
-    join(here, "_orca-device.ts"),
+    join(here, "_orcahermes-device.ts"),
     "--target=node",
     "--format=esm",
     `--outfile=${join(out, "app", "orca-device.mjs")}`,
@@ -97,7 +98,7 @@ writeFileSync(
   join(out, "BUILD.json"),
   `${JSON.stringify(
     {
-      service: "orca-device",
+      service: SERVICE,
       builtAt: new Date().toISOString(),
       orcaVersion,
       target: TARGET,
@@ -127,8 +128,8 @@ writeFileSync(
   join(out, "SHA256SUMS"),
   files.map((file) => `${sha256(join(out, file))}  ${file}\n`).join(""),
 );
-const tarball = join(root, "dist", "orca-device.tgz");
-execFileSync("tar", ["-czf", tarball, "-C", join(root, "dist"), "orca-device"], {
+const tarball = join(root, "dist", `${SERVICE}.tgz`);
+execFileSync("tar", ["-czf", tarball, "-C", join(root, "dist"), SERVICE], {
   env: { ...process.env, COPYFILE_DISABLE: "1" },
 });
 process.stdout.write(

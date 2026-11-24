@@ -8,6 +8,7 @@
   "rules": [{ "type": "Text", "globs": ["**/install.py"], "fallthrough": true }],
   "routes": [
     { "pattern": "orcahermes.leonsilicon.ai", "custom_domain": true },
+    { "pattern": "orcahermes-device.leonsilicon.ai", "custom_domain": true },
     { "pattern": "orcahermes-supervisor.leonsilicon.ai", "custom_domain": true },
   ],
   "assets": {

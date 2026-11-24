@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.orca-bridge
 
-Orca over MCP for remote agents such as Hermes Cloud. It runs on the always-on Mac mini, so it targets the mini's Orca by default; the MacBook is reachable as the saved environment `MacBook` while it is awake. Deployment is in [`apps/orca-bridge`](../../../../../apps/orca-bridge/README.md). [Hermes Cloud's own Orca device](../orca-device/README.md) serves the same tools over stdio, built with `createServer`.
+Orca over MCP for remote agents such as Hermes Cloud. It runs on the always-on Mac mini, so it targets the mini's Orca by default; the MacBook is reachable as the saved environment `MacBook` while it is awake. Deployment is in [`apps/orca-bridge`](../../../../../apps/orca-bridge/README.md). [OrcaHermes Device](../orcahermes-device/README.md) serves the same tools over stdio, built with `createServer`.
 
 It merges two tool sets on one stateless Streamable HTTP endpoint (`/mcp`, bearer token):
 

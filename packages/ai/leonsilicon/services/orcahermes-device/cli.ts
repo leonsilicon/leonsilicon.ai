@@ -2,7 +2,7 @@ import { ensureLink, EXIT_ALREADY_RUNNING, readLinkStatus, startLink } from "#li
 import { runMcpServer } from "#mcp";
 import { devicePaths } from "#paths";
 
-export const USAGE = `orca-device <command>
+export const USAGE = `orcahermes-device <command>
 
   mcp       stdio MCP server (what Hermes runs as "orca")
   link      the tailnet link daemon (started by mcp/start; exits 75 if one is running)

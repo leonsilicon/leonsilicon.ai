@@ -1,0 +1,6 @@
+{
+  "name": "@-apps/ai.leonsilicon.orcahermes-device",
+  "private": true,
+  "type": "module",
+  "exports": {}
+}

@@ -1,8 +1,10 @@
-# @-apps/orca-device
+# OrcaHermes Device
 
-Runs [Hermes Cloud's Orca device](../../packages/ai/leonsilicon/services/orca-device/README.md) on Captain Claude, so Hermes reaches Leon's Macs' Orca without the mini in between. Prototype, set up 2026-11-19.
+Runs the [OrcaHermes Device service](../../packages/ai/leonsilicon/services/orcahermes-device/README.md) on Captain Claude so Hermes can reach the paired Orca installations on Leon's Macs over Tailscale. It has been live since 2026-11-19. [Public reference](https://orcahermes-device.leonsilicon.ai/)
 
 ## On Hermes Cloud (`/opt/data/orca-device`)
+
+Existing installations use `/opt/data/orca-device` and `app/orca-device.mjs` for the persistent data and Hermes MCP configuration. Releases under the new name still install there.
 
 | Path                                 | What                                                                                                                                                                                                                     |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -39,8 +41,8 @@ Live. Hermes's `orca` MCP server is `command: node`, `args: [/opt/data/orca-devi
 
 Rebuild after Orca updates on the Macs, so Hermes's CLI keeps their version:
 
-1. Run `node apps/orca-device/_build-orca-device.ts` on a Mac with the new Orca.
-2. Upload `dist/orca-device.tgz` to Hermes, unpack it under `releases/`, and run its `install.sh`. It keeps the previous `bundle` and `app` as `*.prev`.
+1. Run `node apps/orcahermes-device/_build-orcahermes-device.ts` on a Mac with the new Orca.
+2. Upload `dist/orcahermes-device.tgz` to Hermes, unpack it under `releases/`, and run its `install.sh`. It keeps the previous `bundle` and `app` as `*.prev`.
 3. A running gateway keeps the old MCP process until its next restart.
 
 ## Rollback

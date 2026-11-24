@@ -77,14 +77,14 @@
         "@-/ai.leonsilicon.services.orca-bridge": "workspace:*",
       },
     },
-    "apps/orca-device": {
-      "name": "@-apps/orca-device",
+    "apps/orcahermes-device": {
+      "name": "@-apps/orcahermes-device",
       "bin": {
-        "_build-orca-device": "./_build-orca-device.ts",
-        "_orca-device": "./_orca-device.ts",
+        "_build-orcahermes-device": "./_build-orcahermes-device.ts",
+        "_orcahermes-device": "./_orcahermes-device.ts",
       },
       "dependencies": {
-        "@-/ai.leonsilicon.services.orca-device": "workspace:*",
+        "@-/ai.leonsilicon.services.orcahermes-device": "workspace:*",
       },
     },
     "apps/orcahermes-reference": {
@@ -253,8 +253,8 @@
         "@-/com.npmjs.zod": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/orca-device": {
-      "name": "@-/ai.leonsilicon.services.orca-device",
+    "packages/ai/leonsilicon/services/orcahermes-device": {
+      "name": "@-/ai.leonsilicon.services.orcahermes-device",
       "version": "0.1.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.orca-bridge": "workspace:*",
@@ -380,6 +380,9 @@
     "www/ai/leonsilicon/orcahermes": {
       "name": "@-apps/ai.leonsilicon.orcahermes",
     },
+    "www/ai/leonsilicon/orcahermes-device": {
+      "name": "@-apps/ai.leonsilicon.orcahermes-device",
+    },
     "www/ai/leonsilicon/orcahermes-supervisor": {
       "name": "@-apps/ai.leonsilicon.orcahermes-supervisor",
     },
@@ -452,7 +455,7 @@
 
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
 
-    "@-/ai.leonsilicon.services.orca-device": ["@-/ai.leonsilicon.services.orca-device@workspace:packages/ai/leonsilicon/services/orca-device"],
+    "@-/ai.leonsilicon.services.orcahermes-device": ["@-/ai.leonsilicon.services.orcahermes-device@workspace:packages/ai/leonsilicon/services/orcahermes-device"],
 
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
 
@@ -500,6 +503,8 @@
 
     "@-apps/ai.leonsilicon.orcahermes": ["@-apps/ai.leonsilicon.orcahermes@workspace:www/ai/leonsilicon/orcahermes"],
 
+    "@-apps/ai.leonsilicon.orcahermes-device": ["@-apps/ai.leonsilicon.orcahermes-device@workspace:www/ai/leonsilicon/orcahermes-device"],
+
     "@-apps/ai.leonsilicon.orcahermes-supervisor": ["@-apps/ai.leonsilicon.orcahermes-supervisor@workspace:www/ai/leonsilicon/orcahermes-supervisor"],
 
     "@-apps/ai.leonsilicon.slack-as-leon": ["@-apps/ai.leonsilicon.slack-as-leon@workspace:www/ai/leonsilicon/slack-as-leon"],
@@ -522,7 +527,7 @@
 
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
 
-    "@-apps/orca-device": ["@-apps/orca-device@workspace:apps/orca-device"],
+    "@-apps/orcahermes-device": ["@-apps/orcahermes-device@workspace:apps/orcahermes-device"],
 
     "@-apps/orcahermes-reference": ["@-apps/orcahermes-reference@workspace:apps/orcahermes-reference"],
 

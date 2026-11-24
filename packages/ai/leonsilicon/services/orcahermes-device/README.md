@@ -1,6 +1,6 @@
-# @-/ai.leonsilicon.services.orca-device
+# @-/ai.leonsilicon.services.orcahermes-device
 
-Hermes Cloud as its own Orca device. Hermes runs the Linux Orca CLI on its own machine and pairs it with Leon's Macs, the same way the mini is paired with the MacBook, so it drives either Mac's Orca directly instead of going through the [Orca bridge](../orca-bridge/README.md) on the mini. The deployment is in [`apps/orca-device`](../../../../../apps/orca-device/README.md). Status: prototype, live on Hermes Cloud since 2026-11-19.
+OrcaHermes Device connects Hermes Cloud to existing desktop Orca installations. Hermes runs the Linux Orca CLI on its own machine and pairs it with Leon's Macs, the same way the mini is paired with the MacBook, so it drives either Mac's Orca directly instead of going through the [Orca bridge](../orca-bridge/README.md) on the mini. The deployment is in [`apps/orcahermes-device`](../../../../../apps/orcahermes-device/README.md). Status: prototype, live on Hermes Cloud since 2026-11-19.
 
 ```text
 Hermes ─stdio MCP─▶ orca-device.mjs mcp ─▶ orca CLI (Linux, its own pairing store)
@@ -25,7 +25,7 @@ Hermes ─stdio MCP─▶ orca-device.mjs mcp ─▶ orca CLI (Linux, its own pa
 ## Test
 
 ```sh
-node --test packages/ai/leonsilicon/services/orca-device/__tests__/*.test.ts
+node --test packages/ai/leonsilicon/services/orcahermes-device/__tests__/*.test.ts
 ```
 
 Covers the forwarder (with a stand-in for `tailscale nc`), the link's single owner, status file and clean stop, a fresh home, and the config checks.

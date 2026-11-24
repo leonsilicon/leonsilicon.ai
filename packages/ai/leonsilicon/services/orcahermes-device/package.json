@@ -1,5 +1,5 @@
 {
-  "name": "@-/ai.leonsilicon.services.orca-device",
+  "name": "@-/ai.leonsilicon.services.orcahermes-device",
   "version": "0.1.0",
   "private": true,
   "description": "Hermes Cloud as its own Orca device: the Orca CLI paired with Leon's Macs over a userspace tailnet link, serving the bridge's Orca tools over stdio MCP without the mini in between.",

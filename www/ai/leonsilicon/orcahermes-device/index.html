@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Connect Hermes Cloud to paired Macs running Orca over a private Tailscale network."
+    />
+    <title>OrcaHermes Device</title>
+    <link rel="stylesheet" href="../orcahermes/style.css" />
+  </head>
+  <body>
+    <nav aria-label="OrcaHermes reference">
+      <a href="https://orcahermes.leonsilicon.ai/">OrcaHermes</a>
+      <a href="/" aria-current="page">Device</a>
+      <a href="https://leonsilicon.ai/#agent-stack">Agent stack</a>
+    </nav>
+    <main>
+      <header>
+        <h1>OrcaHermes Device</h1>
+        <p>Connect Hermes Cloud to existing Orca installations on paired Macs.</p>
+      </header>
+      <section aria-labelledby="connection">
+        <h2 id="connection">How it connects</h2>
+        <p>
+          Hermes launches the <code>orca</code> MCP tool server over standard input and output. The
+          Linux Orca CLI uses its saved pairings to reach the selected Mac over a private Tailscale
+          link. The Macs host the workspaces and run the commands.
+        </p>
+      </section>
+      <section aria-labelledby="deployment">
+        <h2 id="deployment">Deployment</h2>
+        <p>
+          The runbook covers building and installing a release on Hermes Cloud. The service
+          documentation describes the pairing store, network link, and MCP tools.
+        </p>
+        <ul>
+          <li>
+            <a
+              href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/apps/orcahermes-device"
+            >
+              Deployment runbook
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://github.com/leonsilicon/leonsilicon.ai/tree/main/packages/ai/leonsilicon/services/orcahermes-device"
+            >
+              Service documentation
+            </a>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

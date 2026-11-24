@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs the orca-device release unpacked next to this script into $ORCA_DEVICE_HOME
+# Installs the orcahermes-device release unpacked next to this script into $ORCA_DEVICE_HOME
 # (default $HERMES_HOME/orca-device = /opt/data/orca-device), keeping the previous bundle and app
 # as *.prev, then restarts the link. data/ (pairings), tailscale/state (tailnet login),
 # device.json and default-environment are never touched.

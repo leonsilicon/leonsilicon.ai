@@ -1,0 +1,13 @@
+{
+  "name": "@-apps/orcahermes-device",
+  "private": true,
+  "bin": {
+    "_build-orcahermes-device": "./_build-orcahermes-device.ts",
+    "_orcahermes-device": "./_orcahermes-device.ts"
+  },
+  "type": "module",
+  "imports": {},
+  "dependencies": {
+    "@-/ai.leonsilicon.services.orcahermes-device": "workspace:*"
+  }
+}
