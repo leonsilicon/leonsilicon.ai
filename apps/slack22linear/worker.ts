@@ -49,7 +49,7 @@ interface Env {
   LINEAR_API_KEY: string;
   /** Signing secret of the Linear webhook. */
   LINEAR_WEBHOOK_SECRET: string;
-  /** Bot token and signing secret of the Linear Sync Slack app. */
+  /** Bot token and signing secret of the slack22linear Slack app. */
   LINEAR_SYNC_SLACK_BOT_TOKEN: string;
   LINEAR_SYNC_SLACK_SIGNING_SECRET?: string;
   /** Bot token of the Autolinear Slack app, which asks Hermes for commands. Optional. */

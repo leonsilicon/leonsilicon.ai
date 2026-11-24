@@ -1989,7 +1989,7 @@ test("a handoff in Linear pings Hermes and starts Executing when Hermes takes it
 test("Hermes's turn on a bot's ping owes a command as well", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t, "Awaiting Date");
-  // Linear Sync pings Hermes when the issue's start comes (Awaiting Start).
+  // slack22linear pings Hermes when the issue's start comes (Awaiting Start).
   issue.state = state("Awaiting Start");
   await t.sync.run("linear", issueHook(issue.id));
   const ping = t.slack.posts.at(-1)!;
