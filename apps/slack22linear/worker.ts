@@ -90,15 +90,14 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
 
 /**
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
- * with a command for Autolinear, Hermes's 👀 on Leon's messages, and its ✅ and ❌ on any message
- * (the sync checks where).
+ * with a command for Autolinear, and Hermes's 👀, ✅ and ❌ on messages (the sync checks where).
  */
 function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
       event.user === config.hermesUserId &&
       (event.item as { type?: string } | undefined)?.type === "message" &&
-      ((event.reaction === config.hermesAckReaction && event.item_user === config.leonUserId) ||
+      (event.reaction === config.hermesAckReaction ||
         event.reaction === config.hermesAnsweredReaction ||
         event.reaction === config.hermesFailedReaction)
     );

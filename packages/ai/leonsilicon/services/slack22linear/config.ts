@@ -99,7 +99,7 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     listenerState: env.LISTENER_STATE ?? "Awaiting Listener",
     listenerExpiredTarget: env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
-    hermesAckState: env.HERMES_ACK_STATE ?? "Awaiting Hermes",
+    hermesAckState: env.HERMES_ACK_STATE ?? "Executing",
     hermesAnsweredReaction: env.HERMES_ANSWERED_REACTION ?? "white_check_mark",
     hermesFailedReaction: env.HERMES_FAILED_REACTION ?? "x",
     autolinearUserId: env.AUTOLINEAR_BOT_USER_ID?.trim() || null,

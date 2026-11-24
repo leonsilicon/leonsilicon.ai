@@ -32,7 +32,8 @@ export function commandUsage(lead: string): string {
     `\`${lead} move others who="Apple App Review"\`: waiting on someone else`,
     `\`${lead} move listener event="Rogers BYOD deal" stop=2026-12-01\`: waiting for something to happen`,
     `\`${lead} move date start=2026-12-01T09:00:00-05:00\`: work starts later`,
-    `\`${lead} move hermes\`: you are still working on it`,
+    `\`${lead} move executing\`: work is already underway`,
+    `\`${lead} move hermes\`: Hermes needs to pick up the task`,
     `\`${lead} stay\`: leave the status as it is`,
   ]
     .map((line) => `• ${line}`)

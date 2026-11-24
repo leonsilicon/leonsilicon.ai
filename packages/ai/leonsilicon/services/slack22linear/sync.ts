@@ -103,6 +103,7 @@ export interface Adoption {
 /** A message as `conversations.replies` returns it. */
 interface SlackMessage {
   ts: string;
+  thread_ts?: string;
   user?: string;
   username?: string;
   bot_profile?: { name?: string };
@@ -131,6 +132,8 @@ export interface CommandJob {
   /** Where Leon's slash command is answered (Slack's `response_url`, ephemeral). */
   responseUrl?: string;
 }
+
+type ResumeJob = Pick<CommandJob, "channel" | "ts" | "threadTs">;
 
 /** What a command came to: told back to Leon, or to Hermes when it didn't work. */
 interface Outcome {
@@ -288,6 +291,12 @@ const saidKey = (channel: string, ts = "") => `said:${channel}:${ts}`;
 const doneKey = (channel: string, ts = "") => `done:${channel}:${ts}`;
 const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
 const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
+const resumeKey = (channel: string, threadTs?: string, ts = "") =>
+  `resume-hermes:${channel}:${threadTs ?? "channel"}:${ts}`;
+const AWAITING_HERMES = "Awaiting Hermes";
+// A Slack Puppet post from Autolinear must reach Hermes's adapter as a new request.
+// The shared Slack Puppet marker would make Hermes's own-message guard discard it.
+const RESUME_MSG_ID_PREFIX = "a7011eaf";
 /** A notice for a due time (not a bare day) this late says "Overdue". */
 const LATE_MS = 3600_000;
 
@@ -366,6 +375,7 @@ export class Sync {
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
+    else if (kind === "resume-hermes") await this.#resumeHermes(payload as ResumeJob);
     else if (kind === "tick") {
       await this.tick();
       await this.#publishProjectVisibility();
@@ -849,6 +859,7 @@ export class Sync {
     if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
+    if (event.client_msg_id?.startsWith(`${RESUME_MSG_ID_PREFIX}-`)) return;
     const rec = this.#store.issueByChannel(event.channel);
     if (!rec || rec.archived) return;
     if (this.#store.commentBySlack(event.channel, event.ts)) return;
@@ -884,8 +895,7 @@ export class Sync {
    * Hermes reacts to each message it takes up: 👀 when it starts, ✅ when its turn is over, ❌ when
    * the turn failed.
    *
-   * - 👀 on Leon's message in an issue channel moves the issue to Awaiting Hermes at once
-   *   (`onHermesAck`; Leon's rule, 2026-11-19, which he asked for again on 2026-11-21).
+   * - 👀 on Leon's message or a handoff ping in an issue channel moves the issue to Executing.
    * - ✅ or ❌ on any message in an issue channel (Leon's, a bot's ping, Autolinear's reminder) ends
    *   a turn, after which Hermes owes Autolinear a command. `onAnswered` checks a few seconds later,
    *   once Hermes's last posts are in. The answer itself moves nothing (Leon's rule, 2026-11-23).
@@ -901,7 +911,12 @@ export class Sync {
     const rec = this.#store.issueByChannel(channel);
     if (!rec || rec.archived) return;
     if (!ended) {
-      if (event.item_user === this.#c.leonUserId) await this.onHermesAck(rec, ts);
+      if (event.item_user === this.#c.leonUserId) return this.onHermesAck(rec, ts);
+      if (!event.item_user || !this.#c.pingHermesStates.includes(rec.stateName)) return;
+      if (event.item_user !== (await this.#botUser())) return;
+      const ping = await this.#reactionMessage(channel, ts);
+      if (ping?.text && mentions(ping.text, this.#c.hermesUserId))
+        await this.onHermesAck(rec, ts, ping.thread_ts ?? ts);
       return;
     }
     const now = this.#now();
@@ -916,12 +931,11 @@ export class Sync {
   }
 
   /**
-   * Hermes took up Leon's message (👀): the issue moves to Awaiting Hermes without pinging Hermes,
-   * which is already on it, so the sidebar shows at once that Hermes has it. The channel's section
-   * changes first, alongside the status, since that's what Leon watches. The status it had before
-   * is kept (`acks`), and title keys stay, so Hermes can put the issue back with a command.
+   * Hermes took up a message (👀): the issue moves to Executing without pinging Hermes. The
+   * sidebar moves alongside the issue. The previous status and title keys stay available so
+   * Hermes can restore the issue with a command.
    */
-  async onHermesAck(rec: IssueRecord, ts: string): Promise<void> {
+  async onHermesAck(rec: IssueRecord, ts: string, threadTs?: string): Promise<void> {
     const issue = await this.#openIssueIn(rec.channelId);
     if (!issue) return;
     const to = this.#c.hermesAckState;
@@ -935,7 +949,7 @@ export class Sync {
       issueId: issue.id,
       fromState: pending?.fromState ?? from,
       at: null,
-      threadTs: pending?.threadTs ?? (await this.#messageThread(rec.channelId, ts)),
+      threadTs: pending?.threadTs ?? threadTs ?? (await this.#messageThread(rec.channelId, ts)),
     };
     this.#store.putAck(ack);
     const [placed] = await Promise.all([
@@ -954,11 +968,14 @@ export class Sync {
   async #messageThread(channel: string, ts: string): Promise<string> {
     const known = this.#store.commentBySlack(channel, ts);
     if (known) return known.threadTs ?? ts;
+    return (await this.#reactionMessage(channel, ts))?.thread_ts ?? ts;
+  }
+
+  async #reactionMessage(channel: string, ts: string): Promise<SlackMessage | undefined> {
     const result = await tolerate(this.#bot("reactions.get", { channel, timestamp: ts }), [
       "message_not_found",
     ]);
-    const message = result?.message as { thread_ts?: string } | undefined;
-    return message?.thread_ts ?? ts;
+    return result?.message as SlackMessage | undefined;
   }
 
   /**
@@ -1044,7 +1061,8 @@ export class Sync {
         : { ok: false, text: "This isn't the channel of an open issue." };
       if (job.by === "leon") {
         if (job.responseUrl) await this.#respond(job.responseUrl, outcome.text);
-      } else if (!outcome.ok) await this.#askHermes(issue!, job.channel, outcome.text, job.ts);
+      } else if (!outcome.ok)
+        await this.#askHermes(issue!, job.channel, outcome.text, job.threadTs ?? job.ts);
       else if (this.#autolinear)
         await tolerate(
           this.#autolinearCall("reactions.add", {
@@ -1095,6 +1113,9 @@ export class Sync {
     const names = [...(await this.#stateIds()).keys()];
     const to = matchStatus(command.status, names);
     if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
+    const resume = job.by === "hermes" && to === AWAITING_HERMES;
+    if (resume && !this.#session)
+      return fail("Slack Puppet's session is unavailable. Use `move executing` for active work");
     const { name, meta } = parseTitle(issue.title);
     const { who, ...keys } = command.keys;
     let base = name.replace(AWAITING_PREFIX, "");
@@ -1121,14 +1142,24 @@ export class Sync {
     const update: IssueUpdate = {};
     if (to !== issue.state.name) update.stateId = await this.#stateId(to);
     if (title !== issue.title) update.title = title;
-    if (!Object.keys(update).length)
+    if (!Object.keys(update).length && !resume)
       return { ok: true, text: `${issue.identifier} is already *${to}*.` };
     const threadTs =
       job.by === "hermes"
         ? (job.threadTs ?? (await this.#messageThread(job.channel, job.ts)))
         : undefined;
-    await this.#linear.updateIssue(issue.id, update);
-    const moved = await this.#linear.issue(issue.id);
+    const followUp: ResumeJob = {
+      channel: job.channel,
+      ts: job.ts,
+      ...(threadTs && threadTs !== job.ts ? { threadTs } : {}),
+    };
+    if (resume && this.#alreadyResumed(followUp))
+      return fail(
+        "I've already sent a continuation prompt here. Use `move executing` for active work or give the status of the current blocker",
+      );
+    const changed = Object.keys(update).length > 0;
+    if (changed) await this.#linear.updateIssue(issue.id, update);
+    const moved = changed ? await this.#linear.issue(issue.id) : issue;
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved)
       await this.syncIssue(moved, "live", {
@@ -1137,8 +1168,44 @@ export class Sync {
         quietHermes: job.by === "hermes",
         quietLeon: job.by === "leon" || mentions(job.text, this.#c.leonUserId),
       });
+    if (resume && moved?.state.name === to)
+      this.#store.enqueue(
+        resumeKey(followUp.channel, followUp.threadTs, followUp.ts),
+        "resume-hermes",
+        followUp,
+        this.#now(),
+      );
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
     return { ok: true, text: `${issue.identifier} is now *${to}*.` };
+  }
+
+  /** One automatic follow-up per conversation until someone writes again. */
+  #alreadyResumed({ channel, threadTs, ts }: ResumeJob): boolean {
+    const lastMessage = this.#store.lastSpoke(channel);
+    const since = lastMessage ? slackTsMs(lastMessage) : 0;
+    const key = resumeKey(channel, threadTs, ts);
+    return this.#store
+      .firedSince(resumeKey(channel, threadTs), since)
+      .some((entry) => entry.key !== key);
+  }
+
+  async #resumeHermes(job: ResumeJob): Promise<void> {
+    const { channel, ts, threadTs } = job;
+    const key = resumeKey(channel, threadTs, ts);
+    if (this.#store.fired(key) || this.#alreadyResumed(job) || this.#store.spokeAfter(channel, ts))
+      return;
+    const issue = await this.#openIssueIn(channel);
+    if (!issue || issue.state.name !== AWAITING_HERMES) return;
+    if (!this.#session) throw new Error("Slack Puppet's session is unavailable");
+    const uuid = await stableUuid(key);
+    await this.#session("chat.postMessage", {
+      channel,
+      thread_ts: threadTs,
+      client_msg_id: `${RESUME_MSG_ID_PREFIX}${uuid.slice(8)}`,
+      text: `<@${this.#c.hermesUserId}> Please pick up ${issue.identifier} from where you left off and take the next available step. If work is already running, use \`move executing\`. If you need input or hit a blocker, say what's needed and move the issue to the corresponding status. _(Automatic follow-up from Autolinear.)_`,
+      unfurl_links: false,
+    });
+    this.#store.markFired(key, this.#now());
   }
 
   /**
@@ -1881,7 +1948,7 @@ export class Sync {
     if (this.#c.pingHermesStates.includes(status) && !post.quietHermes)
       lines.push(
         `<@${this.#c.hermesUserId}> ${issue.identifier} is now ${status}: ${
-          status === "Awaiting Hermes" ? "an agent is waiting on you." : "please pick it up."
+          status === AWAITING_HERMES ? "please continue this task." : "please pick it up."
         }`,
       );
     return lines.join(" ");
@@ -1898,7 +1965,7 @@ export class Sync {
       if (ack?.at === null && ack.fromState === from)
         post = {
           threadTs: ack.threadTs ?? undefined,
-          note: `(Hermes reacted :${this.#c.hermesAckReaction}: to Leon's message)`,
+          note: `(Hermes reacted :${this.#c.hermesAckReaction}:)`,
           quietHermes: true,
         };
     }

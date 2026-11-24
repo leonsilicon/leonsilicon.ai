@@ -45,7 +45,7 @@ export interface ProjectRecord {
 }
 
 /**
- * Hermes's 👀 moved an issue to Awaiting Hermes: the status it had before, and when the move was
+ * Hermes's 👀 moved an issue to Executing: the status it had before, and when the move was
  * done (ms; null while it's under way). Autolinear's reminder names that status, so Hermes can put
  * the issue back with a command.
  */
