@@ -35,15 +35,11 @@ When Hermes's 👀 or a command in a Hermes message changes an issue's status, L
 - A comment made from Slack is created with an ID derived from the Slack message (`stableUuid`), and that ID is recorded first. Linear's webhook for it is then recognized and skipped.
 - A retried Slack event reuses the same ID.
 
-## Issue channel topics
+## Issue metadata for Zami
 
-slack22linear writes issue metadata to the Slack channel topic. The Slack bridge exposes it as the Matrix room topic that [Leon for Zami](https://github.com/leonsilicon/zami-plugin-leon) reads. The topic starts with the status name for older plugin versions and uses this format for compact issue rows:
+The sync stores a full record per mapped Slack issue channel with its status, title, priority, URL, due date and parsed title metadata. A protected, read-only endpoint serves the current records to the Beeper inbox. The publisher matches the Slack workspace and channel to a joined Matrix room and writes `ai.leonsilicon.linear.issue` as room account data. Closed issues keep their final status and deleted issues get a deletion marker so Zami can ignore stale topics.
 
-```text
-Awaiting Date · linear:v1 unstarted #5e6ad2 p2 · https://linear.app/leonsilicon/issue/LEON-381 · File taxes `{start: 2026-12-01}`
-```
-
-The workflow field carries the Linear state type and hex color (`-` when unavailable), followed by `p0` through `p4` for no priority, urgent, high, medium, and low. The title comes last and may contain middle dots. Its metadata ends the topic as a backticked YAML flow mapping, just as in Linear. Long titles are shortened to make room for the complete mapping within [Slack's 250-character limit](https://docs.slack.dev/reference/methods/conversations.setTopic/). A mapping that cannot fit stays in Linear. The daily tick rewrites old topics for open issues and picks up workflow color and priority changes without posting a status message.
+During rollout, Linear Sync can also update legacy Slack topics. `LINEAR_ISSUE_METADATA_MATRIX_ONLY` stops those issue topic writes after the publisher has been verified. Existing topics provide a fallback when Zami has yet to receive account data. Project topics still carry project colors and icons.
 
 ## Title metadata
 

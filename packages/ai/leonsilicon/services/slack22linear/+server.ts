@@ -1,3 +1,4 @@
+export { IssueMetadata } from "#issue-metadata";
 export {
   AWAITING_PREFIX,
   COMMAND_KEYS,

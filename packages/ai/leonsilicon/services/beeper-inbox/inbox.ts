@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import {
   codexHandoffBlock,
@@ -707,7 +708,12 @@ export class Inbox {
   /** A Matrix request made directly (not through Pickle): metadata only, never anything encrypted. */
   async #matrix(
     path: string,
-    init: { method?: string; query?: Record<string, string>; timeoutMs?: number } = {},
+    init: {
+      method?: string;
+      query?: Record<string, string>;
+      timeoutMs?: number;
+      data?: Record<string, unknown>;
+    } = {},
   ): Promise<{ status: number; body: unknown }> {
     const account = this.#account;
     if (!account || !this.#accessToken) throw new InboxError("unavailable", "not signed in");
@@ -715,7 +721,11 @@ export class Inbox {
     for (const [key, value] of Object.entries(init.query ?? {})) url.searchParams.set(key, value);
     const response = await this.#baseFetch(url, {
       method: init.method ?? "GET",
-      headers: { authorization: `Bearer ${this.#accessToken}` },
+      headers: {
+        authorization: `Bearer ${this.#accessToken}`,
+        ...(init.data && { "content-type": "application/json" }),
+      },
+      ...(init.data && { body: JSON.stringify(init.data) }),
       signal: AbortSignal.timeout(init.timeoutMs ?? 60_000),
     });
     const text = await response.text();
@@ -726,6 +736,25 @@ export class Inbox {
       body = text.slice(0, 500);
     }
     return { status: response.status, body };
+  }
+
+  async publishLinearIssue(roomId: string, record: Record<string, unknown>): Promise<void> {
+    const { account } = this.#ready();
+    const user = encodeURIComponent(account.userId);
+    const room = encodeURIComponent(roomIdOf(roomId));
+    const path = `/_matrix/client/v3/user/${user}/rooms/${room}/account_data/ai.leonsilicon.linear.issue`;
+    const saved = await this.#matrix(path, { method: "PUT", data: record, timeoutMs: 15_000 });
+    if (saved.status !== 200)
+      throw new InboxError(
+        "unavailable",
+        `Linear issue account data write failed: HTTP ${saved.status}`,
+      );
+    const readback = await this.#matrix(path, { timeoutMs: 15_000 });
+    if (readback.status !== 200 || !isDeepStrictEqual(readback.body, record))
+      throw new InboxError(
+        "unavailable",
+        `Linear issue account data readback failed: HTTP ${readback.status}`,
+      );
   }
 
   async #isJoined(roomId: string): Promise<boolean> {

@@ -1,6 +1,7 @@
 import {
   botClient,
   commandLine,
+  IssueMetadata,
   LinearClient,
   loadConfig,
   Store,
@@ -58,6 +59,8 @@ interface Env {
   SLACK_SESSION_COOKIE?: string;
   /** Bearer token for /admin/* (backfill, tick, status). */
   LINEAR_SYNC_ADMIN_TOKEN: string;
+  LINEAR_ISSUE_METADATA_TOKEN?: string;
+  LINEAR_ISSUE_METADATA_MATRIX_ONLY?: string | boolean;
   [key: string]: unknown;
 }
 
@@ -119,6 +122,18 @@ function wantedSlackEvent(event: Record<string, unknown> | undefined, config: Sy
 const authorized = (request: Request, env: Env) =>
   Boolean(env.LINEAR_SYNC_ADMIN_TOKEN) &&
   request.headers.get("authorization") === `Bearer ${env.LINEAR_SYNC_ADMIN_TOKEN}`;
+
+function metadataAuthorized(request: Request, token?: string): boolean {
+  if (!token) return false;
+  const encoder = new TextEncoder();
+  const expected = encoder.encode(`Bearer ${token}`);
+  const actual = encoder.encode(request.headers.get("authorization") ?? "");
+  // Workers' native constant-time comparison, an extension to Web Crypto.
+  const subtle = crypto.subtle as SubtleCrypto & {
+    timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
+  };
+  return actual.length === expected.length && subtle.timingSafeEqual(actual, expected);
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -195,6 +210,12 @@ export default {
       return json({ queued: kind });
     }
 
+    if (request.method === "GET" && url.pathname === "/matrix/issue-metadata") {
+      if (!metadataAuthorized(request, env.LINEAR_ISSUE_METADATA_TOKEN))
+        return json({ error: "unauthorized" }, 401);
+      return stub(env).fetch(new Request("https://sync/issue-metadata"));
+    }
+
     if (request.method === "GET" && url.pathname === "/admin/status") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       return stub(env).fetch(new Request("https://sync/status"));
@@ -219,6 +240,8 @@ export class SyncObject {
   readonly #state: DurableObjectState;
   readonly #env: Env;
   readonly #store: Store;
+  readonly #issueMetadata: IssueMetadata;
+  #teamId?: string;
   #draining = false;
   /** The bot's Slack user ID, once `auth.test` has said it. */
   #botUserId: string | undefined;
@@ -230,6 +253,7 @@ export class SyncObject {
       exec: (query, ...params) => state.storage.sql.exec(query, ...params).toArray(),
     };
     this.#store = new Store(sql);
+    this.#issueMetadata = new IssueMetadata(sql);
   }
 
   #session(): SlackCall | null {
@@ -241,6 +265,10 @@ export class SyncObject {
     return new Sync({
       config: loadConfig(this.#env as Record<string, string | undefined>),
       store: this.#store,
+      ...(this.#env.LINEAR_ISSUE_METADATA_TOKEN && {
+        issueMetadata: this.#issueMetadata,
+        matrixOnly: String(this.#env.LINEAR_ISSUE_METADATA_MATRIX_ONLY) === "true",
+      }),
       linear: new LinearClient(this.#env.LINEAR_API_KEY),
       bot: botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN),
       session: this.#session(),
@@ -269,6 +297,18 @@ export class SyncObject {
       return json({ queued });
     }
     if (url.pathname === "/status") return json(this.#store.stats());
+    if (url.pathname === "/issue-metadata") {
+      if (!this.#teamId) {
+        const { team_id } = await botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN)("auth.test");
+        if (typeof team_id !== "string" || !/^T[A-Z0-9]+$/.test(team_id))
+          return json({ error: "Slack workspace unavailable" }, 503);
+        this.#teamId = team_id;
+      }
+      const body = `{"teamId":${JSON.stringify(this.#teamId)},"records":${this.#issueMetadata.snapshot()}}`;
+      return new Response(body, {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
     // autolinear's hand-over of a channel it opened, through its binding to this Durable Object
     // (the Worker above never routes a request here). Answers once the bot and Hermes are in.
     if (url.pathname === "/adopt") {

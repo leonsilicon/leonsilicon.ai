@@ -5,6 +5,7 @@
   "description": "Hermes's direct Beeper Cloud inbox: list, read, download from and send in Leon's existing Beeper conversations over Matrix, as its own E2EE device, with no Beeper Desktop.",
   "type": "module",
   "imports": {
+    "#linear-issue-metadata": "./linear-issue-metadata.ts",
     "#cli": "./cli.ts",
     "#client": "./client.ts",
     "#daemon": "./daemon.ts",

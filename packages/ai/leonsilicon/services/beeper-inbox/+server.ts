@@ -1,3 +1,4 @@
+export { linearIssueMetadataExtension } from "#linear-issue-metadata";
 export { runCli, USAGE } from "#cli";
 export { startDaemon, EXIT_ALREADY_OWNED } from "#daemon";
 export type { RunningDaemon } from "#daemon";

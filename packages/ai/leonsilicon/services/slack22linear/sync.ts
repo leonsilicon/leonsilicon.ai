@@ -1,3 +1,4 @@
+import type { IssueMetadata } from "#issue-metadata";
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
 import { AWAITING_PREFIX, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
 import type { AutolinearCommand } from "#command";
@@ -152,6 +153,8 @@ interface StatusPost {
 export interface SyncDeps {
   config: SyncConfig;
   store: Store;
+  issueMetadata?: IssueMetadata;
+  matrixOnly?: boolean;
   linear: LinearApi;
   /** The sync's own Slack app. */
   bot: SlackCall;
@@ -303,6 +306,8 @@ interface Due {
 export class Sync {
   readonly #c: SyncConfig;
   readonly #store: Store;
+  readonly #issueMetadata?: IssueMetadata;
+  readonly #matrixOnly: boolean;
   readonly #linear: LinearApi;
   readonly #bot: SlackCall;
   readonly #session: SlackCall | null;
@@ -322,6 +327,8 @@ export class Sync {
   constructor(deps: SyncDeps) {
     this.#c = deps.config;
     this.#store = deps.store;
+    if (deps.issueMetadata) this.#issueMetadata = deps.issueMetadata;
+    this.#matrixOnly = deps.matrixOnly === true;
     this.#linear = deps.linear;
     this.#bot = deps.bot;
     this.#session = deps.session;
@@ -375,6 +382,7 @@ export class Sync {
     if (hook.action === "remove") {
       this.#store.setTimer(issueTimer(hook.data.id), "timer", null, null, this.#now());
       const rec = this.#store.issue(hook.data.id);
+      if (rec) this.#issueMetadata?.remove(rec);
       if (rec && !rec.archived) {
         await this.#unplace(rec.channelId);
         await this.#archive(rec.channelId);
@@ -453,11 +461,14 @@ export class Sync {
     this.#planTimer(issue);
     const prev = this.#store.issue(issue.id);
     const title = parseTitle(issue.title);
-    const topic = channelTopic(title, issue.state, issue.url, issue.priority);
+    const topic = this.#matrixOnly
+      ? null
+      : channelTopic(title, issue.state, issue.url, issue.priority);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
+      this.#issueMetadata?.save(prev.channelId, issue);
       if (!prev.archived) {
-        if (prev.topic !== topic)
+        if (topic !== null && prev.topic !== topic)
           await tolerate(this.#bot("conversations.setTopic", { channel: prev.channelId, topic }), [
             ...ARCHIVED,
             "channel_not_found",
@@ -471,7 +482,7 @@ export class Sync {
         ...prev,
         title: issue.title,
         stateName: issue.state.name,
-        topic: prev.archived ? prev.topic : topic,
+        topic: topic === null || prev.archived ? prev.topic : topic,
         archived: true,
         section: null,
       };
@@ -530,7 +541,8 @@ export class Sync {
         rec.channelName = wanted;
     }
 
-    if (rec.topic !== topic) {
+    this.#issueMetadata?.save(rec.channelId, issue);
+    if (topic !== null && rec.topic !== topic) {
       await this.#bot("conversations.setTopic", { channel: rec.channelId, topic });
       rec.topic = topic;
     }
@@ -1535,10 +1547,15 @@ export class Sync {
         rec.archived ||
         rec.stateName !== issue.state.name ||
         rec.title !== issue.title ||
-        rec.topic !== channelTopic(parseTitle(issue.title), issue.state, issue.url, issue.priority)
+        (!this.#matrixOnly &&
+          rec.topic !==
+            channelTopic(parseTitle(issue.title), issue.state, issue.url, issue.priority))
       )
         await this.syncIssue(issue, "live");
-      else this.#planTimer(issue);
+      else {
+        this.#issueMetadata?.save(rec.channelId, issue);
+        this.#planTimer(issue);
+      }
     }
     for (const rec of this.#store.allIssues()) {
       if (rec.archived || open.has(rec.issueId)) continue;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { loadConfig } from "#config";
+import { IssueMetadata } from "#issue-metadata";
 import type {
   IssueUpdate,
   LinearApi,
@@ -579,14 +580,16 @@ function fakeSlack() {
   };
 }
 
-function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
+function setup(now = Date.UTC(2026, 10, 18, 20, 0), matrixOnly = false) {
   const slack = fakeSlack();
   const clock = { now };
   const linear = fakeLinear(
     (name) => slack.addLinearChannel(name),
     () => clock.now,
   );
-  const store = new Store(memorySql());
+  const sql = memorySql();
+  const store = new Store(sql);
+  const issueMetadata = new IssueMetadata(sql);
   /** What Leon's `/autolinear` was told, through Slack's response URL. */
   const responses: { url: string; text: string }[] = [];
   const sync = new Sync({
@@ -596,6 +599,8 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
       AUTOLINEAR_BOT_USER_ID: AUTO,
     }),
     store,
+    issueMetadata,
+    matrixOnly,
     linear: linear.api,
     bot: slack.bot,
     session: slack.session,
@@ -618,7 +623,7 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     }
     throw new Error("the queue never settled");
   };
-  return { linear, slack, store, sync, clock, drain, responses };
+  return { linear, slack, store, sync, clock, drain, responses, issueMetadata };
 }
 
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
@@ -1174,6 +1179,42 @@ test("the daily tick upgrades old topics and refreshes status colors and priorit
     slack.calls.filter(({ method }) => method === "conversations.setTopic").length,
     topicWrites,
   );
+});
+
+test("Matrix-only publishing backfills and updates the full issue record without changing Slack topics", async () => {
+  const { linear, slack, sync, store, issueMetadata } = setup(undefined, true);
+  const longTitle = "Full title ".repeat(35).trim();
+  const issue = linear.addIssue(381, longTitle + " `{due: 2026-12-01}`", "Awaiting Leon");
+  issue.dueDate = "2026-12-01";
+  await sync.run("backfill", {});
+  const { channelId } = store.issue(issue.id)!;
+  const snapshot = () => JSON.parse(issueMetadata.snapshot());
+  assert.deepEqual(snapshot(), [
+    {
+      version: 1,
+      channelId,
+      identifier: "LEON-381",
+      title: longTitle,
+      statusName: "Awaiting Leon",
+      statusType: "started",
+      statusColor: issue.state.color,
+      priority: issue.priority,
+      url: issue.url,
+      dueDate: "2026-12-01",
+      meta: { due: "2026-12-01" },
+    },
+  ]);
+
+  issue.priority = 2;
+  await sync.run("tick", {});
+  assert.equal(snapshot()[0].priority, 2);
+  issue.state = state("Done");
+  await sync.run("linear", issueHook(issue.id));
+  assert.equal(snapshot()[0].statusType, "completed");
+  assert.equal(store.issue(issue.id)?.archived, true);
+  await sync.run("linear", issueHook(issue.id, "remove"));
+  assert.deepEqual(snapshot(), [{ version: 1, channelId, identifier: "LEON-381", deleted: true }]);
+  assert.equal(slack.calls.filter(({ method }) => method === "conversations.setTopic").length, 0);
 });
 
 test("an open project gets a channel from Linear's Slack app, filed under Projects", async () => {
