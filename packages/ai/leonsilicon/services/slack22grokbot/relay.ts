@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { parseTaskBotName, slackIdentifier, slackThread, taskName } from "#handoff";
+import { slackIdentifier, slackThread, taskName } from "#handoff";
 import type { Slack22GrokBot } from "#slack22grokbot";
 import {
   budgetExceededMessage,
@@ -241,7 +241,7 @@ export function createGrokDelegation(options: GrokDelegationOptions): GrokDelega
     // The complete Slack route is the identity, including the channel.
     const all = await bots();
     const existing = all.find((bot) => bot.name === taskName(thread));
-    if (!existing && parseTaskBotName(asked.name))
+    if (!existing && asked.name.startsWith("Task slack:"))
       throw new Error("This Grok task bot belongs to a different Slack thread");
     const target = existing ?? asked;
     if (existing && existing.chatID !== asked.chatID)

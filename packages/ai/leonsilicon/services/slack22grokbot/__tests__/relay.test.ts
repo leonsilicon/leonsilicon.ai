@@ -477,4 +477,11 @@ test("one task bot per Slack thread: a task for a thread that has one goes to it
     /Create a new bot for it named exactly "Task slack:C0TASKS001\/1795280099\.000001"/,
   );
   assert.equal(other.redirected_from, undefined);
+  const invalid = "Task slack:unknown/1795280099.000001";
+  chats["c-invalid"] = { title: invalid, messages: [] };
+  await assert.rejects(
+    relay.send({ ...THREAD, slack_thread_ts: "1795280099.000001", bot: invalid, text: "new task" }),
+    /belongs to a different Slack thread/,
+  );
+  assert.equal(posted.length, 2);
 });
