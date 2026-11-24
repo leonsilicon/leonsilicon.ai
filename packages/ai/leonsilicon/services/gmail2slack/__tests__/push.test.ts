@@ -101,12 +101,16 @@ test("schedules catch-up for a dropped notification and retains work on failure 
 
 test("parses wrapped Pub/Sub pushes and keeps Gmail history IDs as exact strings", () => {
   const info = { emailAddress: "person@example.test", historyId: "90071992547409931" };
-  const event = (data: unknown) => ({
-    message: { data: Buffer.from(JSON.stringify(data)).toString("base64url") },
+  const event = (data: string) => ({
+    message: { data: Buffer.from(data).toString("base64url") },
   });
-  assert.deepEqual(parseGmailNotification(event(info)), info);
-  assert.equal(parseGmailNotification(event({ ...info, historyId: 123 })), null);
-  assert.equal(parseGmailNotification(event(null)), null);
+  assert.deepEqual(parseGmailNotification(event(JSON.stringify(info))), info);
+  const numericEvent = event(
+    `{"emailAddress":"${info.emailAddress}","historyId":${info.historyId}}`,
+  );
+  assert.deepEqual(parseGmailNotification(numericEvent), info);
+  assert.equal(parseGmailNotification(event(JSON.stringify({ ...info, historyId: 1.5 }))), null);
+  assert.equal(parseGmailNotification(event("null")), null);
   assert.equal(parseGmailNotification({ message: { data: "&" } }), null);
 });
 

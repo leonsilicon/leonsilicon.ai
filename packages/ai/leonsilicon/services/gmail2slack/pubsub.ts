@@ -32,7 +32,12 @@ export function parseGmailNotification(envelope: unknown) {
     const bytes = Uint8Array.from(atob(data.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
       c.charCodeAt(0),
     );
-    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as {
+    // Gmail also sends history IDs as JSON numbers. Read the source digits before rounding.
+    const parsed = JSON.parse(
+      new TextDecoder().decode(bytes),
+      (key: string, value: unknown, context?: { source: string }) =>
+        key === "historyId" && typeof value === "number" ? context?.source : value,
+    ) as {
       emailAddress?: unknown;
       historyId?: unknown;
     } | null;
