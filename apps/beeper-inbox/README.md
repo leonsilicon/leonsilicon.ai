@@ -52,10 +52,20 @@ The publisher checks for changes every 10 seconds and refreshes its Slack-to-Mat
 
 ## Slack feeds
 
-[instagram2slack](../../packages/ai/leonsilicon/services/instagram2slack/README.md) and [whatsapp2slack](../../packages/ai/leonsilicon/services/whatsapp2slack/README.md) ship with the inbox. Install this inbox release to retire `beeper-feed`. The new daemon ignores the old extension's settings and delivery queue.
+Install the inbox release to retire `beeper-feed` and register the platform feeds below. The daemon ignores the old extension's settings and delivery queue. The inbox can see accounts connected through [Beeper Cloud](https://help.beeper.com/chat-networks/using-on-device-chat-network-connections-in-beeper).
 
-1. For each platform to enable, run `vpx _env-file instagram2slack` or `vpx _env-file whatsapp2slack`. Install the generated settings as `/opt/data/beeper-inbox/<name>/env` (mode 600).
-2. To limit a feed to particular chats, add `BEEPER_ROOM_IDS` to that file as a comma-separated list of exact Matrix room IDs. Use `list_conversations` with `network: "instagram"` or `network: "whatsapp"` to find the `room_id` values. Omit the setting to copy all conversations on the chosen network.
+| Feed                                                                                | Beeper network | Slack channel     |
+| ----------------------------------------------------------------------------------- | -------------- | ----------------- |
+| [discord2slack](../../packages/ai/leonsilicon/services/discord2slack/README.md)     | `discord`      | `#feed-discord`   |
+| [instagram2slack](../../packages/ai/leonsilicon/services/instagram2slack/README.md) | `instagram`    | `#feed-instagram` |
+| [linkedin2slack](../../packages/ai/leonsilicon/services/linkedin2slack/README.md)   | `linkedin`     | `#feed-linkedin`  |
+| [reddit2slack](../../packages/ai/leonsilicon/services/reddit2slack/README.md)       | `reddit`       | `#feed-reddit`    |
+| [wechat2slack](../../packages/ai/leonsilicon/services/wechat2slack/README.md)       | `wechat`       | `#feed-wechat`    |
+| [whatsapp2slack](../../packages/ai/leonsilicon/services/whatsapp2slack/README.md)   | `whatsapp`     | `#feed-whatsapp`  |
+| [x2slack](../../packages/ai/leonsilicon/services/x2slack/README.md)                 | `x`            | `#feed-x`         |
+
+1. Enable a feed by running `vpx _env-file <name>` and installing the generated settings as `/opt/data/beeper-inbox/<name>/env` (mode 600).
+2. To limit a feed to particular chats, add `BEEPER_ROOM_IDS` to its settings as a comma-separated list of exact Matrix room IDs. Use the feed's Beeper network in `list_conversations` to find its `room_id` values. Omit the setting to copy conversations from the chosen network.
 3. Restart the inbox daemon and check `status.extensions` under the feed's name. Each feed starts with new messages the first time it runs. The status shows the latest pass, pending work and delivery counts.
 
 Move a feed's settings file out of its directory and restart the daemon to pause it. Restoring the file resumes from its saved cursor. Keep room IDs and settings on Hermes Cloud.

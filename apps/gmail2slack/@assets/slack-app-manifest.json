@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Slack Feeds",
-    "description": "Screens and copies selected Instagram and WhatsApp conversations and incoming Gmail to Slack.",
+    "description": "Screens and copies selected Beeper conversations and incoming Gmail to Slack.",
     "background_color": "#1f2933"
   },
   "features": {

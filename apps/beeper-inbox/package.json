@@ -9,8 +9,13 @@
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+    "@-/ai.leonsilicon.services.discord2slack": "workspace:*",
     "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
+    "@-/ai.leonsilicon.services.linkedin2slack": "workspace:*",
+    "@-/ai.leonsilicon.services.reddit2slack": "workspace:*",
     "@-/ai.leonsilicon.services.slack22grokbot": "workspace:*",
-    "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*"
+    "@-/ai.leonsilicon.services.wechat2slack": "workspace:*",
+    "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*",
+    "@-/ai.leonsilicon.services.x2slack": "workspace:*"
   }
 }

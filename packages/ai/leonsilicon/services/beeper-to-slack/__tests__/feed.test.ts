@@ -19,7 +19,8 @@ import { beeperToSlackExtension } from "#extension";
 import { BeeperFeed } from "#feed";
 
 const NOW = Date.parse("2026-11-21T21:00:00Z");
-const rooms = ["whatsapp", "instagram", "slack", "beeper", "telegram", "other-group"].map(
+const feedNetworks = ["discord", "instagram", "linkedin", "reddit", "wechat", "whatsapp", "x"];
+const rooms = [...feedNetworks, "slack", "beeper", "telegram", "other-group"].map(
   (id): RoomInfo => ({
     roomId: `!${id}:example.test`,
     network: id === "other-group" ? "whatsapp" : id,
@@ -133,7 +134,7 @@ function setup(t: TestContext) {
   };
 }
 
-test("keeps the two feeds independent and screens messages only from the selected network", async (t) => {
+test("keeps feed delivery and screening within the selected network", async (t) => {
   const h = setup(t);
   h.record("old", "already in the journal");
   const whatsapp = h.make();
@@ -174,6 +175,31 @@ test("keeps the two feeds independent and screens messages only from the selecte
   ]);
   assert.equal(whatsapp.status().posted, 1);
   assert.equal(instagram.status().posted, 3);
+});
+
+test("all configured networks use their own channels and ignore messages from other networks", async (t) => {
+  const h = setup(t);
+  const feeds = feedNetworks.map((network) => h.make(network));
+  for (const feed of feeds) await feed.tick();
+  for (const network of [...feedNetworks, "slack", "beeper", "telegram"]) {
+    h.record(network, `${network} message`, network);
+  }
+  for (const feed of feeds) {
+    await feed.tick();
+    assert.equal(feed.status().posted, 1);
+    assert.equal(feed.status().pending, 0);
+  }
+  assert.deepEqual(
+    h.screened,
+    feedNetworks.map((network) => `${network} message`),
+  );
+  assert.deepEqual(
+    h.posts.map(({ channel }) => channel),
+    feedNetworks.map((network) => `feed-${network}`),
+  );
+  for (const [index, network] of feedNetworks.entries()) {
+    assert.ok(h.posts[index].text.includes(`${network} message`));
+  }
 });
 
 test("restricts a feed to configured rooms and rechecks queued messages on restart", async (t) => {

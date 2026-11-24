@@ -1,0 +1,14 @@
+{
+  "name": "@-/ai.leonsilicon.services.linkedin2slack",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#extension": "./extension.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  },
+  "dependencies": {
+    "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*"
+  }
+}

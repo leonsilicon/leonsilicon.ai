@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.beeper-to-slack
 
-Shared delivery for [instagram2slack](../instagram2slack/README.md) and [whatsapp2slack](../whatsapp2slack/README.md). Each extension chooses one Beeper network and has its own settings, journal cursor and pending deliveries. The [Beeper inbox](../beeper-inbox/README.md) provides the room directory and live journal through its existing Matrix session.
+Shared delivery for the [Beeper inbox Slack feeds](../../../../../apps/beeper-inbox/README.md#slack-feeds). Each extension chooses one Beeper network and has its own settings, journal cursor and pending deliveries. The [Beeper inbox](../beeper-inbox/README.md) provides the room directory and live journal through its existing Matrix session.
 
 A feed starts at the journal head on first use and resumes at its saved cursor on restart. The room's network and any configured room IDs are checked before screening or delivery. Pending edits update the queued copy; redactions drop it. Slack receives a text snapshot. Attachments and the original message stay accessible through Beeper.
 

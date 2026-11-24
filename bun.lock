@@ -35,9 +35,14 @@
       },
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+        "@-/ai.leonsilicon.services.discord2slack": "workspace:*",
         "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
+        "@-/ai.leonsilicon.services.linkedin2slack": "workspace:*",
+        "@-/ai.leonsilicon.services.reddit2slack": "workspace:*",
         "@-/ai.leonsilicon.services.slack22grokbot": "workspace:*",
+        "@-/ai.leonsilicon.services.wechat2slack": "workspace:*",
         "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*",
+        "@-/ai.leonsilicon.services.x2slack": "workspace:*",
       },
     },
     "apps/cronometer": {
@@ -220,6 +225,12 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/discord2slack": {
+      "name": "@-/ai.leonsilicon.services.discord2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/feed-common": {
       "name": "@-/ai.leonsilicon.services.feed-common",
       "dependencies": {
@@ -244,6 +255,12 @@
         "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/linkedin2slack": {
+      "name": "@-/ai.leonsilicon.services.linkedin2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/orca-bridge": {
       "name": "@-/ai.leonsilicon.services.orca-bridge",
       "version": "3.0.0",
@@ -259,6 +276,12 @@
       "dependencies": {
         "@-/ai.leonsilicon.services.orca-bridge": "workspace:*",
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
+      },
+    },
+    "packages/ai/leonsilicon/services/reddit2slack": {
+      "name": "@-/ai.leonsilicon.services.reddit2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/slack-as-leon": {
@@ -281,8 +304,20 @@
         "@-/com.npmjs.yaml": "workspace:*",
       },
     },
+    "packages/ai/leonsilicon/services/wechat2slack": {
+      "name": "@-/ai.leonsilicon.services.wechat2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
+      },
+    },
     "packages/ai/leonsilicon/services/whatsapp2slack": {
       "name": "@-/ai.leonsilicon.services.whatsapp2slack",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
+      },
+    },
+    "packages/ai/leonsilicon/services/x2slack": {
+      "name": "@-/ai.leonsilicon.services.x2slack",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
@@ -458,6 +493,8 @@
 
     "@-/ai.leonsilicon.services.dailylinear": ["@-/ai.leonsilicon.services.dailylinear@workspace:packages/ai/leonsilicon/services/dailylinear"],
 
+    "@-/ai.leonsilicon.services.discord2slack": ["@-/ai.leonsilicon.services.discord2slack@workspace:packages/ai/leonsilicon/services/discord2slack"],
+
     "@-/ai.leonsilicon.services.feed-common": ["@-/ai.leonsilicon.services.feed-common@workspace:packages/ai/leonsilicon/services/feed-common"],
 
     "@-/ai.leonsilicon.services.gmail2slack": ["@-/ai.leonsilicon.services.gmail2slack@workspace:packages/ai/leonsilicon/services/gmail2slack"],
@@ -466,9 +503,13 @@
 
     "@-/ai.leonsilicon.services.instagram2slack": ["@-/ai.leonsilicon.services.instagram2slack@workspace:packages/ai/leonsilicon/services/instagram2slack"],
 
+    "@-/ai.leonsilicon.services.linkedin2slack": ["@-/ai.leonsilicon.services.linkedin2slack@workspace:packages/ai/leonsilicon/services/linkedin2slack"],
+
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
 
     "@-/ai.leonsilicon.services.orcahermes-device": ["@-/ai.leonsilicon.services.orcahermes-device@workspace:packages/ai/leonsilicon/services/orcahermes-device"],
+
+    "@-/ai.leonsilicon.services.reddit2slack": ["@-/ai.leonsilicon.services.reddit2slack@workspace:packages/ai/leonsilicon/services/reddit2slack"],
 
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
 
@@ -476,7 +517,11 @@
 
     "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
 
+    "@-/ai.leonsilicon.services.wechat2slack": ["@-/ai.leonsilicon.services.wechat2slack@workspace:packages/ai/leonsilicon/services/wechat2slack"],
+
     "@-/ai.leonsilicon.services.whatsapp2slack": ["@-/ai.leonsilicon.services.whatsapp2slack@workspace:packages/ai/leonsilicon/services/whatsapp2slack"],
+
+    "@-/ai.leonsilicon.services.x2slack": ["@-/ai.leonsilicon.services.x2slack@workspace:packages/ai/leonsilicon/services/x2slack"],
 
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:packages/com/leonsilicon/hermes/plugins/autolinear"],
 
