@@ -22,6 +22,7 @@ export default defineConfig({
   },
   lint: {
     ...flatcap.configs.oxlint,
+    ignorePatterns: ["apps/hermes-plugin-*/policy.cjs"],
     options: { typeAware: true, typeCheck: true },
     overrides: [
       {
@@ -34,6 +35,7 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       "patches.gen/**",
+      "apps/hermes-plugin-*/policy.cjs",
       "**/@fixtures/**",
       // What pywrangler puts beside a Python Worker: its packages, its environment and its lock.
       "**/python_modules/**",
@@ -73,6 +75,10 @@ export default defineConfig({
         ].join(" "),
       },
       typecheck: { command: "tsc --noEmit" },
+      "build:hermes-plugins": {
+        cache: false,
+        command: `node ${ai}/configs/hermes-mirrors/_build-hermes-plugins.ts`,
+      },
       // dist/beeper-inbox.tgz for Hermes Cloud: the app plus Pickle built from its pinned revision.
       "build:beeper-inbox": {
         cache: false,

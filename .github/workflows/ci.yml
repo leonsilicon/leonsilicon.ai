@@ -20,8 +20,16 @@ jobs:
       - run: vp check
       - run: vpr -w typecheck
       - run: vpr -w test
-      - run: python3 -m unittest discover -s apps/hermes-plugin-slack22orca/__tests__
-      - run: python3 -m unittest discover -s apps/hermes-plugin-hermes22muse/__tests__
+      - run: vpr -w build:hermes-plugins
+      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' 'apps/hermes-plugin-*/_pythonmonkey.py'
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Test Hermes plugins
+        run: |
+          uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with pytest python -m pytest \
+            --rootdir=. --import-mode=importlib \
+            apps/hermes-plugin-dropbox-task-memory/__tests__ \
+            apps/hermes-plugin-slack22orca/__tests__ \
+            apps/hermes-plugin-hermes22muse/__tests__
       - run: vp build
 
   # Pushes to main deploy the Cloudflare Workers they changed, once the checks above pass.
