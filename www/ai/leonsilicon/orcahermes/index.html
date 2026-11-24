@@ -39,10 +39,10 @@
       <section aria-labelledby="verification">
         <h2 id="verification">Deployment verification</h2>
         <p>
-          The headless server runs on Nous under Orca’s built-in supervisor and s6. A local Orca
-          client listed projects, and the terminal daemon passed its startup check. Automatic
-          startup after a full host restart, private client pairing, and authenticated Codex require
-          further verification.
+          The headless server runs on Nous under Orca’s built-in supervisor and s6. A live terminal
+          survived both a runtime crash and a supervisor crash. A paired client reached Orca over
+          private TLS, and Codex resumed a signed-in session on the server. Automatic startup after
+          a full host restart remains to be verified.
         </p>
       </section>
     </main>

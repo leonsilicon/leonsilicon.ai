@@ -42,8 +42,10 @@
         <h2 id="evidence">Verification</h2>
         <p>
           The deployed server answered a local project-list request, registered a repository on
-          persistent storage, and created a live terminal. Authenticated access from another device,
-          denial of unpaired access, and Codex sign-in and resume require further testing.
+          persistent storage, and created a live terminal. A paired device listed projects over a
+          private connection with a valid TLS certificate. Orca rejected an unauthenticated request.
+          A signed-in Codex session resumed after interruption and recalled context from its first
+          turn.
         </p>
         <p><a href="https://orca.dev/docs/remote-servers">Orca remote server documentation</a></p>
       </section>

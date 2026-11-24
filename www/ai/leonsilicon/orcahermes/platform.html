@@ -34,10 +34,11 @@
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
-          Service registration and local runtime startup were verified on Nous. Automatic startup,
-          persistent pairing identity, and private client access after a full host restart remain
-          unverified. A platform restart ends live terminal processes, so an agent session must
-          resume from durable state afterward.
+          On Nous, s6 replaced the supervisor after a forced failure, and the replacement runtime
+          recovered the registered project and live terminal. Automatic startup, persistent pairing
+          identity, and private client access after a full host restart remain unverified. A
+          platform restart ends live terminal processes, so an agent session must resume from
+          durable state afterward.
         </p>
         <p>
           <a href="https://skarnet.org/software/s6/s6-supervise.html"

@@ -37,11 +37,10 @@
       <section aria-labelledby="evidence">
         <h2 id="evidence">Verification</h2>
         <p>
-          On Nous, killing the runtime triggered a restart. The service log recorded that Orca
-          preserved the running terminal daemon and that the replacement runtime reached ready
-          state. In a separate Linux test, s6 replaced a killed supervisor after stopping its
-          abandoned runtime, and Orca reattached to the same terminal workload. Hosted terminal
-          readback across both failures requires further testing.
+          On Nous, a forced runtime crash recovered in 75 seconds. A separate forced supervisor
+          crash recovered in 150 seconds after s6 started a replacement supervisor. Both checks read
+          back the same terminal and verified that the terminal daemon and workload process stayed
+          alive.
         </p>
         <p>
           <a href="https://orca.dev/docs/remote-servers#orca-serve-as-a-service"
