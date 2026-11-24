@@ -100,6 +100,7 @@ function readMessage(body: Record<string, unknown> | null): IntakeMessage | null
     ...(Array.isArray(body.files)
       ? {
           files: (body.files as Record<string, unknown>[]).map((f) => ({
+            id: text(f?.id),
             name: text(f?.name),
             title: text(f?.title),
             permalink: text(f?.permalink),

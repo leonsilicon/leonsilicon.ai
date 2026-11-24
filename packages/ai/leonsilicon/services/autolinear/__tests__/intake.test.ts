@@ -37,6 +37,10 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
     channels: [] as { id: string; name: string; private: boolean }[],
     posts: [] as { channel: string; ts: string; params: SlackParams }[],
     edits: [] as SlackParams[],
+    shares: [] as { ts: string; params: SlackParams }[],
+    detached: [] as SlackParams[],
+    lookups: [] as SlackParams[],
+    sourceFiles: [] as { id: string }[],
     refuseEdits: false,
   };
   const session = (method: string, params: SlackParams = {}) =>
@@ -60,12 +64,42 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
         case "chat.update":
           if (slack.refuseEdits) throw new SlackError(method, "edit_window_closed");
           slack.edits.push(params);
+          if (params.file_ids)
+            return {
+              ok: true,
+              message: {
+                files: (JSON.parse(String(params.file_ids)) as string[]).map((id) => ({ id })),
+              },
+            };
           return { ok: true };
         case "chat.postMessage": {
           const ts = `1794000001.00000${slack.posts.length + 1}`;
           slack.posts.push({ channel: String(params.channel), ts, params });
           return { ok: true, ts };
         }
+        case "files.share": {
+          const ts = `1794000002.00000${slack.shares.length + 1}`;
+          slack.shares.push({ ts, params });
+          return { ok: true, file_msg_ts: ts };
+        }
+        case "chat.removeFile":
+          slack.detached.push(params);
+          slack.sourceFiles = slack.sourceFiles.filter((file) => file.id !== params.file);
+          return { ok: true };
+        case "conversations.history":
+        case "conversations.replies":
+          slack.lookups.push(params);
+          return {
+            ok: true,
+            messages: [
+              {
+                ts: params.latest,
+                ...(params.channel === DM
+                  ? { files: slack.sourceFiles }
+                  : { text: "existing copy" }),
+              },
+            ],
+          };
         default:
           throw new Error(`fake Slack has no ${method}`);
       }
@@ -273,6 +307,7 @@ test("a retry after a failed step carries on: one issue, one channel, one copy",
 test("a reply links its thread, others' mentions get names, and a taken channel name gets -2", async () => {
   const t = setup();
   t.slack.channels.push({ id: "C0OLD", name: "leon-401-sure-ask-syed", private: true });
+  t.slack.sourceFiles = [{ id: "F1" }];
   const result = await t.intake.run(
     message({
       ts: "1794000000.000005",
@@ -294,10 +329,82 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
   assert.equal(t.adopted[0]!.sourceThreadTs, "1794000000.000004");
   assert.equal(t.adopted[0]!.lead, `From Leon's reply in <${permalink}|a thread in #feed-gmail>.`);
   assert.equal(t.slack.edits[0]!.text, `<#${result.channel.id}>`);
-  assert.equal(
-    t.slack.posts[0]!.params.text,
-    "sure, ask <@U0SYED00001>\n📎 <https://files.slack.com/F1|receipt.png>",
+  assert.deepEqual(t.slack.lookups[0], {
+    channel: DM,
+    ts: "1794000000.000004",
+    oldest: "1794000000.000005",
+    latest: "1794000000.000005",
+    inclusive: true,
+    limit: 5,
+  });
+  assert.equal(t.slack.shares[0]!.params.files, "F1");
+  assert.equal(t.slack.shares[0]!.params.comment, "sure, ask <@U0SYED00001>");
+  assert.deepEqual(t.slack.detached, [{ channel: DM, ts: "1794000000.000005", file: "F1" }]);
+});
+
+test("uploaded files and formatting move before the original is reduced to a channel link", async () => {
+  const t = setup();
+  const msg = message({ files: [{ id: "F1", name: "image.png" }, { id: "F2" }] });
+  const result = await t.intake.run(msg);
+  assert.ok(result.ok);
+  const share = t.slack.shares[0]!;
+  assert.equal(result.ts, share.ts);
+  assert.equal(share.params.channel, result.channel.id);
+  assert.equal(share.params.files, "F1,F2");
+  assert.equal(share.params.resharing_aware, true);
+  assert.deepEqual(JSON.parse(String(share.params.blocks)), msg.blocks);
+  assert.match(String(share.params.client_msg_id), /^de1e6a7e-/);
+  assert.equal(t.slack.posts.length, 0);
+  assert.equal(t.slack.lookups.length, 0);
+  assert.equal(t.slack.edits[0]!.text, `<#${result.channel.id}>`);
+  assert.deepEqual(t.slack.detached, [
+    { channel: DM, ts: msg.ts, file: "F1" },
+    { channel: DM, ts: msg.ts, file: "F2" },
+  ]);
+  assert.deepEqual(
+    t.log.filter((method) => ["files.share", "chat.update", "chat.removeFile"].includes(method)),
+    ["files.share", "chat.update", "chat.removeFile", "chat.removeFile"],
   );
+});
+
+test("a file-only message keeps its source until shared and resumes a failed detach", async () => {
+  const t = setup();
+  t.slack.sourceFiles = [{ id: "F1" }];
+  const msg = message({ files: [{ id: "F1", name: "image.png" }], text: "", blocks: undefined });
+  t.failures.push("files.share", "chat.removeFile");
+  await assert.rejects(t.intake.run(msg), /files.share failed/);
+  assert.equal(t.slack.edits.length, 0);
+  assert.equal(t.slack.detached.length, 0);
+  const clientMsgId = t.progress().copyClientMsgId;
+  assert.match(clientMsgId!, /^de1e6a7e-/);
+
+  await assert.rejects(t.intake.run(msg), /chat.removeFile failed/);
+  assert.equal(t.slack.shares[0]!.params.comment, undefined);
+  assert.equal(t.slack.shares[0]!.params.client_msg_id, clientMsgId);
+  assert.deepEqual(t.progress().filesToDetach, ["F1"]);
+
+  const result = await t.intake.run(msg);
+  assert.ok(result.ok);
+  assert.equal(result.ts, t.slack.shares[0]!.ts);
+  assert.equal(t.slack.shares.length, 1);
+  assert.equal(t.slack.edits.length, 1);
+  assert.equal(t.slack.detached.length, 1);
+  assert.deepEqual(t.progress().filesToDetach, []);
+});
+
+test("a retry can attach an image to a copy saved before file sharing was added", async () => {
+  const t = setup();
+  t.failures.push("adopt");
+  await assert.rejects(t.intake.run(message()), /adopt failed/);
+  const copyTs = t.progress().copyTs;
+  const result = await t.intake.run(message({ files: [{ id: "F1" }] }));
+  assert.ok(result.ok);
+  assert.equal(result.ts, copyTs);
+  assert.equal(t.slack.posts.length, 1);
+  assert.equal(t.slack.shares.length, 0);
+  assert.equal(t.slack.edits[1]!.ts, copyTs);
+  assert.equal(t.slack.edits[1]!.file_ids, '["F1"]');
+  assert.deepEqual(t.slack.detached, [{ channel: DM, ts: message().ts, file: "F1" }]);
 });
 
 test("an edit Slack refuses is logged; the issue, channel and copy still happen", async () => {

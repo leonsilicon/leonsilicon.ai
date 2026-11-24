@@ -18,6 +18,7 @@ import { newClientMsgId } from "@-/ai.leonsilicon.services.slack-as-leon";
 import type { AutolinearConfig } from "#config";
 
 export interface SlackFileRef {
+  id?: string;
   name?: string;
   title?: string;
   permalink?: string;
@@ -65,6 +66,9 @@ export interface Progress {
   channel?: { id: string; name: string };
   linked?: boolean;
   copyTs?: string;
+  copyClientMsgId?: string;
+  /** Files shared to the copy that still need detaching from the source message. */
+  filesToDetach?: string[];
   adopted?: boolean;
 }
 
@@ -100,7 +104,8 @@ export interface IntakeDeps {
  * 2. Creates its private channel `leon-<n>-<first words>` as Leon, so he is in it already.
  * 3. Posts a copy in the new channel and hands the channel to slack22linear in parallel.
  *    The copy carries slack-as-leon's marker, so Hermes handles it through its plugin.
- * 4. Once the copy is saved, replaces the original message with the channel link.
+ * 4. Once the copy is saved, replaces the original message with the channel link and detaches
+ *    the files from the original.
  *
  * Each step is recorded, so a retry carries on where the last try stopped.
  */
@@ -174,14 +179,39 @@ export class Intake {
     const where = escapeSlack(msg.where);
     const lead = `From Leon's ${reply ? "reply" : "message"} in ${permalink ? `<${permalink}|${where}>` : where}.`;
     const copyAndLink = async () => {
-      if (!p.copyTs) {
-        p.copyTs = await this.#copy(msg, channel.id);
+      if (msg.files?.length && !p.filesToDetach) {
+        const fileIds = await this.#fileIds(msg);
+        if (p.copyTs) {
+          // An intake started before file sharing was added may have a copy with file links.
+          await this.#attachToCopy(channel.id, p.copyTs, fileIds);
+        } else {
+          if (!p.copyClientMsgId) {
+            p.copyClientMsgId = newClientMsgId();
+            await save();
+          }
+          p.copyTs = await this.#copy(msg, channel.id, fileIds, p.copyClientMsgId);
+        }
+        p.filesToDetach = fileIds;
+        mark("copy");
+        await save();
+      } else if (!p.copyTs) {
+        p.copyTs = await this.#copy(msg, channel.id, [], newClientMsgId());
         mark("copy");
         await save();
       }
       if (!p.linked) {
         p.linked = await this.#link(msg, channel.id);
         mark("linked");
+        if (p.linked && p.filesToDetach?.length) await save();
+      }
+      if (p.linked && p.filesToDetach?.length) {
+        const pending = p.filesToDetach;
+        for (const [index, file] of pending.entries()) {
+          await this.#detach(msg, file);
+          p.filesToDetach = pending.slice(index + 1);
+          await save();
+        }
+        mark("filesDetached");
       }
     };
     const steps = await Promise.allSettled([
@@ -337,38 +367,101 @@ export class Intake {
     }
   }
 
-  /** Posts Leon's message again in the channel as him, formatting and file links included. */
-  async #copy(msg: IntakeMessage, channelId: string): Promise<string> {
-    const files = (msg.files ?? []).filter((f) => f.permalink);
-    const fileLines = files.map(
-      (f) => `📎 <${f.permalink}|${escapeSlack(f.title || f.name || "file")}>`,
-    );
-    const text = [msg.text, ...fileLines].filter(Boolean).join("\n") || "(no text)";
+  async #slackMessage(channel: string, ts: string, threadTs?: string | null) {
+    const exact = { channel, oldest: ts, latest: ts, inclusive: true };
+    const response =
+      threadTs && threadTs !== ts
+        ? await this.#d.session("conversations.replies", { ...exact, ts: threadTs, limit: 5 })
+        : await this.#d.session("conversations.history", { ...exact, limit: 1 });
+    return (response.messages as SlackMessageCopy[] | undefined)?.find((m) => m.ts === ts);
+  }
+
+  async #fileIds(msg: IntakeMessage): Promise<string[]> {
+    let files = msg.files ?? [];
+    // Older Hermes plugins send file names and links without IDs.
+    if (files.some((file) => !file.id)) {
+      const source = await this.#slackMessage(msg.channel, msg.ts, msg.threadTs);
+      files = source?.files ?? [];
+    }
+    const ids = files.map((file) => file.id);
+    if (
+      !ids.length ||
+      !ids.every((id): id is string => typeof id === "string" && /^F[A-Z0-9]+$/.test(id))
+    )
+      throw new Error("Could not resolve the Slack message's attached file IDs");
+    return [...new Set(ids)];
+  }
+
+  async #attachToCopy(channel: string, ts: string, fileIds: string[]): Promise<void> {
+    const copy = await this.#slackMessage(channel, ts);
+    if (!copy) throw new Error("Could not find the Slack copy to attach files");
+    const currentIds = (copy.files ?? []).flatMap((file) => (file.id ? [file.id] : []));
+    if (fileIds.every((id) => currentIds.includes(id))) return;
+    const edited = await this.#d.session("chat.update", {
+      channel,
+      ts,
+      text: copy.text || "(no text)",
+      blocks: copy.blocks?.length ? JSON.stringify(copy.blocks) : undefined,
+      file_ids: JSON.stringify([...new Set([...currentIds, ...fileIds])]),
+    });
+    const attached = (edited.message as SlackMessageCopy | undefined)?.files;
+    if (!fileIds.every((id) => attached?.some((file) => file.id === id)))
+      throw new Error("Slack did not confirm the files on the existing copy");
+  }
+
+  /** Removes this message's reference to the file, preserving the file and its other shares. */
+  async #detach(msg: IntakeMessage, file: string): Promise<void> {
+    try {
+      await this.#d.session("chat.removeFile", { channel: msg.channel, ts: msg.ts, file });
+    } catch (error) {
+      // A previous attempt may have detached it before we could save progress.
+      if (!(error instanceof SlackError)) throw error;
+      const source = await this.#slackMessage(msg.channel, msg.ts, msg.threadTs);
+      if (source?.files?.some((attached) => attached.id === file)) throw error;
+    }
+  }
+
+  /** Posts as Leon with the same formatting and native Slack files. */
+  async #copy(
+    msg: IntakeMessage,
+    channelId: string,
+    fileIds: string[],
+    clientMsgId: string,
+  ): Promise<string> {
+    const method = fileIds.length ? "files.share" : "chat.postMessage";
     const post = (blocks?: unknown[]) =>
-      this.#d.session("chat.postMessage", {
+      this.#d.session(method, {
         channel: channelId,
-        text,
-        client_msg_id: newClientMsgId(),
-        ...(blocks ? { blocks: JSON.stringify(blocks) } : {}),
+        client_msg_id: clientMsgId,
+        ...(fileIds.length
+          ? {
+              files: fileIds.join(","),
+              resharing_aware: true,
+              comment: blocks ? undefined : msg.text || undefined,
+            }
+          : { text: msg.text || "(no text)" }),
+        blocks: blocks ? JSON.stringify(blocks) : undefined,
       });
     let posted;
     if (msg.blocks?.length) {
-      const links = files.flatMap((f, i) => [
-        ...(i ? [{ type: "text", text: "\n" }] : []),
-        { type: "text", text: "📎 " },
-        { type: "link", url: f.permalink!, text: f.title || f.name || "file" },
-      ]);
       try {
-        posted = await post([...msg.blocks, ...(links.length ? [richText(links)] : [])]);
+        posted = await post(msg.blocks);
       } catch (error) {
         if (!(error instanceof SlackError) || error.code !== "invalid_blocks") throw error;
         posted = await post();
       }
     } else posted = await post();
-    if (typeof posted.ts !== "string" || !posted.ts)
-      throw new Error("Slack chat.postMessage returned no timestamp");
-    return posted.ts;
+    const ts = posted.file_msg_ts ?? posted.ts;
+    if (typeof ts !== "string" || !ts) throw new Error(`Slack ${method} returned no timestamp`);
+    return ts;
   }
+}
+
+interface SlackMessageCopy {
+  ts: string;
+  text?: string;
+  blocks?: unknown[];
+  files?: SlackFileRef[];
 }
 
 const richText = (elements: unknown[]) => ({

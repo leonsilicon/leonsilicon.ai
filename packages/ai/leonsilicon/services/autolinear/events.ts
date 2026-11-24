@@ -87,6 +87,7 @@ export async function messageFromEvent(
     ...(event.files?.length
       ? {
           files: event.files.map((f) => ({
+            ...(typeof f.id === "string" ? { id: f.id } : {}),
             name: typeof f.name === "string" ? f.name : "",
             title: typeof f.title === "string" ? f.title : "",
             permalink: typeof f.permalink === "string" ? f.permalink : "",

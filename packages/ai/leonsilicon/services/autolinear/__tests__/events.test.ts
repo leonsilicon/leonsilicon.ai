@@ -56,7 +56,13 @@ test("Leon's message in his DM with Hermes, or in a public channel, starts at on
       thread_ts: "1793999999.000001",
       subtype: "file_share",
       files: [
-        { name: "a.png", title: "receipt.png", permalink: "https://files/F1", url_private: "x" },
+        {
+          id: "F1",
+          name: "a.png",
+          title: "receipt.png",
+          permalink: "https://files/F1",
+          url_private: "x",
+        },
       ],
     }),
     config,
@@ -65,7 +71,7 @@ test("Leon's message in his DM with Hermes, or in a public channel, starts at on
   assert.equal(reply?.where, "a thread in #general");
   assert.equal(reply?.threadTs, "1793999999.000001");
   assert.deepEqual(reply?.files, [
-    { name: "a.png", title: "receipt.png", permalink: "https://files/F1" },
+    { id: "F1", name: "a.png", title: "receipt.png", permalink: "https://files/F1" },
   ]);
 });
 
