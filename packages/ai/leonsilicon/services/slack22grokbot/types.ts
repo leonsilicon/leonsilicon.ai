@@ -62,7 +62,7 @@ export interface QueuedItem {
   text: string;
   at: string;
   /** The task's Slack thread; the block for it is added when the queue goes out. */
-  thread?: { channel: string; threadTs: string };
+  thread: { channel: string; threadTs: string };
   /** For the thread's task bot itself: a follow-up note instead of the "make a task bot" block. */
   followUp?: boolean;
 }

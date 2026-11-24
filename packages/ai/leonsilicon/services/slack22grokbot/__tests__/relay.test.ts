@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { HOURLY_BUDGET } from "#policy";
-import { createGrokRelay } from "#relay";
+import { createGrokDelegation, type GrokDelegationOptions } from "#relay";
 import { callTool } from "#tools";
 import type { GrokBackend, GrokLive, GrokMessage } from "#types";
 
@@ -13,9 +13,15 @@ import type { GrokBackend, GrokLive, GrokMessage } from "#types";
 const THREAD = { slack_channel: "C0TASKS001", slack_thread_ts: "1795280000.123456" };
 const BLOCK = handoffBlock({ channel: "C0TASKS001", threadTs: "1795280000.123456" });
 
+const bridge: NonNullable<GrokDelegationOptions["bridge"]> = {
+  validate: async (thread) => thread,
+  retired: () => false,
+  complete: async () => ({ ok: true }),
+};
+
 /** The relay against a fake Beeper: offline, sends nothing real. */
-function setup() {
-  const stateDir = join(mkdtempSync(join(tmpdir(), "grok-relay-test-")), "state");
+function setup(configured: GrokDelegationOptions["bridge"] | null = bridge) {
+  const stateDir = join(mkdtempSync(join(tmpdir(), "slack22grokbot-test-")), "state");
   let key = 1000;
   let id = 1;
   const chats: Record<string, { title: string; messages: GrokMessage[] }> = {
@@ -63,12 +69,13 @@ function setup() {
   };
   const logs: Array<Record<string, unknown>> = [];
   const open = () =>
-    createGrokRelay({
+    createGrokDelegation({
       stateDir,
       backend,
       log: (entry) => logs.push(entry),
       flush: false,
       pollMs: 5,
+      bridge: configured ?? undefined,
     });
   return { stateDir, relay: open(), open, chats, add, posted, logs, calls };
 }
@@ -90,42 +97,14 @@ test("idle bot: sends directly and counts against the budget", async () => {
   assert.match(String(posted[0]?.key), /^send-[0-9a-f-]{36}$/);
 });
 
-test("queued requests without a thread stay available for readback and never go out", async () => {
-  const { stateDir, open, posted } = setup();
-  const at = new Date(Date.now() - 3_600_000).toISOString();
-  const legacy = { text: "old request", at };
-  mkdirSync(stateDir, { recursive: true });
-  writeFileSync(
-    join(stateDir, "outbox.json"),
-    JSON.stringify({
-      "c-task": {
-        bot: "Task Bot",
-        items: [
-          legacy,
-          {
-            text: "threaded request",
-            at,
-            thread: { channel: THREAD.slack_channel, threadTs: THREAD.slack_thread_ts },
-          },
-        ],
-      },
-    }),
+test("a missing Slack bridge leaves read tools available and refuses handoffs", async () => {
+  const { relay, posted } = setup(null);
+  assert.ok((await relay.bots()).some((bot) => bot.name === "Task Bot"));
+  await assert.rejects(
+    relay.send({ ...THREAD, bot: "Task Bot", text: "do it", wait_seconds: 0 }),
+    /slack22grokbot is unavailable/,
   );
-  const relay = open();
-  await relay.flushOnce();
-  assert.equal(posted.length, 1);
-  assert.match(posted[0]!.text, /threaded request[\s\S]*Slack thread for this task/);
-  assert.doesNotMatch(posted[0]!.text, /old request/);
-  const queued = (await relay.read({ bot: "Task Bot" })).queued as {
-    preview: string;
-    needsSlackThread?: boolean;
-  }[];
-  assert.deepEqual(
-    queued.map(({ preview, needsSlackThread }) => ({ preview, needsSlackThread })),
-    [{ preview: legacy.text, needsSlackThread: true }],
-  );
-  await relay.flushOnce();
-  assert.equal(posted.length, 1);
+  assert.equal(posted.length, 0);
 });
 
 test("busy bot: queued, merged into one message on flush once idle", async () => {
@@ -232,7 +211,7 @@ test("budget: refused at the limit with ask-Leon text; Leon's quote extends it",
   );
   const refused = await callTool(relay, "grok_bot_send", { bot: "Task Bot", text: "one more" });
   assert.equal(refused.ok, false);
-  assert.equal((refused.error as { code: string }).code, "grok_relay_error");
+  assert.equal((refused.error as { code: string }).code, "slack22grokbot_error");
   const result = await relay.send({
     ...THREAD,
     bot: "Task Bot",
@@ -267,7 +246,7 @@ test("waits for the reply and returns it as it finally reads", async () => {
   assert.equal((result.sent as { sentAs: string }).sentAs, "Leon");
 });
 
-test("read: tells Hermes's messages from Leon's, pages by cursor, drops a pre-move cursor", async () => {
+test("read: tells Hermes's messages from Leon's and pages by cursor", async () => {
   const { relay, add } = setup();
   add("c-task", true, "typed by Leon himself", 400_000);
   add("c-task", false, "An answer to Leon.", 390_000);
@@ -284,10 +263,7 @@ test("read: tells Hermes's messages from Leon's, pages by cursor, drops a pre-mo
     (later.messages as Array<{ text: string }>).map((line) => line.text),
     ["An answer to Hermes."],
   );
-  // Beeper Desktop's cursors were plain numbers.
-  const stale = await relay.read({ bot: "Task Bot", after: "26965" });
-  assert.equal((stale.messages as unknown[]).length, 4);
-  assert.match(String(stale.cursorNote), /can't be used any more/);
+  await assert.rejects(relay.read({ bot: "Task Bot", after: "26965" }), /after must be a cursor/);
 });
 
 test("an unknown bot refreshes the list once, then names the ones there are", async () => {
@@ -303,7 +279,7 @@ test("an unknown bot refreshes the list once, then names the ones there are", as
 
 /** The relay with a journal: a fake one that hands out positions and wakes waiters like the real one. */
 function setupLive({ coveredMinutes = 60 }: { coveredMinutes?: number } = {}) {
-  const stateDir = join(mkdtempSync(join(tmpdir(), "grok-relay-live-")), "state");
+  const stateDir = join(mkdtempSync(join(tmpdir(), "slack22grokbot-live-")), "state");
   const chatID = "!task:beeper.local";
   const rows: Array<{ rev: number; message: GrokMessage }> = [];
   let head = 0;
@@ -358,12 +334,13 @@ function setupLive({ coveredMinutes = 60 }: { coveredMinutes?: number } = {}) {
       return { id: arrive(true, text).id };
     },
   };
-  const relay = createGrokRelay({
+  const relay = createGrokDelegation({
     stateDir,
     backend,
     log: () => undefined,
     flush: false,
     quietMs: 60,
+    bridge,
   });
   return { relay, arrive, calls, posted };
 }
@@ -466,11 +443,14 @@ test("a journal younger than the busy window isn't trusted yet", async () => {
 });
 
 test("one task bot per Slack thread: a task for a thread that has one goes to it", async () => {
-  const { relay, chats, posted } = setup();
-  // The thread's task bot, made earlier with the channel written as a name.
-  chats["c-thread"] = { title: "Task slack:#leon-42-fix/1795280000.123456", messages: [] };
+  const { relay, chats, posted } = setup({
+    ...bridge,
+    validate: async (thread) => ({ ...thread, channel: THREAD.slack_channel }),
+  });
+  chats["c-thread"] = { title: "Task slack:C0TASKS001/1795280000.123456", messages: [] };
   const result = await relay.send({
     ...THREAD,
+    slack_channel: "#leon-42-fix",
     bot: "Task Bot",
     text: "one more thing",
     wait_seconds: 0,
@@ -481,7 +461,7 @@ test("one task bot per Slack thread: a task for a thread that has one goes to it
     posted[0]?.text,
     `one more thing\n\n${followUpBlock({ channel: "C0TASKS001", threadTs: "1795280000.123456" })}`,
   );
-  assert.equal(result.task_bot, "Task slack:#leon-42-fix/1795280000.123456");
+  assert.equal(result.task_bot, "Task slack:C0TASKS001/1795280000.123456");
   assert.equal(result.redirected_from, "Task Bot");
   // Another thread still gets a new task bot from the bot that was named.
   const other = await relay.send({

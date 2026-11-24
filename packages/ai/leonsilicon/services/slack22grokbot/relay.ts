@@ -1,13 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-  isTaskBotFor,
-  parseTaskBotName,
-  slackIdentifier,
-  slackThread,
-  taskBotName,
-} from "#handoff";
+import { parseTaskBotName, slackIdentifier, slackThread, taskName } from "#handoff";
 import type { Slack22GrokBot } from "#slack22grokbot";
 import {
   budgetExceededMessage,
@@ -27,18 +21,7 @@ import {
 } from "#policy";
 import type { BudgetState, GrokBackend, GrokBot, GrokMessage, QueuedItem, RelayLog } from "#types";
 
-/**
- * The Grok Bot relay (since 2026-11-06). Leon's Grok bots answer only Leon and ignore Hermes in Slack,
- * so Hermes messages them in their own chats, as Leon and with no label. Since v1.2.0 a message to a
- * bot that is still working is queued and goes out merged with the others when it finishes, and an
- * hourly budget sends Hermes to Leon. Only Grok Bot chats are reachable here.
- */
-
-/** Labels used before 2026-11-07, so older Hermes messages still read as Hermes's. */
-const OLD_LABELS = [
-  "[From Hermes, Leon's Slack agent, relayed through Leon's Beeper. Leon lets Hermes approve and confirm for him, except payments, purchases, transfers and password or security changes.]",
-  "[From Hermes, Leon's Slack agent, relayed through Leon's Beeper]",
-];
+/** Queues handoffs for busy Grok bots and applies Hermes's hourly send budget. */
 /** Message IDs remembered as Hermes's. */
 const KEEP_SENT = 2000;
 export const MAX_TEXT = 8000;
@@ -59,7 +42,7 @@ const QUEUED_NOTE =
 
 type Outbox = Record<string, { bot: string; items: QueuedItem[] }>;
 
-export interface GrokRelayOptions {
+export interface GrokDelegationOptions {
   /** Holds `hermes-sent.json`, `outbox.json` and `budget.json`; one process at a time. */
   stateDir: string;
   backend: GrokBackend;
@@ -83,7 +66,7 @@ export interface ShapedMessage {
   type?: string;
 }
 
-export interface GrokRelay {
+export interface GrokDelegation {
   bots(): Promise<Array<GrokBot & { queued?: number }>>;
   send(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   read(args: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -110,7 +93,7 @@ function writeJSON(file: string, value: unknown): void {
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const given = (value: unknown): boolean => value !== undefined && value !== null && value !== "";
 
-export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
+export function createGrokDelegation(options: GrokDelegationOptions): GrokDelegation {
   const { backend, log, bridge } = options;
   const { live } = backend;
   const pollMs = options.pollMs ?? POLL_MS;
@@ -132,6 +115,10 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
 
   // Messages waiting for a busy bot, sent merged by the flusher.
   const outbox = readJSON<Outbox>(outboxFile, {});
+  for (const [chatID, box] of Object.entries(outbox)) {
+    box.items = box.items.filter((item) => item.thread?.channel && item.thread.threadTs);
+    if (!box.items.length) delete outbox[chatID];
+  }
   const saveOutbox = (): void => writeJSON(outboxFile, outbox);
   let budget: BudgetState = pruneBudget(readJSON<Partial<BudgetState>>(budgetFile, {}));
   const saveBudget = (): void => writeJSON(budgetFile, budget);
@@ -200,14 +187,10 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   }
 
   function shape(message: GrokMessage, botName: string): ShapedMessage {
-    const label = message.isSender
-      ? OLD_LABELS.find((old) => message.text.startsWith(old))
-      : undefined;
-    const byHermes =
-      message.isSender && (label !== undefined || sentIDs.has(`${message.chatID} ${message.id}`));
+    const byHermes = message.isSender && sentIDs.has(`${message.chatID} ${message.id}`);
     return {
       from: !message.isSender ? botName : byHermes ? "Hermes (as Leon)" : "Leon",
-      text: label ? message.text.slice(label.length).trim() : message.text,
+      text: message.text,
       timestamp: message.timestamp,
       sortKey: message.sortKey,
       ...(message.type ? { type: message.type } : {}),
@@ -231,11 +214,10 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   function queued(
     chatID: string,
     now: number = Date.now(),
-  ): Array<{ preview: string; ageSeconds: number; needsSlackThread?: true }> {
+  ): Array<{ preview: string; ageSeconds: number }> {
     return (outbox[chatID]?.items ?? []).map((item) => ({
       preview: item.text.slice(0, 160),
       ageSeconds: Math.round((now - Date.parse(item.at)) / 1000),
-      ...(!item.thread ? { needsSlackThread: true } : {}),
     }));
   }
 
@@ -250,29 +232,15 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     // Every task carries its Slack thread, and the bot makes a task bot that works there with
     // Hermes; the instructions for that go after Hermes's own text (see handoff.ts).
     const requested = slackThread(args.slack_channel, args.slack_thread_ts);
-    const thread = bridge ? await bridge.validate(requested) : requested;
+    if (!bridge) throw new Error("slack22grokbot is unavailable on this Beeper inbox");
+    const thread = await bridge.validate(requested);
 
     const asked = await resolve(args.bot);
     const why = guardBot(asked.name, args.needs_bot_because);
     if (why) log({ event: "grok_bot_justified", bot: asked.name, reason: why.slice(0, 300) });
     // The complete Slack route is the identity, including the channel.
     const all = await bots();
-    let existing = all.find((bot) => isTaskBotFor(bot.name, thread));
-    if (!existing) {
-      for (const bot of all) {
-        const named = parseTaskBotName(bot.name);
-        if (named?.threadTs !== thread.threadTs) continue;
-        if (
-          !bridge ||
-          isTaskBotFor(bot.name, requested) ||
-          (named.channel.startsWith("#") &&
-            (await bridge.validate(named).catch(() => undefined))?.channel === thread.channel)
-        ) {
-          existing = bot;
-          break;
-        }
-      }
-    }
+    const existing = all.find((bot) => bot.name === taskName(thread));
     if (!existing && parseTaskBotName(asked.name))
       throw new Error("This Grok task bot belongs to a different Slack thread");
     const target = existing ?? asked;
@@ -286,7 +254,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     };
     const handoff = {
       slack_identifier: slackIdentifier(thread),
-      task_bot: existing?.name ?? taskBotName(thread),
+      task_bot: existing?.name ?? taskName(thread),
       ...(existing && existing.chatID !== asked.chatID ? { redirected_from: asked.name } : {}),
     };
 
@@ -315,7 +283,7 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
 
     const { list: before, windowed } = await recent(target.chatID);
     const baseline = before.at(-1)?.sortKey ?? null;
-    const pending = outbox[target.chatID]?.items.filter((item) => item.thread).length ?? 0;
+    const pending = outbox[target.chatID]?.items.length ?? 0;
     const state = busy(before, Date.now(), { windowed });
     if (!isUrgent && (state.busy || pending)) {
       const box = (outbox[target.chatID] ??= { bot: target.name, items: [] });
@@ -346,14 +314,9 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     // Taken before the send, so nothing that arrives while it is on its way is missed.
     const position = live ? await live.cursor() : 0;
     const sentAt = Date.now();
-    const messageID = await post(
-      target.chatID,
-      compose([item], Boolean(bridge)),
-      `send-${randomUUID()}`,
-      {
-        urgent: isUrgent,
-      },
-    );
+    const messageID = await post(target.chatID, compose([item]), `send-${randomUUID()}`, {
+      urgent: isUrgent,
+    });
     log({
       event: "grok_send",
       bot: target.name,
@@ -416,42 +379,35 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
     const target = await resolve(args.bot);
     const limit = args.limit === undefined ? 10 : Number(args.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 30) throw new Error("limit must be 1-30");
-    // Cursors from before 2026-11-20, when the relay read Beeper Desktop, were plain numbers.
-    const stale = given(args.after) && /^\d+$/.test(String(args.after));
-    const after = given(args.after) && !stale ? String(args.after) : null;
+    const after = args.after ?? undefined;
+    if (after !== undefined && (typeof after !== "string" || !/^\d{13,}:.+$/.test(after)))
+      throw new Error("after must be a cursor returned by grok_bot_send or grok_bot_read");
     // From the journal when it holds what is asked for: everything since the cursor's time, or as
     // many of the latest messages as wanted. Otherwise one page of history.
     let list: GrokMessage[] | null = null;
     if (live) {
-      const from = after === null ? Number.NaN : Number.parseInt(after, 10);
+      const from = after === undefined ? Number.NaN : Number.parseInt(after, 10);
       if (Number.isFinite(from) && from >= (await live.coveredSince()))
         list = ordered(await live.since(target.chatID, from));
-      else if (after === null) {
+      else if (after === undefined) {
         const held = ordered(await live.latest(target.chatID, limit));
         if (held.length >= limit) list = held;
       }
     }
     list ??= await messages(target.chatID, limit);
-    if (after !== null) list = list.filter((message) => compareKeys(message.sortKey, after) > 0);
+    if (after !== undefined)
+      list = list.filter((message) => compareKeys(message.sortKey, after) > 0);
     const shown = list.slice(-limit).map((message) => shape(message, target.name));
     const waiting = queued(target.chatID);
     return {
       ok: true,
       bot: target.name,
       messages: shown,
-      cursor: shown.at(-1)?.sortKey ?? after,
-      ...(stale
-        ? {
-            cursorNote:
-              "That cursor is from before the relay moved off Beeper Desktop and can't be used any more; these are the latest messages instead.",
-          }
-        : {}),
+      cursor: shown.at(-1)?.sortKey ?? after ?? null,
       ...(waiting.length
         ? {
             queued: waiting,
-            queuedNote: waiting.some((item) => item.needsSlackThread)
-              ? "Items marked needsSlackThread were queued before Slack handoffs. They require a new grok_bot_send call with the correct Slack thread. Other items go out when the bot finishes."
-              : "Not sent yet: these go out merged as one message when the bot finishes.",
+            queuedNote: "Queued messages go out together when the bot finishes.",
           }
         : {}),
     };
@@ -461,25 +417,22 @@ export function createGrokRelay(options: GrokRelayOptions): GrokRelay {
   // send them as one.
   let flushing = false;
   async function flushOnce(now: () => number = () => Date.now()): Promise<void> {
-    if (flushing) return;
+    if (!bridge || flushing) return;
     flushing = true;
     try {
       for (const [chatID, box] of Object.entries(outbox)) {
-        if (!box.items.length || bridge?.retired(chatID)) {
+        const [first] = box.items;
+        if (!first || bridge.retired(chatID)) {
           delete outbox[chatID];
           saveOutbox();
           continue;
         }
-        // Preserve legacy requests for readback, but only deliver requests with a Slack handoff.
-        const threaded = box.items.filter((item) => item.thread);
-        const first = threaded[0];
-        if (!first) continue;
         try {
           const { list, windowed } = await recent(chatID, now());
           const state = busy(list, now(), { windowed });
           if (state.busy && now() - Date.parse(first.at) < MAX_QUEUE_AGE_MS) continue;
-          const batch = takeBatch(threaded, MAX_TEXT, Boolean(bridge));
-          const text = compose(batch, Boolean(bridge));
+          const batch = takeBatch(box.items, MAX_TEXT);
+          const text = compose(batch);
           // The same batch always has the same key, so a flush retried after a lost answer can't
           // post it twice.
           const key = `flush-${createHash("sha256")

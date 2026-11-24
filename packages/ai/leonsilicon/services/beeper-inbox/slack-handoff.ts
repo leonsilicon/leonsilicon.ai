@@ -2,7 +2,7 @@
  * Every task Hermes hands another agent carries the Slack thread Hermes is working in (Leon's
  * design, 2026-11-21). The agent starts a worker for the task whose name holds that thread,
  * `Task slack:<channel>/<thread_ts>`, and the worker talks to Hermes there through slack-puppet. The
- * Grok relay does this for Grok bots; `send_message` does it for Silicon Dot's chats, whose workers
+ * slack22grokbot does this for Grok bots; `send_message` does it for Silicon Dot's chats, whose workers
  * are Codex sessions. The instructions are appended here, so they are the same every time.
  */
 

@@ -29,12 +29,6 @@ export default defineConfig({
         files: ["**/__tests__/**"],
         rules: { "typescript/no-floating-promises": "off" },
       },
-      {
-        // Byte-identical copy of the Grok relay deployed on the mini (plain .mjs, not a workspace
-        // package), kept so the source lives here; see its README.
-        files: [`${ai}/configs/grok-relay-hermes/**`],
-        rules: { "flatcap/flat-package-files": "off", "flatcap/no-relative-imports": "off" },
-      },
     ],
   },
   fmt: {
@@ -45,8 +39,6 @@ export default defineConfig({
       "**/python_modules/**",
       "**/.venv-workers/**",
       "**/pylock.toml",
-      // Byte-identical copy of what runs on the mini; reformatting would hide drift.
-      `${ai}/configs/grok-relay-hermes/*.mjs`,
     ],
   },
   run: {
@@ -72,10 +64,10 @@ export default defineConfig({
             "dailylinear",
             "gmail2slack",
             "grok-bot-roster",
-            "grok-relay",
             "orca-bridge",
             "orcahermes-device",
             "slack-as-leon",
+            "slack22grokbot",
             "slack22linear",
           ].map((service) => `${ai}/services/${service}/__tests__/*.test.ts`),
         ].join(" "),

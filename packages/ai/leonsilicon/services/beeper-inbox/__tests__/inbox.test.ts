@@ -938,7 +938,7 @@ test("the Codex handoff names the session after the thread and tells it how to r
   assert.throws(() => slackThread("general", "1795280000.123456"), /channel ID/);
 });
 
-test("only the in-process Grok relay can send, using either extension name", async () => {
+test("only the slack22grokbot extension can send to Grok rooms", async () => {
   const { env, paths, server, pickle } = setup();
   const daemon = await startDaemon({
     env,
@@ -949,10 +949,9 @@ test("only the in-process Grok relay can send, using either extension name", asy
     extensions: [
       {
         name: "slack22grokbot",
-        legacyName: "grok-relay",
         server: { name: "test-relay", version: "1", instructions: "", tools: [] },
         start: (context) => {
-          assert.equal(context.home, join(paths.home, "grok-relay"));
+          assert.equal(context.home, join(paths.home, "slack22grokbot"));
           return { callTool: (_name, args) => context.tool("send_message", args) };
         },
       },
@@ -966,8 +965,8 @@ test("only the in-process Grok relay can send, using either extension name", asy
     const args = { room_id: GROK_ROOM, text: "run the lookup" };
     await assert.rejects(tool(paths.socket, "send_message", args), /must use grok_bot_send/);
     await assert.rejects(
-      tool(paths.socket, "send_message", { ...args, fromGrokRelay: true }),
-      /unknown argument.*fromGrokRelay/,
+      tool(paths.socket, "send_message", { ...args, fromSlack22GrokBot: true }),
+      /unknown argument.*fromSlack22GrokBot/,
     );
     const file = join(paths.downloads, "task.txt");
     writeFileSync(file, "run the lookup");
@@ -977,15 +976,13 @@ test("only the in-process Grok relay can send, using either extension name", asy
     );
     assert.equal(server.sendPuts.length, 0);
 
-    for (const extension of ["slack22grokbot", "grok-relay"]) {
-      const sent = (await callIpc(paths.socket, "extension", {
-        extension,
-        name: "test_send",
-        arguments: { ...args, text: `${args.text} via ${extension}` },
-      })) as Record<string, unknown>;
-      assert.equal(sent.status, "sent");
-    }
-    assert.equal(server.sendPuts.length, 2);
+    const sent = (await callIpc(paths.socket, "extension", {
+      extension: "slack22grokbot",
+      name: "test_send",
+      arguments: args,
+    })) as Record<string, unknown>;
+    assert.equal(sent.status, "sent");
+    assert.equal(server.sendPuts.length, 1);
     const status = (await callIpc(paths.socket, "status")) as { extensions: object };
     assert.deepEqual(status.extensions, { slack22grokbot: { running: true } });
   } finally {

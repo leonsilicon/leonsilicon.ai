@@ -24,9 +24,9 @@ Not implemented: starting conversations with new contacts, edits and deletions, 
 
 ## Agent tasks (2026-11-21)
 
-Use [`grok_bot_send`](../grok-relay/README.md#slack-handoff-slack22grokbot) with a Slack channel and thread to delegate or resume work in Grok Bot. The inbox refuses direct text and file sends to Grok rooms and lets the in-process relay deliver the handoff. The task bot communicates with Hermes in the Slack thread through Slack Puppet.
+Use [`grok_bot_send`](../slack22grokbot/README.md#slack-handoff) with a Slack channel and thread to delegate or resume work in Grok Bot. The inbox refuses direct text and file sends to Grok rooms and lets the in-process relay deliver the handoff. The task bot communicates with Hermes in the Slack thread through Slack Puppet.
 
-Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task, so `send_message` there requires `slack_channel` and `slack_thread_ts`, the Slack thread Hermes works in, and refuses the send without them (`slack-handoff.ts`). It appends Leon's standing rule in his voice: start a Codex session titled `Task slack:<channel>/<thread_ts>`, one per Slack thread (a session whose title ends in that ts gets the message instead), reply with its link, and have it work with Hermes in that thread with slack-puppet's agent tools. The result carries `slack_identifier` and `codex_session_title`. Elsewhere the two fields are refused. The thread check is shared with the [Grok relay](../grok-relay/README.md#slack-handoff-slack22grokbot). Codex gets the tools from [`configs/silicon-dot/hermes-thread`](../../configs/silicon-dot/hermes-thread/README.md) on Leon's MacBook.
+Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task, so `send_message` there requires `slack_channel` and `slack_thread_ts`, the Slack thread Hermes works in, and refuses the send without them (`slack-handoff.ts`). It appends Leon's standing rule in his voice: start a Codex session titled `Task slack:<channel>/<thread_ts>`, one per Slack thread (a session whose title ends in that ts gets the message instead), reply with its link, and have it work with Hermes in that thread with slack-puppet's agent tools. The result carries `slack_identifier` and `codex_session_title`. Elsewhere the two fields are refused. The thread check is shared with the [slack22grokbot](../slack22grokbot/README.md#slack-handoff). Codex gets the tools from [`configs/silicon-dot/hermes-thread`](../../configs/silicon-dot/hermes-thread/README.md) on Leon's MacBook.
 
 ## How it works
 
@@ -38,7 +38,7 @@ Hermes ─stdio MCP─▶ beeper-inbox.mjs mcp ─unix socket─▶ beeper-inbox
 - **Library.** [Pickle](https://github.com/beeper/pickle) (`@beeper/pickle`, mautrix-go and goolm compiled to WebAssembly) with its SQLite state adapter, built from the pinned revision in [`apps/beeper-inbox/@assets/pickle.json`](../../../../../apps/beeper-inbox/@assets/pickle.json). It isn't on npm, so it is vendored, and loaded at run time by `pickle.ts`; `types.ts` describes the slice used.
 - **One writer.** Pickle requires exactly one writer per device store. The daemon is the only process that opens `pickle.db` and `inbox.db`, and only while it holds `state/owner.lock`: an open SQLite `BEGIN EXCLUSIVE` transaction, which the kernel releases when the process dies by any cause, so there is no stale lock to clear. A second daemon exits with code 75. Both databases are also opened with `locking_mode=EXCLUSIVE`.
 - **Thin adapters.** Hermes may start the MCP server in several processes (the gateway, cron runs, dashboard chats). Each is a stateless client of the daemon's socket. The first call, or the adapter's start, launches the daemon detached (`setsid`), outside the process group Hermes kills when an MCP server exits; every adapter checks on it once a minute.
-- **Extensions** (`extension.ts`). The daemon can serve a second set of tools from the same process, each with its own MCP server (`beeper-inbox.mjs mcp <name>`) and its own directory under the home. An extension reaches Beeper only through the tools above and what the daemon hands it: the journal, room details (name, network, connection, whether Leon muted the room) and sender names. The [Grok relay](../grok-relay/README.md) runs as the `slack22grokbot` extension, with status under `extensions.slack22grokbot`.
+- **Extensions** (`extension.ts`). The daemon can serve a second set of tools from the same process, each with its own MCP server (`beeper-inbox.mjs mcp <name>`) and its own directory under the home. An extension reaches Beeper only through the tools above and what the daemon hands it: the journal, room details (name, network, connection, whether Leon muted the room) and sender names. The [slack22grokbot extension](../slack22grokbot/README.md) reports its status under `extensions.slack22grokbot`.
 - **Background sync** keeps to-device room keys, device lists and the directory current. It never creates Hermes tasks or contacts anyone.
 - **Pickle's `fetch`** goes through `matrix-fetch.ts`, which adds what Pickle doesn't expose:
   - Send retries in Pickle get fresh transaction IDs, so a lost response could post twice. The wrapper pins each send to one transaction ID derived from its idempotency key, and the homeserver deduplicates by it.
@@ -58,7 +58,7 @@ Measured on Hermes Cloud, 2026-11-21, in a Grok bot's chat: a page of 10 message
 
 - A page slower than 3 s is logged as `slow read`, with its requests by kind and its store writes by key (`store-trace.ts`).
 - Reads run one at a time. Pages of 30 and 100 events asked for at once kept the Matrix core busy for over 20 s, and the daemon's health check restarted it (twice on 2026-11-21, back in 5 s on the same device).
-- So anything that needs new messages often, such as the Grok relay waiting for a reply or a feed of every chat, takes them from the journal below, not by reading history again and again.
+- So anything that needs new messages often, such as slack22grokbot waiting for a reply or a feed of every chat, takes them from the journal below, not by reading history again and again.
 
 ## The journal
 
@@ -72,7 +72,7 @@ Sync already hands the daemon every new message, decrypted. Since 2026-11-21 it 
 - **It holds message text**, unlike the rest of `inbox.db`, for 7 days at most (100,000 messages at most), in the owner-only state directory beside the keys that decrypt everything anyway.
 - **Who reads it.** Extensions, through `ExtensionContext.journal`. It isn't one of Hermes's tools: what is put in front of Hermes stays the feed's decision. `beeper-inbox.mjs journal` shows an operator the latest entries without their text.
 
-Measured on Hermes Cloud, 2026-11-21: a message was in the journal 0.2 to 0.9 s after it was sent, and the Grok relay's read of a chat took 0.15 s from the journal against 1.1 s for four messages of history.
+Measured on Hermes Cloud, 2026-11-21: a message was in the journal 0.2 to 0.9 s after it was sent, and slack22grokbot's read of a chat took 0.15 s from the journal against 1.1 s for four messages of history.
 
 ## State and secrets
 

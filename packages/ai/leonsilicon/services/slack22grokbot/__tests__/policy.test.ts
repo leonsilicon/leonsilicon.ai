@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { handoffBlock } from "#handoff";
 import {
   budgetExceededMessage,
   budgetStatus,
@@ -25,7 +26,7 @@ let key = 100;
 const msg = (isSender: boolean, offsetMs: number, text = "x"): ChatLine => ({
   isSender,
   timestamp: new Date(T0 + offsetMs).toISOString(),
-  sortKey: String(key++),
+  sortKey: `${T0 + key++}:$event`,
   text,
 });
 
@@ -89,22 +90,22 @@ test("a real reply followed by Leon typing again makes it busy again", () => {
   assert.equal(busy(chat, T0 + s(330)).busy, true);
 });
 
-test("compose: one item unchanged, several numbered in order", () => {
-  assert.equal(compose(["just this"]), "just this");
+test("compose numbers queued messages and appends their handoff", () => {
+  const thread = { channel: "C0TASKS001", threadTs: "1795280000.123456" };
+  const items = [" a ", "b"].map((text) => ({ text, at: "", thread }));
+  assert.equal(compose(items.slice(0, 1)), `a\n\n${handoffBlock(thread)}`);
   assert.equal(
-    compose([
-      { text: " a ", at: "" },
-      { text: "b", at: "" },
-    ]),
-    "a few more things, in order:\n\n1. a\n\n2. b",
+    compose(items),
+    `a few more things, in order:\n\n1. a\n\n2. b\n\n${handoffBlock(thread)}`,
   );
   assert.equal(compose([]), "");
 });
 
 test("takeBatch keeps under the size limit but always takes one", () => {
-  const items = ["a".repeat(50), "b".repeat(50), "c".repeat(50)];
-  assert.equal(takeBatch(items, 1000).length, 3);
-  assert.equal(takeBatch(items, 150).length, 2);
+  const thread = { channel: "C0TASKS001", threadTs: "1795280000.123456" };
+  const items = ["a", "b", "c"].map((letter) => ({ text: letter.repeat(50), at: "", thread }));
+  assert.equal(takeBatch(items, compose(items).length).length, 3);
+  assert.equal(takeBatch(items, compose(items.slice(0, 2)).length).length, 2);
   assert.equal(takeBatch(items, 10).length, 1);
 });
 

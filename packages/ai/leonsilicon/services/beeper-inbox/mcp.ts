@@ -17,7 +17,7 @@ import { INSTRUCTIONS, TOOLS } from "#tools";
  * crypto store keeps a single writer. It also starts the daemon when Hermes starts, and checks on it
  * every minute, so background sync survives gateway restarts and machine restarts.
  *
- * With an `extension` it serves that extension's tools instead (`mcp_servers.grok` runs
+ * With an `extension` it serves that extension's tools instead (`mcp_servers.slack22grokbot` runs
  * `beeper-inbox.mjs mcp slack22grokbot`), through the same daemon.
  */
 export async function runMcpServer(
@@ -48,7 +48,7 @@ export async function runMcpServer(
         ? callIpc(paths.socket, "extension", { extension: extension.name, ...call }, 175_000)
         : callIpc(paths.socket, "tool", call, 175_000))) as Record<string, unknown>;
       return {
-        // An extension reports a refused call as `ok: false` (the Grok relay's budget, for example).
+        // An extension reports a refused call as `ok: false` (slack22grokbot's budget, for example).
         ...(result.ok === false ? { isError: true } : {}),
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 1) }],
         structuredContent: result,

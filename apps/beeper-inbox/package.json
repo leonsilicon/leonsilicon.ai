@@ -9,8 +9,8 @@
   "imports": {},
   "dependencies": {
     "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-    "@-/ai.leonsilicon.services.grok-relay": "workspace:*",
     "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
+    "@-/ai.leonsilicon.services.slack22grokbot": "workspace:*",
     "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*"
   }
 }

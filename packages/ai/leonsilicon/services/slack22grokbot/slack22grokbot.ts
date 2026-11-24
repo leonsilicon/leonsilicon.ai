@@ -5,7 +5,7 @@ import {
   type ExtensionJournal,
   type JournalEntry,
 } from "@-/ai.leonsilicon.services.beeper-inbox";
-import { parseTaskBotName, taskBotName, type SlackThread } from "#handoff";
+import { parseTaskBotName, taskName, type SlackThread } from "#handoff";
 import type { GrokBackend, RelayLog } from "#types";
 
 export interface RosterBot {
@@ -162,7 +162,7 @@ export class Slack22GrokBot {
           log({ event: "slack22grokbot_route_error", bot: name, message });
       };
       const present = new Set(roster.map((bot) => bot.id));
-      const tasks = roster.filter((bot) => parseTaskBotName(bot.name));
+      const tasks = roster.filter((bot) => state.routes[bot.id] || parseTaskBotName(bot.name));
       let rooms = knownRooms;
       const now = this.#now();
       if (
@@ -348,8 +348,7 @@ export class Slack22GrokBot {
       const matches = roster.filter((bot) => {
         const route = state.routes[bot.id];
         return (
-          bot.name === taskBotName(target) ||
-          bot.name === taskBotName(thread) ||
+          bot.name === taskName(target) ||
           (route?.thread.channel === target.channel && route.thread.threadTs === target.threadTs)
         );
       });

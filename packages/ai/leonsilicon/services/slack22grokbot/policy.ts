@@ -2,7 +2,7 @@ import { followUpBlock, handoffBlock, slackIdentifier, type SlackThread } from "
 import type { BudgetState, QueuedItem } from "#types";
 
 /**
- * Usage policy for the Grok relay (since v1.2.0, 2026-11-07). Grok Bot bills by agent steps and tokens,
+ * Usage policy for slack22grokbot. Grok Bot bills by agent steps and tokens,
  * and Hermes was sending follow-ups to bots still working on its previous message (63 of 134 sends
  * landed under 3 minutes after the last one), each starting another full run. These pure helpers decide
  * when a bot is busy, merge queued messages into one, keep an hourly budget that sends Hermes to Leon,
@@ -33,15 +33,8 @@ export const MAX_QUEUE_AGE_MS = 20 * 60 * 1000;
 export const MIN_JUSTIFICATION = 20;
 export const BOOKKEEPING_BOTS = ["linear bot", "todoist bot"];
 
-export function compareKeys(a: unknown, b: unknown): number {
-  const sa = String(a);
-  const sb = String(b);
-  if (/^\d+$/.test(sa) && /^\d+$/.test(sb)) {
-    const x = BigInt(sa);
-    const y = BigInt(sb);
-    return x < y ? -1 : x > y ? 1 : 0;
-  }
-  return sa < sb ? -1 : sa > sb ? 1 : 0;
+export function compareKeys(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** HTML to readable text with links kept, for a source that hands replies over as HTML. */
@@ -149,9 +142,8 @@ export function busy(
  * One item goes out unchanged; several become one numbered message, in Leon's lowercase voice.
  * Then the handoff block of each Slack thread the items carry, once per thread.
  */
-export function compose(items: ReadonlyArray<string | QueuedItem>, automatic = false): string {
+export function compose(items: readonly QueuedItem[]): string {
   const kept = items
-    .map((item) => (typeof item === "string" ? { text: item } : item))
     .map((item) => ({ ...item, text: item.text.trim() }))
     .filter((item) => item.text);
   const body =
@@ -160,30 +152,24 @@ export function compose(items: ReadonlyArray<string | QueuedItem>, automatic = f
       : `a few more things, in order:\n\n${kept.map((item, index) => `${index + 1}. ${item.text}`).join("\n\n")}`;
   const threads = new Map<string, { thread: SlackThread; items: number[]; followUp: boolean }>();
   kept.forEach((item, index) => {
-    if (!("thread" in item) || !item.thread) return;
     const key = slackIdentifier(item.thread);
     const entry = threads.get(key) ?? { thread: item.thread, items: [], followUp: true };
     entry.items.push(index + 1);
-    entry.followUp &&= "followUp" in item && item.followUp === true;
+    entry.followUp &&= item.followUp === true;
     threads.set(key, entry);
   });
   const blocks = [...threads.values()].map(({ thread, items: numbers, followUp }) =>
     followUp
-      ? followUpBlock(thread, automatic)
-      : handoffBlock(thread, kept.length > 1 && threads.size > 1 ? numbers : undefined, automatic),
+      ? followUpBlock(thread)
+      : handoffBlock(thread, kept.length > 1 && threads.size > 1 ? numbers : undefined),
   );
   return [body, ...blocks].join("\n\n");
 }
 
 /** The longest prefix of the queue whose composed message fits in `max` characters (at least one item). */
-export function takeBatch<T extends string | QueuedItem>(
-  items: readonly T[],
-  max: number,
-  automatic = false,
-): T[] {
+export function takeBatch(items: readonly QueuedItem[], max: number): QueuedItem[] {
   let count = 1;
-  while (count < items.length && compose(items.slice(0, count + 1), automatic).length <= max)
-    count++;
+  while (count < items.length && compose(items.slice(0, count + 1)).length <= max) count++;
   return items.slice(0, count);
 }
 

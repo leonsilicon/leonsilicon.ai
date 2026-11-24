@@ -78,7 +78,6 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
       : {}),
   });
   const extensions = new Map<string, RunningExtension>();
-  const extensionAliases = new Map<string, string>();
   let server: net.Server | null = null;
   let stopping: Promise<void> | null = null;
   let watchdog: NodeJS.Timeout | null = null;
@@ -120,7 +119,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
   // start is left out; the inbox itself still runs.
   for (const extension of options.extensions ?? []) {
     try {
-      const home = join(paths.home, extension.legacyName ?? extension.name);
+      const home = join(paths.home, extension.name);
       mkdirSync(home, { recursive: true, mode: 0o700 });
       extensions.set(
         extension.name,
@@ -170,7 +169,6 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
           },
         }),
       );
-      if (extension.legacyName) extensionAliases.set(extension.legacyName, extension.name);
     } catch (error) {
       log("error", "extension failed to start", {
         extension: extension.name,
@@ -207,8 +205,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
           );
         case "extension": {
           const name = typeof input.extension === "string" ? input.extension : "";
-          const extension =
-            extensions.get(name) ?? extensions.get(extensionAliases.get(name) ?? name);
+          const extension = extensions.get(name);
           if (!extension?.callTool)
             throw Object.assign(new Error(`this daemon has no extension "${name}"`), {
               code: "bad_method",

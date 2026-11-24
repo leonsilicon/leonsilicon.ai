@@ -72,7 +72,7 @@ test("a browser gets the host's page; API clients fall through", async () => {
 test("anything the build doesn't have falls through to the service", async () => {
   const assets = fakeAssets({ "/ai/leonsilicon/orca/index.html": "orca page" });
   assert.equal(await serveSite(page("https://orca.leonsilicon.ai/healthz"), assets), null);
-  assert.equal(await serveSite(page("https://grok.leonsilicon.ai/"), assets), null);
+  assert.equal(await serveSite(page("https://missing.leonsilicon.ai/"), assets), null);
   assert.equal(
     await serveSite(new Request("https://orca.leonsilicon.ai/assets/x.js"), assets),
     null,

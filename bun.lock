@@ -35,8 +35,8 @@
       },
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-        "@-/ai.leonsilicon.services.grok-relay": "workspace:*",
         "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
+        "@-/ai.leonsilicon.services.slack22grokbot": "workspace:*",
         "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*",
       },
     },
@@ -238,13 +238,6 @@
       "name": "@-/ai.leonsilicon.services.grok-bot-roster",
       "version": "2.0.0",
     },
-    "packages/ai/leonsilicon/services/grok-relay": {
-      "name": "@-/ai.leonsilicon.services.grok-relay",
-      "version": "1.5.0",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/instagram2slack": {
       "name": "@-/ai.leonsilicon.services.instagram2slack",
       "dependencies": {
@@ -271,6 +264,13 @@
     "packages/ai/leonsilicon/services/slack-as-leon": {
       "name": "@-/ai.leonsilicon.services.slack-as-leon",
       "version": "2.0.0",
+    },
+    "packages/ai/leonsilicon/services/slack22grokbot": {
+      "name": "@-/ai.leonsilicon.services.slack22grokbot",
+      "version": "1.6.0",
+      "dependencies": {
+        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
+      },
     },
     "packages/ai/leonsilicon/services/slack22linear": {
       "name": "@-/ai.leonsilicon.services.slack22linear",
@@ -464,8 +464,6 @@
 
     "@-/ai.leonsilicon.services.grok-bot-roster": ["@-/ai.leonsilicon.services.grok-bot-roster@workspace:packages/ai/leonsilicon/services/grok-bot-roster"],
 
-    "@-/ai.leonsilicon.services.grok-relay": ["@-/ai.leonsilicon.services.grok-relay@workspace:packages/ai/leonsilicon/services/grok-relay"],
-
     "@-/ai.leonsilicon.services.instagram2slack": ["@-/ai.leonsilicon.services.instagram2slack@workspace:packages/ai/leonsilicon/services/instagram2slack"],
 
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
@@ -473,6 +471,8 @@
     "@-/ai.leonsilicon.services.orcahermes-device": ["@-/ai.leonsilicon.services.orcahermes-device@workspace:packages/ai/leonsilicon/services/orcahermes-device"],
 
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
+
+    "@-/ai.leonsilicon.services.slack22grokbot": ["@-/ai.leonsilicon.services.slack22grokbot@workspace:packages/ai/leonsilicon/services/slack22grokbot"],
 
     "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
 

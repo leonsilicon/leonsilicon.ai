@@ -4,11 +4,11 @@ import { parseEnv } from "node:util";
 import type { DaemonExtension } from "@-/ai.leonsilicon.services.beeper-inbox";
 import { inboxBackend } from "#backend";
 import { bridgeServices } from "#bridge-services";
-import { createGrokRelay } from "#relay";
+import { createGrokDelegation } from "#relay";
 import { Slack22GrokBot } from "#slack22grokbot";
 import { callTool, INSTRUCTIONS, TOOLS } from "#tools";
 
-export const VERSION = "1.5.1";
+export const VERSION = "1.6.0";
 const NAME = "slack22grokbot";
 const POLL_MS = 15_000;
 
@@ -17,10 +17,9 @@ const POLL_MS = 15_000;
  * MCP server. It runs inside the daemon because the queue, the budget and the flusher need exactly
  * one owner, and Hermes starts an MCP server in several processes at once.
  */
-export function grokRelayExtension(): DaemonExtension {
+export function slack22GrokBotExtension(): DaemonExtension {
   return {
     name: NAME,
-    legacyName: "grok-relay",
     server: { name: NAME, version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS },
     start(context) {
       const backend = inboxBackend((name, args) => context.tool(name, args), context.journal);
@@ -49,7 +48,7 @@ export function grokRelayExtension(): DaemonExtension {
           log({ event: "slack22grokbot_config_error", message: problem });
         }
       }
-      const relay = createGrokRelay({
+      const relay = createGrokDelegation({
         stateDir: join(context.home, "state"),
         backend,
         bridge,
@@ -79,11 +78,9 @@ export function grokRelayExtension(): DaemonExtension {
       return {
         callTool: (name, args) => callTool(relay, name, args),
         status: () => ({
-          slack22grokbot: {
-            running: Boolean(bridge),
-            ...bridge?.status(),
-            ...(problem ? { problem } : {}),
-          },
+          running: Boolean(bridge),
+          ...bridge?.status(),
+          ...(problem ? { problem } : {}),
         }),
         async stop() {
           stopped = true;

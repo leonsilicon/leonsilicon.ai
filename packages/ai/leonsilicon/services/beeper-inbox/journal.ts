@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 /**
  * Every message sync delivers, written down once as it arrives, so that whatever needs new messages
- * often (the Grok relay waiting for a reply, a feed of every chat) can ask "what is new or changed
+ * often (slack22grokbot waiting for a reply, a feed of every chat) can ask "what is new or changed
  * since N?" instead of reading history again. A page of history costs about half a second per message
  * (see the README); a journal read is one indexed query.
  *

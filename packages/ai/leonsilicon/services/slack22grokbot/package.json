@@ -1,8 +1,8 @@
 {
-  "name": "@-/ai.leonsilicon.services.grok-relay",
-  "version": "1.5.0",
+  "name": "@-/ai.leonsilicon.services.slack22grokbot",
+  "version": "1.6.0",
   "private": true,
-  "description": "The Grok Bot relay for Hermes, with Slack task threads mirrored through the Beeper inbox.",
+  "description": "Grok Bot delegation and Slack task thread sync for Hermes.",
   "type": "module",
   "imports": {
     "#backend": "./inbox-backend.ts",

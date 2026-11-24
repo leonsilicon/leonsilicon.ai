@@ -24,7 +24,7 @@ Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker o
 
 [Slack Puppet migration](https://slack-as-leon.leonsilicon.ai/) covers the temporary `slack-as-leon` hostname. Each live service page links its source and deployment runbook.
 
-Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also served `orca`, `grok`, `beeper` and `watch` here, and `cronometer` ran there too. What they did now runs on Hermes Cloud (below) or as a Worker, so those four names and all three pieces were removed, and the mini serves nothing public. The git history has them.
+Until 2026-11-21 an edge Worker, a tunnel and a gateway on Leon's Mac mini also served `orca`, `beeper` and `watch` here, and `cronometer` ran there too. What they did now runs on Hermes Cloud (below) or as a Worker, so those names and the infrastructure serving them were removed, and the mini serves nothing public. The git history has them.
 
 ## On Hermes Cloud
 
@@ -34,7 +34,7 @@ Services that run on Hermes Cloud's own machine without a public address.
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [OrcaHermes Device](https://orcahermes-device.leonsilicon.ai/)                | Live since 2026-11-19: Hermes reaches the Macs' Orca directly. It replaced the Orca bridge. [Runbook](apps/orcahermes-device/README.md) |
 | [Beeper inbox](apps/beeper-inbox/README.md)                                   | Live since 2026-11-19: Hermes reads and sends in Leon's Beeper chats over Matrix, no Beeper Desktop                                     |
-| [slack22grokbot](packages/ai/leonsilicon/services/grok-relay/README.md)       | Hermes delegates to Grok bots through the Beeper inbox and follows up in Slack task threads                                             |
+| [slack22grokbot](packages/ai/leonsilicon/services/slack22grokbot/README.md)   | Hermes delegates to Grok bots through the Beeper inbox and follows up in Slack task threads                                             |
 | [instagram2slack](packages/ai/leonsilicon/services/instagram2slack/README.md) | Copies selected Instagram conversations into Slack through the Beeper inbox                                                             |
 | [whatsapp2slack](packages/ai/leonsilicon/services/whatsapp2slack/README.md)   | Copies selected WhatsApp conversations into Slack through the Beeper inbox                                                              |
 

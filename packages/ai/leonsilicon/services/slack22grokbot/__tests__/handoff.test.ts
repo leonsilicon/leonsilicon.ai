@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handoffBlock, slackIdentifier, slackThread, taskBotName, withHandoff } from "#handoff";
+import { handoffBlock, slackIdentifier, slackThread, taskName } from "#handoff";
 import { compose } from "#policy";
-import { createGrokRelay } from "#relay";
+import { createGrokDelegation } from "#relay";
 
 const T1 = { channel: "C0TASKS001", threadTs: "1795280000.123456" };
 const T2 = { channel: "#leon-42-fix-the-thing", threadTs: "1795280001.000001" };
@@ -11,7 +11,7 @@ test("the thread is checked, and becomes the identifier and the task bot's name"
   assert.deepEqual(slackThread(" C0TASKS001 ", "1795280000.123456"), T1);
   assert.deepEqual(slackThread("#leon-42-fix-the-thing", "1795280001.000001"), T2);
   assert.equal(slackIdentifier(T1), "slack:C0TASKS001/1795280000.123456");
-  assert.equal(taskBotName(T1), "Task slack:C0TASKS001/1795280000.123456");
+  assert.equal(taskName(T1), "Task slack:C0TASKS001/1795280000.123456");
   assert.throws(() => slackThread(undefined, undefined), /are required/);
   assert.throws(() => slackThread("C0TASKS001", ""), /are required/);
   assert.throws(() => slackThread("D0LEONDM01", "1795280000.123456"), /not a DM/);
@@ -24,9 +24,11 @@ test("the block tells the bot to spawn the task bot, and how it talks to Hermes"
   const block = handoffBlock(T1);
   assert.match(block, /^---\nSlack thread for this task: slack:C0TASKS001\/1795280000\.123456/);
   assert.match(block, /named exactly "Task slack:C0TASKS001\/1795280000\.123456"/);
-  assert.match(block, /hermes_thread_send \(channel C0TASKS001, thread_ts 1795280000\.123456/);
-  assert.match(block, /grok_bot_delete/);
-  assert.equal(withHandoff("  do the thing ", T1), `do the thing\n\n${block}`);
+  assert.match(
+    block,
+    /Beeper copies each reply to Slack thread slack:C0TASKS001\/1795280000\.123456/,
+  );
+  assert.match(block, /Hermes retires the task bot/);
 });
 
 test("merged messages carry one block per thread, naming their items when there are several", () => {
@@ -44,12 +46,10 @@ test("merged messages carry one block per thread, naming their items when there 
   ]);
   assert.match(mixed, /Slack thread for items 1, 3: slack:C0TASKS001/);
   assert.match(mixed, /Slack thread for item 2: slack:#leon-42-fix-the-thing/);
-  // Queued before the upgrade: no thread, no block.
-  assert.equal(compose([{ text: "old", at }]), "old");
 });
 
 test("grok_bot_send refuses a task without its Slack thread", async () => {
-  const relay = createGrokRelay({
+  const relay = createGrokDelegation({
     stateDir: (await import("node:fs")).mkdtempSync(`${(await import("node:os")).tmpdir()}/relay-`),
     backend: {
       bots: async () => [{ name: "Task Bot", chatID: "!task:beeper" }],

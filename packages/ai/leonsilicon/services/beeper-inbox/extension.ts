@@ -81,8 +81,6 @@ export interface RunningExtension {
 export interface DaemonExtension {
   /** The extension's command and status name. */
   name: string;
-  /** Its former command name, also used to keep existing settings and state in place. */
-  legacyName?: string;
   server?: ExtensionServer;
   start(context: ExtensionContext): RunningExtension | Promise<RunningExtension>;
 }

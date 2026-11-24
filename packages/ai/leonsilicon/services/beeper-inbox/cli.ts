@@ -40,9 +40,7 @@ export async function runCli(
     Boolean(extension.server),
   );
   const extensionNamed = (name: string): McpExtension => {
-    const found = mcpExtensions.find(
-      (extension) => extension.name === name || extension.legacyName === name,
-    );
+    const found = mcpExtensions.find((extension) => extension.name === name);
     if (!found)
       throw new Error(
         `no MCP extension "${name}"; this build has: ${mcpExtensions.map((extension) => extension.name).join(", ") || "none"}`,

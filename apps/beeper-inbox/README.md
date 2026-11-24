@@ -32,6 +32,8 @@ It fetches Pickle at the revision in [`@assets/pickle.json`](@assets/pickle.json
 
 ## Deploy
 
+For an existing Slack–Grok integration, follow the [extension upgrade instructions](../../packages/ai/leonsilicon/services/slack22grokbot/README.md#enable-on-hermes-cloud) to move its state and update its Hermes registration.
+
 1. Upload `dist/beeper-inbox.tgz` to `/opt/data/beeper-inbox/releases/` with the dashboard's `POST /api/files/upload-stream` (multipart `file` and `path`), and compare the sha256.
 2. Run as the `hermes` user on Captain Claude, from a `no_agent` cron script (`/opt/data/scripts/<name>.sh`, then `POST /api/cron/jobs/<id>/trigger` once; a 409 can still mean it started, so never re-trigger) or Hermes's terminal:
 
@@ -109,7 +111,7 @@ $B status                    # JSON health: device, crypto, sync, directory, rec
 $B restart                   # same device and store
 $B tool list_conversations '{"query":"note to self"}'
 $B journal                   # what sync delivered lately, without text; '{"after":N,"room_id":"!…"}' narrows it
-$B extension slack22grokbot grok_bots   # one of the Grok relay's tools, as Hermes would call it
+$B extension slack22grokbot grok_bots   # one of slack22grokbot's tools, as Hermes would call it
 tail /opt/data/beeper-inbox/logs/daemon.log
 ```
 

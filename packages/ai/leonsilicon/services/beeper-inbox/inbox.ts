@@ -1413,8 +1413,8 @@ export class Inbox {
     return room.network;
   }
 
-  #requireGrokRelay(network: string, fromGrokRelay = false): void {
-    if (network === "grok" && !fromGrokRelay)
+  #requireGrokHandoff(network: string, fromSlack22GrokBot = false): void {
+    if (network === "grok" && !fromSlack22GrokBot)
       throw new InboxError(
         "refused",
         "Grok Bot requests must use grok_bot_send with slack_channel and slack_thread_ts. Use the task's Slack thread, or the ts of Leon's message when there is no thread. For a task bot already talking to you in Slack, answer it in that thread.",
@@ -1423,7 +1423,7 @@ export class Inbox {
 
   async sendMessage(
     args: Record<string, unknown>,
-    fromGrokRelay = false,
+    fromSlack22GrokBot = false,
   ): Promise<Record<string, unknown>> {
     const { client } = this.#ready();
     const roomId = roomIdOf(args.room_id);
@@ -1432,7 +1432,7 @@ export class Inbox {
     // A message to Silicon Dot is a task: it carries the Slack thread Hermes works in, and Dot's
     // Codex session for it talks to Hermes there (slack-handoff.ts).
     const network = await this.#sendNetwork(roomId);
-    this.#requireGrokRelay(network, fromGrokRelay);
+    this.#requireGrokHandoff(network, fromSlack22GrokBot);
     const dot = DOT_NETWORKS.has(network);
     const hasThread = args.slack_channel !== undefined || args.slack_thread_ts !== undefined;
     if (!dot && hasThread)
@@ -1527,7 +1527,7 @@ export class Inbox {
     const caption =
       typeof args.caption === "string" && args.caption.trim() ? args.caption : undefined;
     const sendAs = args.send_as === "file" ? "file" : "auto";
-    this.#requireGrokRelay(await this.#sendNetwork(roomId));
+    this.#requireGrokHandoff(await this.#sendNetwork(roomId));
     const encrypted = await this.#roomEncrypted(roomId);
     const bytes = new Uint8Array(readFileSync(realPath));
     const digest = sha256(bytes);

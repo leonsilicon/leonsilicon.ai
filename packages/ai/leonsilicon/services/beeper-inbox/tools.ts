@@ -243,7 +243,7 @@ export interface InboxTools {
   downloadAttachment(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   sendMessage(
     args: Record<string, unknown>,
-    fromGrokRelay?: boolean,
+    fromSlack22GrokBot?: boolean,
   ): Promise<Record<string, unknown>>;
   sendFile(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   sendReaction(args: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -259,7 +259,7 @@ export async function runTool(
   inbox: InboxTools,
   name: string,
   args: unknown,
-  fromGrokRelay = false,
+  fromSlack22GrokBot = false,
 ): Promise<Record<string, unknown>> {
   const allowed = ALLOWED.get(name);
   if (!allowed) throw new InboxError("unknown_tool", `unknown tool ${name}`);
@@ -279,7 +279,7 @@ export async function runTool(
     case "download_attachment":
       return inbox.downloadAttachment(input);
     case "send_message":
-      return inbox.sendMessage(input, fromGrokRelay);
+      return inbox.sendMessage(input, fromSlack22GrokBot);
     case "send_file":
       return inbox.sendFile(input);
     case "send_reaction":

@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { ExtensionJournal, JournalEntry } from "@-/ai.leonsilicon.services.beeper-inbox";
-import { taskBotName } from "#handoff";
+import { taskName } from "#handoff";
 import { Slack22GrokBot, type BridgeServices } from "#slack22grokbot";
 import type { GrokBackend } from "#types";
 
 const start = 1_795_280_001_000;
 const thread = { channel: "C0TASKS001", threadTs: "1795280000.123456" };
 const wrong = { channel: "C0TASKS002", threadTs: thread.threadTs };
-const name = taskBotName(thread);
+const name = taskName(thread);
 
 test("routes by the full bot name, retries across restarts, mirrors edits, and retires only the completed bot", async (t) => {
   const home = mkdtempSync(join(tmpdir(), "slack22grokbot-"));
@@ -43,7 +43,7 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
   } satisfies Partial<ExtensionJournal> as ExtensionJournal;
   let roster = [
     { id: "1", name, created_at: null },
-    { id: "2", name: taskBotName(wrong), created_at: null },
+    { id: "2", name: taskName(wrong), created_at: null },
   ];
   const slackReplies = [
     {
@@ -90,7 +90,7 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
   const backend: GrokBackend = {
     bots: async () => [
       { name, chatID: "!grok:test", lastActivity: null },
-      { name: taskBotName(wrong), chatID: "!other:test", lastActivity: null },
+      { name: taskName(wrong), chatID: "!other:test", lastActivity: null },
     ],
     messages: async () => [],
     async send(chat, text, key) {
@@ -111,7 +111,7 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
   entries.push(message(1, "First Grok result"));
   await bridge.tick();
   assert.equal(bridge.status().errors[name], "response lost");
-  assert.equal(bridge.status().errors[taskBotName(wrong)], "thread_not_found");
+  assert.equal(bridge.status().errors[taskName(wrong)], "thread_not_found");
   assert.deepEqual(
     sends.map(({ chat, text }) => ({ chat, text })),
     [
