@@ -1,3 +1,5 @@
+import { parseArgs } from "@-/com.npmjs.citty";
+
 /**
  * Autolinear's commands (Leon's rule, 2026-11-23): after every turn in an issue channel, Hermes
  * tells Autolinear what to do with the channel in one line, and nothing moves on Hermes's answer
@@ -5,7 +7,7 @@
  * Autolinear's bot; Leon can type the same words after `/autolinear`.
  *
  * ```text
- * @Autolinear move <status> [who=…] [start=…] [event=… stop=…] [due=…]
+ * @Autolinear move <status> [--who …] [--start …] [--event … --stop …] [--due …]
  * @Autolinear stay
  * @Autolinear help
  * ```
@@ -21,8 +23,18 @@ export type AutolinearCommand =
 
 export type ParsedCommand = { ok: true; command: AutolinearCommand } | { ok: false; error: string };
 
+const moveOptions = {
+  who: { type: "string" },
+  start: { type: "string" },
+  event: { type: "string" },
+  stop: { type: "string" },
+  due: { type: "string" },
+} as const;
+const moveArgs = { status: { type: "positional" }, ...moveOptions } as const;
+
 /** Workflow details a `move` may set. */
-export const COMMAND_KEYS = ["who", "start", "event", "stop", "due"] as const;
+export const COMMAND_KEYS = Object.keys(moveOptions) as readonly (keyof typeof moveOptions)[];
+const optionNames = COMMAND_KEYS.map((key) => `\`--${key}\``).join(", ");
 export const AWAITING_HERMES = "Awaiting Hermes";
 
 /** What Hermes writes after Autolinear's mention (or Leon after `/autolinear`), as Slack mrkdwn. */
@@ -30,9 +42,9 @@ export function commandUsage(lead: string): string {
   return [
     `\`${lead} move done\`: nothing is left for anyone`,
     `\`${lead} move leon\`: Leon needs to see or do something`,
-    `\`${lead} move trigger who="Apple App Review"\`: waiting on someone else`,
-    `\`${lead} move trigger event="Rogers BYOD deal" stop=2026-12-01\`: waiting for an event until a stop date`,
-    `\`${lead} move date start=2026-12-01T09:00:00-05:00\`: work starts later`,
+    `\`${lead} move trigger --who "Apple App Review"\`: waiting on someone else`,
+    `\`${lead} move trigger --event "Rogers BYOD deal" --stop 2026-12-01\`: waiting for an event until a stop date`,
+    `\`${lead} move date --start 2026-12-01T09:00:00-05:00\`: work starts later`,
     `\`${lead} move executing\`: work is already underway`,
     `\`${lead} stay\`: leave the status as it is`,
   ]
@@ -70,59 +82,89 @@ const unescape = (text: string) =>
   text.replace(/[“”]/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
 /**
- * Splits on spaces, keeping `"quoted words"` and `key="quoted value"` together, quotes removed.
- * Null when a quote isn't closed.
+ * Splits Slack text into argv without shell expansion. Quoted tokens can follow an equals sign.
+ * Returns null for an unclosed or misplaced quote.
  */
 function tokens(text: string): string[] | null {
   const out: string[] = [];
-  for (const match of text.matchAll(/([^\s"=]+=)?"((?:[^"\\]|\\.)*)"|(\S+)/g)) {
-    if (match[3]?.includes('"')) return null;
-    out.push(match[3] ?? `${match[1] ?? ""}${match[2]!.replace(/\\(.)/g, "$1")}`);
+  for (const [, prefix, quoted, singleQuoted, bare] of text.matchAll(
+    /([^\s"'=]+=)?(?:"((?:[^"\\]|\\.)*)"|'([^']*)')(?=\s|$)|(\S+)/g,
+  )) {
+    if (bare?.includes('"') || (bare && /(?:^|=)'/.test(bare))) return null;
+    out.push(bare ?? `${prefix ?? ""}${quoted?.replace(/\\(.)/g, "$1") ?? singleQuoted ?? ""}`);
   }
   return out;
 }
 
+const isOption = (arg: string) => arg.startsWith("-") || arg.includes("=");
+
+/** Keep multiword statuses and adapt legacy `key=value` before handing argv to Citty. */
+function parseMove(args: string[]): ParsedCommand {
+  const firstOption = args.findIndex(isOption);
+  const status = (firstOption < 0 ? args : args.slice(0, firstOption)).join(" ").trim();
+  if (!status) return { ok: false, error: "`move` needs a status, such as `move done`" };
+  const options = firstOption < 0 ? [] : args.slice(firstOption);
+  const argv = [status];
+  for (let index = 0; index < options.length; index++) {
+    const arg = options[index]!;
+    if (!isOption(arg))
+      return { ok: false, error: `unexpected argument \`${arg}\`. Quote values with spaces` };
+    const equal = arg.indexOf("=");
+    const option = equal < 0 ? arg : arg.slice(0, equal);
+    const key = option.replace(/^--/, "").toLowerCase();
+    if (!Object.hasOwn(moveOptions, key)) {
+      const label = option.startsWith("-") ? option : `--${option}`;
+      return {
+        ok: false,
+        error: `unknown option \`${label}\`. Use ${optionNames}`,
+      };
+    }
+    const value = equal < 0 ? options[index + 1] : arg.slice(equal + 1);
+    if (!value?.trim() || (equal < 0 && value.startsWith("-")))
+      return { ok: false, error: `\`--${key}\` has no value` };
+    argv.push(`--${key}=${value.trim()}`);
+    if (equal < 0) index++;
+  }
+  const parsed = parseArgs<typeof moveArgs>(argv, moveArgs);
+  if (parsed._.length !== 1) return { ok: false, error: "couldn't read the move options" };
+  const keys: Record<string, string> = {};
+  for (const key of COMMAND_KEYS) {
+    const value = parsed[key];
+    if (value !== undefined) keys[key] = value;
+  }
+  if (matchStatus(parsed.status, [AWAITING_HERMES]))
+    return { ok: false, error: "Awaiting Hermes is only available in Linear" };
+  return { ok: true, command: { verb: "move", status: parsed.status, keys } };
+}
+
 /** Reads a command's words (after the mention or `/autolinear`). Errors say what's wrong in a sentence. */
 export function parseCommand(words: string): ParsedCommand {
-  const list = tokens(unescape(words).trim());
+  // Treat trailing sentence punctuation outside quotes as Slack prose.
+  const list = tokens(
+    unescape(words)
+      .trim()
+      .replace(/[.!]+$/, ""),
+  );
   if (!list) return { ok: false, error: "a quote isn't closed" };
-  // A sentence's full stop isn't part of the command.
-  if (list.length) list[list.length - 1] = list.at(-1)!.replace(/[.!]+$/, "");
-  const [verb = "", ...args] = list.filter(Boolean);
-  switch (verb.toLowerCase()) {
+  const [verb = "", ...args] = list;
+  const subcommand = verb.toLowerCase();
+  if (
+    (subcommand === "move" || subcommand === "stay") &&
+    args.length === 1 &&
+    (args[0] === "--help" || args[0] === "-h")
+  )
+    return { ok: true, command: { verb: "help" } };
+  switch (subcommand) {
     case "stay":
       return args.length
         ? { ok: false, error: "`stay` takes nothing after it" }
         : { ok: true, command: { verb: "stay" } };
     case "help":
+    case "--help":
+    case "-h":
       return { ok: true, command: { verb: "help" } };
-    case "move": {
-      const words: string[] = [];
-      const keys: Record<string, string> = {};
-      for (const arg of args) {
-        const eq = arg.indexOf("=");
-        if (eq < 0) {
-          if (Object.keys(keys).length)
-            return { ok: false, error: `the status goes before the keys, not \`${arg}\`` };
-          words.push(arg);
-          continue;
-        }
-        const key = arg.slice(0, eq).toLowerCase();
-        const value = arg.slice(eq + 1).trim();
-        if (!(COMMAND_KEYS as readonly string[]).includes(key))
-          return {
-            ok: false,
-            error: `\`${key}\` isn't a key I know; use ${COMMAND_KEYS.map((k) => `\`${k}\``).join(", ")}`,
-          };
-        if (!value) return { ok: false, error: `\`${key}\` has no value` };
-        keys[key] = value;
-      }
-      if (!words.length) return { ok: false, error: "`move` needs a status, such as `move done`" };
-      const status = words.join(" ");
-      if (matchStatus(status, [AWAITING_HERMES]))
-        return { ok: false, error: "Awaiting Hermes is only available in Linear" };
-      return { ok: true, command: { verb: "move", status, keys } };
-    }
+    case "move":
+      return parseMove(args);
     case "":
       return { ok: false, error: "there's no command after my name" };
     default:

@@ -1825,7 +1825,7 @@ test("Hermes moves an issue and updates workflow details without renaming it", a
   const command = await hermesCommands(
     t,
     channel.id,
-    "move trigger event=“Rogers BYOD deal” stop=2026-12-01.",
+    "move trigger --event “Rogers BYOD deal” --stop 2026-12-01.",
     "I'll watch for it.",
   );
   assert.equal(t.slack.posts.length, posts);
@@ -1892,11 +1892,11 @@ test("a trigger command requires an external response or a complete timed event"
   const t = setup();
   const { issue, channel } = await issueChannel(t);
   await hermesCommands(t, channel.id, "move trigger");
-  assert.match(autolinearPosts(t).at(-1)!.text, /needs `who=…` or both `event=…` and `stop=…`/);
+  assert.match(autolinearPosts(t).at(-1)!.text, /needs `--who` or both `--event` and `--stop`/);
   await hermesCommands(t, channel.id, "move trigger who=Rogers event=deal stop=2026-12-01");
   assert.match(
     autolinearPosts(t).at(-1)!.text,
-    /accepts either `who=…` or both `event=…` and `stop=…`/,
+    /accepts either `--who` or both `--event` and `--stop`/,
   );
   assert.equal(issue.state.name, "Awaiting Init");
   assert.deepEqual(issueWorkflow(issue), {});
@@ -1961,7 +1961,7 @@ test("a command that doesn't work is answered under it, and reminders stop after
   await hermesCommands(t, channel.id, "move trigger event=deal");
   assert.equal(
     autolinearPosts(t, posts).at(-1)!.text.split("\n")[0],
-    `<@${HERMES}> I couldn't do that: *Awaiting Trigger* needs \`stop=…\`.`,
+    `<@${HERMES}> I couldn't do that: *Awaiting Trigger* needs \`--stop\`.`,
   );
   assert.equal(autolinearPosts(t, posts).length, MAX_REMINDERS);
 
@@ -2097,7 +2097,7 @@ test("Leon's /autolinear moves the issue and answers him privately", async () =>
   });
   const message = await leonWrites(t, channel.id, "wait on rogers for me");
   t.clock.now += 2000;
-  await t.sync.run("command", slash('move trigger who="Rogers"'));
+  await t.sync.run("command", slash("move trigger --who Rogers"));
   assert.equal(issue.state.name, "Awaiting Trigger");
   assert.equal(
     t.slack.posts.at(-1)!.text,

@@ -46,6 +46,31 @@ test("move takes a status, then keys, with quotes for spaces", () => {
   assert.deepEqual(parseCommand("help"), { ok: true, command: { verb: "help" } });
 });
 
+test("Citty reads CLI options after a Slack mention", () => {
+  const words = commandLine(
+    `<@${AUTO}> move Awaiting Trigger --who “Apple Inc.” --due=2026-12-01`,
+    AUTO,
+  );
+  assert.deepEqual(parseCommand(words!), {
+    ok: true,
+    command: {
+      verb: "move",
+      status: "Awaiting Trigger",
+      keys: { who: "Apple Inc.", due: "2026-12-01" },
+    },
+  });
+  assert.deepEqual(parseCommand("move trigger --event 'price=offer' STOP=2026-12-01"), {
+    ok: true,
+    command: {
+      verb: "move",
+      status: "trigger",
+      keys: { event: "price=offer", stop: "2026-12-01" },
+    },
+  });
+  for (const words of ["--help", "-h", "move --help"])
+    assert.deepEqual(parseCommand(words), { ok: true, command: { verb: "help" } });
+});
+
 test("a command that doesn't read says why", () => {
   for (const [words, error] of [
     ["", "there's no command after my name"],
@@ -54,10 +79,16 @@ test("a command that doesn't read says why", () => {
     ["move who=x", "`move` needs a status, such as `move done`"],
     [
       "move trigger colour=red",
-      "`colour` isn't a key I know; use `who`, `start`, `event`, `stop`, `due`",
+      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--due`",
     ],
-    ["move trigger who=", "`who` has no value"],
-    ["move start=2026-12-01 date", "the status goes before the keys, not `date`"],
+    [
+      "move trigger --colour red",
+      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--due`",
+    ],
+    ["move trigger who=", "`--who` has no value"],
+    ["move trigger --who --due 2026-12-01", "`--who` has no value"],
+    ["move trigger --who what else", "unexpected argument `else`. Quote values with spaces"],
+    ["move start=2026-12-01 date", "`move` needs a status, such as `move done`"],
     ['move trigger who="Apple', "a quote isn't closed"],
     ["stay put", "`stay` takes nothing after it"],
   ])

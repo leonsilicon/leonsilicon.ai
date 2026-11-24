@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+    "@-/com.npmjs.citty": "workspace:*",
     "@-/com.npmjs.yaml": "workspace:*"
   }
 }

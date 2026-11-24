@@ -263,6 +263,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
+        "@-/com.npmjs.citty": "workspace:*",
         "@-/com.npmjs.yaml": "workspace:*",
       },
     },
@@ -293,6 +294,12 @@
     "packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply": {
       "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
       "version": "1.0.0",
+    },
+    "packages/com/npmjs/citty": {
+      "name": "@-/com.npmjs.citty",
+      "dependencies": {
+        "citty": "catalog:",
+      },
     },
     "packages/com/npmjs/krzysztofkobra__orca-mcp": {
       "name": "@-/com.npmjs.krzysztofkobra__orca-mcp",
@@ -389,6 +396,7 @@
     "@types/node": "24.19.2",
     "@varlock/cloudflare-integration": "1.6.3",
     "@varlock/infisical-plugin": "2.1.3",
+    "citty": "0.1.6",
     "eslint-plugin-flatcap": "0.1.0",
     "openai": "7.45.1",
     "typescript": "7.0.2",
@@ -454,6 +462,8 @@
     "@-/com.leonsilicon.hermes.plugins.slack-flat-replies": ["@-/com.leonsilicon.hermes.plugins.slack-flat-replies@workspace:packages/com/leonsilicon/hermes/plugins/slack-flat-replies"],
 
     "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:packages/com/leonsilicon/hermes/plugins/slack-own-thread-reply"],
+
+    "@-/com.npmjs.citty": ["@-/com.npmjs.citty@workspace:packages/com/npmjs/citty"],
 
     "@-/com.npmjs.krzysztofkobra__orca-mcp": ["@-/com.npmjs.krzysztofkobra__orca-mcp@workspace:packages/com/npmjs/krzysztofkobra__orca-mcp"],
 
@@ -1001,7 +1011,11 @@
 
     "chalk": ["chalk@6.0.1", "", {}, "sha512-/Ce6KNm3vIbWdMlNna6RVIZ/ICQxnJxCicet5LBKK9ZffBkqzDw0xh9EiKSljdRtiIQ1S1z4YgcscUUGzNCWrA=="],
 
+    "citty": ["citty@0.1.6", "", { "dependencies": { "consola": "^3.2.3" } }, "sha512-tskPPKEs8D2KPafUypv2gxwJP8h/OaJmC82QQGGDQcHvXX43xF2VDACcJVmZ0EuSxkpO9Kc4MlrA3q0+FG58AQ=="],
+
     "commander": ["commander@15.0.0", "", {}, "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg=="],
+
+    "consola": ["consola@3.4.2", "", {}, "sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA=="],
 
     "content-disposition": ["content-disposition@2.0.1", "", {}, "sha512-e+H0ZXHSWYrENhQzw1LPuP4oF5MzVKmDU6d3hxlvaPEYLLg62MxtQNPRx4SYSuYJSBUgnQIG4HIN2tEtNv7Dog=="],
 

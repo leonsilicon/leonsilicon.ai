@@ -16,6 +16,7 @@
       "@types/node": "24.19.2",
       "@varlock/cloudflare-integration": "1.6.3",
       "@varlock/infisical-plugin": "2.1.3",
+      "citty": "0.1.6",
       "eslint-plugin-flatcap": "0.1.0",
       "openai": "7.45.1",
       "typescript": "7.0.2",

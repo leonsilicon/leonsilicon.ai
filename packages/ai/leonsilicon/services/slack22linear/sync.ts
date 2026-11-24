@@ -1015,18 +1015,18 @@ export class Sync {
     for (const status of [this.#c.dateState, this.#c.triggerState]) {
       if (status === to) continue;
       for (const key of this.#statusKeys(status)) {
-        if (key in keys) return fail(`\`${key}\` goes with *${status}* only`);
+        if (key in keys) return fail(`\`--${key}\` goes with *${status}* only`);
         delete meta[key];
       }
     }
     for (const [key, value] of Object.entries(keys))
       if (key !== "event" && key !== "who" && !metaInstant(value, this.#c.timeZone))
-        return fail(`\`${key}=${value}\` isn't a day (YYYY-MM-DD) or an RFC 3339 time`);
+        return fail(`\`--${key} ${value}\` needs a day (YYYY-MM-DD) or an RFC 3339 time`);
     Object.assign(meta, keys);
     let required = to === this.#c.dateState ? ["start"] : [];
     if (to === this.#c.triggerState) {
       const timed = keys.event || keys.stop;
-      const either = `\`who=…\` or both \`event=…\` and \`stop=…\``;
+      const either = "`--who` or both `--event` and `--stop`";
       if (keys.who && timed) return fail(`*${to}* accepts either ${either}`);
       if (keys.who) {
         delete meta.event;
@@ -1039,7 +1039,7 @@ export class Sync {
     }
     const missing = required.filter((key) => !meta[key]);
     if (missing.length)
-      return fail(`*${to}* needs ${missing.map((k) => `\`${k}=…\``).join(" and ")}`);
+      return fail(`*${to}* needs ${missing.map((k) => `\`--${k}\``).join(" and ")}`);
     const update: IssueUpdate = {};
     if (to !== issue.state.name) update.stateId = await this.#stateId(to);
     if (Object.keys({ ...previous, ...meta }).some((key) => previous[key] !== meta[key]))
