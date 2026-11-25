@@ -101,7 +101,7 @@ export interface IntakeDeps {
  *
  * 1. Creates the issue in Awaiting Init, one request: the team and status IDs come from config or
  *    a cache, and the title and description from the message itself.
- * 2. Creates its private channel `leon-<n>-<first words>` as Leon, so he is in it already.
+ * 2. Creates its public channel `leon-<n>-<first words>` as Leon, so he is in it already.
  * 3. Posts a copy in the new channel and hands the channel to slack22linear in parallel.
  *    The copy carries slack-as-leon's marker, so Hermes handles it through its plugin.
  * 4. Once the copy is saved, replaces the original message with the channel link and detaches
@@ -332,14 +332,14 @@ export class Intake {
     }
   }
 
-  /** The issue's private channel, made by Leon so he's in it at once. A taken name gets `-2`… */
+  /** The issue's channel, public (Leon never wants private ones), made by Leon so he's in it at once. A taken name gets `-2`… */
   async #createChannel(number: number, title: string): Promise<{ id: string; name: string }> {
     const c = this.#d.config;
     const base = channelName(c.channelPrefix, number, parseTitle(title).name, c.channelNameMax);
     for (let attempt = 0; attempt < 5; attempt++) {
       const name = attempt === 0 ? base : `${base.slice(0, c.channelNameMax - 3)}-${attempt + 1}`;
       try {
-        const created = await this.#d.session("conversations.create", { name, is_private: true });
+        const created = await this.#d.session("conversations.create", { name, is_private: false });
         return { id: (created.channel as { id: string }).id, name };
       } catch (error) {
         if (error instanceof SlackError && error.code === "name_taken") continue;

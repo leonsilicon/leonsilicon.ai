@@ -629,7 +629,7 @@ const issueHook = (id: string, action = "update") => ({ action, type: "Issue", d
 const commentHook = (id: string, action = "create") => ({ action, type: "Comment", data: { id } });
 const projectHook = (id: string, action = "update") => ({ action, type: "Project", data: { id } });
 
-test("a new issue gets a private channel, an intro and its status section", async () => {
+test("a new issue gets a public channel, an intro and its status section", async () => {
   const { linear, slack, sync } = setup();
   linear.addIssue(
     380,
@@ -641,7 +641,7 @@ test("a new issue gets a private channel, an intro and its status section", asyn
 
   const channel = slack.channels[0]!;
   assert.equal(channel.name, "leon-380-stop-san-francisco-optometry-email-reminders");
-  assert.equal(channel.private, true);
+  assert.equal(channel.private, false);
   assert.deepEqual([...channel.members].sort(), [AUTO, BOT, HERMES, LEON].sort());
   assert.equal(channel.topic, "");
   assert.equal(slack.sectionOf(channel.id), "Awaiting Start");

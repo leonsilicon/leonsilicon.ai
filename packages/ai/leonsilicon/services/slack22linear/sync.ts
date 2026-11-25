@@ -1700,7 +1700,8 @@ export class Sync {
         attempt === 0 ? base : `${base.slice(0, this.#c.channelNameMax - 3)}-${attempt + 1}`;
       let id: string;
       try {
-        const created = await this.#bot("conversations.create", { name, is_private: true });
+        // Leon never wants private channels.
+        const created = await this.#bot("conversations.create", { name, is_private: false });
         id = (created.channel as { id: string }).id;
       } catch (error) {
         if (error instanceof SlackError && error.code === "name_taken") continue;

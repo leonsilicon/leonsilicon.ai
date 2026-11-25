@@ -219,7 +219,7 @@ test("a message is copied to its new issue channel before being replaced with th
   assert.deepEqual(channel, {
     id: "C1",
     name: "leon-401-can-you-check-whether-rogers-billed-me-twice",
-    private: true,
+    private: false,
   });
   const edit = t.slack.edits[0]!;
   assert.equal(edit.channel, DM);
