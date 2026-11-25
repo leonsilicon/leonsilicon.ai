@@ -1,0 +1,13 @@
+{
+  "name": "@-/ai.leonsilicon.services.slack22chatgpt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Routes ChatGPT Dots and Codex workers to the shared Slack task thread.",
+  "type": "module",
+  "imports": {
+    "#handoff": "./handoff.ts"
+  },
+  "exports": {
+    ".": "./+server.ts"
+  }
+}

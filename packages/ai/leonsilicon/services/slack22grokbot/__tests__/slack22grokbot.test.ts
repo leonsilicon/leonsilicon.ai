@@ -55,6 +55,20 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
       text: "Please check page 2.",
     },
     { ts: "1795280002.002000", from: "leon", author: "Leon", files: [], text: "Include the date." },
+    {
+      ts: "1795280002.003000",
+      from: "codex",
+      author: "Codex",
+      files: [],
+      text: "Check the release URL.",
+    },
+    {
+      ts: "1795280002.004000",
+      from: "bot",
+      author: "Muse",
+      files: [],
+      text: "To Grok Bot: Can you verify the page?",
+    },
   ];
   const copies: Record<string, unknown>[] = [];
   let fail = true;
@@ -117,6 +131,14 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
     [
       { chat: "!grok:test", text: "Slack reply from Hermes:\nPlease check page 2." },
       { chat: "!grok:test", text: "Slack reply from Leon:\nInclude the date." },
+      {
+        chat: "!grok:test",
+        text: "Slack reply from Codex (collaborator):\nCheck the release URL.",
+      },
+      {
+        chat: "!grok:test",
+        text: "Slack reply from Muse (other Slack participant):\nTo Grok Bot: Can you verify the page?",
+      },
     ],
   );
   assert.notEqual(sends[0]?.key, sends[1]?.key);
@@ -125,7 +147,7 @@ test("routes by the full bot name, retries across restarts, mirrors edits, and r
   await bridge.tick();
   assert.equal(copies[1]?.eventId, copies[0]?.eventId);
   assert.equal(copies[1]?.retrySince, "1795279941.000000");
-  assert.equal(sends.length, 2);
+  assert.equal(sends.length, 4);
 
   entries.push(message(2, "Edited final Grok result"));
   entries.push({ ...message(3, "Slack reply copied into Grok", true), eventId: "$owner" });

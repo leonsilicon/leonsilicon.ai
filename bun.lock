@@ -144,6 +144,9 @@
     "apps/landing": {
       "name": "@-apps/landing",
     },
+    "apps/muse-gadget": {
+      "name": "@-apps/muse-gadget",
+    },
     "apps/orca-bridge": {
       "name": "@-apps/orca-bridge",
       "bin": {
@@ -282,6 +285,7 @@
       "name": "@-/ai.leonsilicon.services.beeper-inbox",
       "version": "0.1.0",
       "dependencies": {
+        "@-/ai.leonsilicon.services.slack22chatgpt": "workspace:*",
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
       },
     },
@@ -362,6 +366,10 @@
     "packages/ai/leonsilicon/services/slack-as-leon": {
       "name": "@-/ai.leonsilicon.services.slack-as-leon",
       "version": "2.0.0",
+    },
+    "packages/ai/leonsilicon/services/slack22chatgpt": {
+      "name": "@-/ai.leonsilicon.services.slack22chatgpt",
+      "version": "0.1.0",
     },
     "packages/ai/leonsilicon/services/slack22grokbot": {
       "name": "@-/ai.leonsilicon.services.slack22grokbot",
@@ -567,6 +575,8 @@
 
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
 
+    "@-/ai.leonsilicon.services.slack22chatgpt": ["@-/ai.leonsilicon.services.slack22chatgpt@workspace:packages/ai/leonsilicon/services/slack22chatgpt"],
+
     "@-/ai.leonsilicon.services.slack22grokbot": ["@-/ai.leonsilicon.services.slack22grokbot@workspace:packages/ai/leonsilicon/services/slack22grokbot"],
 
     "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
@@ -646,6 +656,8 @@
     "@-apps/grok-bot-roster": ["@-apps/grok-bot-roster@workspace:apps/grok-bot-roster"],
 
     "@-apps/landing": ["@-apps/landing@workspace:apps/landing"],
+
+    "@-apps/muse-gadget": ["@-apps/muse-gadget@workspace:apps/muse-gadget"],
 
     "@-apps/orca-bridge": ["@-apps/orca-bridge@workspace:apps/orca-bridge"],
 

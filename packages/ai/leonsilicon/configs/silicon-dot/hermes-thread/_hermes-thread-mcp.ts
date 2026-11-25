@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // The stdio MCP server Codex launches as `slack-puppet`: forwards each message to slack-puppet with
-// the Codex token from the login Keychain. `--check` connects once and lists the tools.
+// the Codex token from the cloud environment or login Keychain. `--check` lists the tools.
 import { createInterface } from "node:readline";
-import { forward, keychainToken, KEYCHAIN_SERVICE } from "#hermes-thread";
+import { forward, threadToken, KEYCHAIN_SERVICE } from "#hermes-thread";
 
-const token = keychainToken();
+const token = threadToken();
 if (!token) {
   process.stderr.write(
-    `hermes-thread: no slack-puppet token in the login Keychain (${KEYCHAIN_SERVICE}); run the installer (configs/silicon-dot/hermes-thread)\n`,
+    `hermes-thread: configure SLACK_AS_LEON_CODEX_TOKEN in the cloud environment or install the Mac login Keychain entry (${KEYCHAIN_SERVICE})\n`,
   );
   process.exit(1);
 }

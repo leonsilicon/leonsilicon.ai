@@ -19,6 +19,10 @@ vpx varlock run --filter '#hermes-thread' -- node packages/ai/leonsilicon/config
 
 It stores the token in the Keychain (piped to `security -i`, so it never shows in a process list), links the command, writes the Codex section (backing the old config up as `config.toml.bak-hermes-thread`), copies the skill, and ends with `hermes-thread-mcp --check`, which connects once and lists the tools. Rerun it after editing the skill; add `--replace-token` after rotating the token. New Codex sessions pick the server up; running ones don't.
 
+## Cloud environment
+
+Configure `SLACK_AS_LEON_CODEX_TOKEN` in the environment’s secret store and provide the checkout containing this client. Start the stdio server with `node <checkout>/packages/ai/leonsilicon/configs/silicon-dot/hermes-thread/_hermes-thread-mcp.ts`. Its `--check` flag verifies the tool listing. A shell-only worker can run `_hermes-thread.ts send` and `read` with the same arguments as `hermes-thread`. Include the companion skill in the environment so the session knows how to reach its thread.
+
 ## Test
 
 ```sh

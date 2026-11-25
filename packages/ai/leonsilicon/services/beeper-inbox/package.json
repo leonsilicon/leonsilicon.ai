@@ -31,6 +31,7 @@
     ".": "./+server.ts"
   },
   "dependencies": {
+    "@-/ai.leonsilicon.services.slack22chatgpt": "workspace:*",
     "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*"
   }
 }

@@ -296,7 +296,9 @@ export class Slack22GrokBot {
           ? "Hermes"
           : reply.from === "leon"
             ? "Leon"
-            : `${reply.author.replace(/\s+/g, " ").trim()} (other Slack participant)`;
+            : reply.from === "codex"
+              ? "Codex (collaborator)"
+              : `${reply.author.replace(/\s+/g, " ").trim()} (other Slack participant)`;
       const files = reply.files.map((file) => `Slack attachment: ${file}`).join("\n");
       const text = [reply.text, files].filter(Boolean).join("\n");
       if (text.trim()) {

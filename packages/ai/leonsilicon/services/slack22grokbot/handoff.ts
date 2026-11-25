@@ -36,7 +36,7 @@ export function handoffBlock(thread: SlackThread, items?: readonly number[]): st
   const name = taskName(thread);
   const what =
     items && items.length ? `item${items.length > 1 ? "s" : ""} ${items.join(", ")}` : "this task";
-  const conversation = `- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread ${id} and brings Slack replies back here with their authors. Send progress, questions and your final result in this chat. Treat a relayed reply identified as from Hermes or Leon as my answer, and distinguish it from other authors.
+  const conversation = `- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread ${id} and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.
 - Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat.`;
   return `---
 Slack thread for ${what}: ${id}

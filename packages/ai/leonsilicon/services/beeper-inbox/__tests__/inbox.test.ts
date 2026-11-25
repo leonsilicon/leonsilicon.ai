@@ -945,6 +945,7 @@ test("the Codex handoff names the session after the thread and tells it how to r
   assert.match(block, /titled exactly "Task slack:C0TASKS001\/1795280000\.123456"/);
   assert.match(block, /clickable link/);
   assert.match(block, /hermes_thread_send \(channel C0TASKS001, thread_ts 1795280000\.123456/);
+  assert.match(block, /Read peer replies for inputs from Grok Bot and Muse/);
   assert.equal(taskName(thread), "Task slack:C0TASKS001/1795280000.123456");
   assert.throws(() => slackThread("general", "1795280000.123456"), /channel ID/);
 });

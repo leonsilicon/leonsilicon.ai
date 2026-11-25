@@ -26,7 +26,7 @@ Not implemented: starting conversations with new contacts, edits and deletions, 
 
 Use [`grok_bot_send`](../slack22grokbot/README.md#slack-handoff) with a Slack channel and thread to delegate or resume work in Grok Bot. The inbox refuses direct text and file sends to Grok rooms and lets the in-process relay deliver the handoff. The task bot communicates with Hermes in the Slack thread through Slack Puppet.
 
-Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task, so `send_message` there requires `slack_channel` and `slack_thread_ts`, the Slack thread Hermes works in, and refuses the send without them (`slack-handoff.ts`). It appends Leon's standing rule in his voice: start a Codex session titled `Task slack:<channel>/<thread_ts>`, one per Slack thread (a session whose title ends in that ts gets the message instead), reply with its link, and have it work with Hermes in that thread with slack-puppet's agent tools. The result carries `slack_identifier` and `codex_session_title`. Elsewhere the two fields are refused. The thread check is shared with the [slack22grokbot](../slack22grokbot/README.md#slack-handoff). Codex gets the tools from [`configs/silicon-dot/hermes-thread`](../../configs/silicon-dot/hermes-thread/README.md) on Leon's MacBook.
+Every message in Silicon Dot's chats (network `chatgpt`, from ChatGPT Dots) is a task. `send_message` requires the issue’s `slack_channel` and `slack_thread_ts`. [slack22chatgpt](../slack22chatgpt/README.md) appends the instructions to start or resume Codex in that collaboration thread. The result carries `slack_identifier` and `codex_session_title`. The thread validation is shared with [slack22grokbot](../slack22grokbot/README.md#slack-handoff).
 
 ## How it works
 

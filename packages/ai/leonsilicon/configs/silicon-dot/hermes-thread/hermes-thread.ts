@@ -4,8 +4,8 @@ import { userInfo } from "node:os";
 /**
  * The Codex sessions Silicon Dot starts on Leon's MacBook (inside the ChatGPT app) reach
  * slack-puppet's agent tools through this: a stdio MCP server Codex launches, which forwards every
- * message to slack-puppet over HTTPS with the Codex token. The token lives in the login Keychain,
- * never in Codex's config or an environment variable.
+ * message to slack-puppet over HTTPS with the Codex token. The local token lives in the login
+ * Keychain. Cloud workers get the same restricted token from their environment's secret store.
  */
 
 export const SLACK_PUPPET_URL = "https://slack-puppet.leonsilicon.ai/mcp";
@@ -23,6 +23,11 @@ export function keychainToken(): string | null {
   );
   const token = found.status === 0 ? found.stdout.trim() : "";
   return token || null;
+}
+
+export function threadToken(): string | null {
+  const injected = process.env.SLACK_AS_LEON_CODEX_TOKEN?.trim();
+  return injected || (process.platform === "darwin" ? keychainToken() : null);
 }
 
 /**
@@ -66,7 +71,7 @@ export async function forward(
   if (!response.ok)
     return failure(
       response.status === 401
-        ? "slack-puppet refused the Codex token; rerun the hermes-thread installer (see its README)"
+        ? "slack-puppet refused the Codex token; check the environment's token or the Mac installer"
         : `slack-puppet answered HTTP ${response.status}: ${body.slice(0, 200)}`,
     );
   if ((response.headers.get("content-type") ?? "").includes("text/event-stream"))

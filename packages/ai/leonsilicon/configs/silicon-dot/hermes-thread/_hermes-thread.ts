@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // hermes-thread: talk to Hermes in a task's Slack thread from a shell, with the same two tools as the
 // slack-puppet MCP server, for sessions that can run a command but don't get Codex's MCP servers
-// (Silicon Dot's ChatGPT sessions). The token comes from the login Keychain.
+// (Silicon Dot's ChatGPT sessions). The token comes from the cloud environment or login Keychain.
 //
 //   hermes-thread send --channel C0123456789 --thread-ts 1795280000.123456 --from "Task slack:…" --text "…"
 //   hermes-thread read --channel C0123456789 --ts <ts of your post> [--after <cursor>] [--wait 120]
@@ -9,7 +9,7 @@
 // --text can be left out to read the message from stdin. Prints the tool's JSON; exits 1 on a refusal.
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { callTool, keychainToken, KEYCHAIN_SERVICE } from "#hermes-thread";
+import { callTool, threadToken, KEYCHAIN_SERVICE } from "#hermes-thread";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({
@@ -33,10 +33,10 @@ const usage = () => {
   process.exit(64);
 };
 if (command !== "send" && command !== "read") usage();
-const token = keychainToken();
+const token = threadToken();
 if (!token) {
   process.stderr.write(
-    `hermes-thread: no slack-puppet token in the login Keychain (${KEYCHAIN_SERVICE}); run the installer (configs/silicon-dot/hermes-thread)\n`,
+    `hermes-thread: configure SLACK_AS_LEON_CODEX_TOKEN in the cloud environment or install the Mac login Keychain entry (${KEYCHAIN_SERVICE})\n`,
   );
   process.exit(1);
 }

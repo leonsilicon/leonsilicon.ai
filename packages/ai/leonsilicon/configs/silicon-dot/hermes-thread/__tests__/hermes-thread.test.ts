@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { callTool, forward, withServerSection } from "#hermes-thread";
+import { callTool, forward, threadToken, withServerSection } from "#hermes-thread";
+
+test("a cloud worker can use the token injected into its environment", () => {
+  const key = "SLACK_AS_LEON_CODEX_TOKEN";
+  const previous = process.env[key];
+  try {
+    process.env[key] = "  injected-token  ";
+    assert.equal(threadToken(), "injected-token");
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
 
 const answer = (body: string, status = 200, type = "application/json") =>
   (async () => new Response(body, { status, headers: { "content-type": type } })) as typeof fetch;
