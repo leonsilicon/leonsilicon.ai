@@ -66,6 +66,7 @@ export interface SlackMessageEvent {
     thread_ts?: string;
     bot_id?: string;
     files?: SlackFile[];
+    edited?: { ts?: string };
   };
 }
 
@@ -122,7 +123,7 @@ interface Answer {
 /** A command for Autolinear (`Sync.onCommand`): from Hermes's message, or Leon's `/autolinear`. */
 export interface CommandJob {
   channel: string;
-  /** Hermes's message's ts, or `slash-<trigger id>` for Leon's slash command. */
+  /** Hermes's message ts, progress card ts plus edit ts, or Leon's `slash-<trigger id>`. */
   ts: string;
   /** The Slack thread parent, or the command's own timestamp for a top-level message. */
   threadTs?: string;
@@ -740,7 +741,13 @@ export class Sync {
       const edited = event.message;
       // Hermes can stream a reply by editing it, so its command can first show up in an edit.
       if (edited?.user === this.#c.hermesUserId)
-        return this.#onHermesMessage(event.channel, edited.ts, edited.text ?? "", edited.thread_ts);
+        return this.#onHermesMessage(
+          event.channel,
+          edited.ts,
+          edited.text ?? "",
+          edited.thread_ts,
+          edited.edited?.ts ?? event.ts,
+        );
       if (!edited || edited.bot_id || !edited.user) return;
       const known = this.#store.commentBySlack(event.channel, edited.ts);
       if (known?.origin === "slack")
@@ -911,16 +918,28 @@ export class Sync {
     ts: string,
     text: string,
     threadTs?: string,
+    editedAt?: string,
   ): Promise<void> {
-    if (commandLine(text, this.#c.autolinearUserId) === null) return;
     const rec = this.#store.issueByChannel(channelId);
     if (!rec || rec.archived) return;
+    let commandTs = ts;
+    if (/^\*Task progress\*(?:\s|$)/.test(text) && (!threadTs || threadTs === ts)) {
+      const revision = editedAt ?? ts;
+      if (!/^[0-9]+\.[0-9]{6}$/.test(revision)) return;
+      const heading = "\n\n*Update from Hermes*\n";
+      const start = text.indexOf(heading);
+      text = start === -1 ? "" : text.slice(start + heading.length);
+      const digest = text ? await stableUuid(text) : "";
+      if (!this.#store.progressAnswerChanged(channelId, ts, revision, digest)) return;
+      commandTs = `${ts}:${revision}`;
+    }
+    if (commandLine(text, this.#c.autolinearUserId) === null) return;
     const now = this.#now();
-    this.#store.markFired(saidKey(channelId, ts), now);
-    if (this.#store.fired(doneKey(channelId, ts))) return;
+    this.#store.markFired(saidKey(channelId, commandTs), now);
+    if (this.#store.fired(doneKey(channelId, commandTs))) return;
     const job: CommandJob = {
       channel: channelId,
-      ts,
+      ts: commandTs,
       threadTs: threadTs ?? ts,
       text,
       by: "hermes",
@@ -939,7 +958,7 @@ export class Sync {
    * message that starts with Autolinear's mention, or from Leon's `/autolinear`. `move` goes through
    * at once, with its workflow details, and the channel follows; `stay` keeps the status. Successful
    * Hermes commands run silently. Autolinear explains failures so Hermes can try again. Leon's slash
-   * command gets its answer privately. Each message acts once.
+   * command gets its answer privately. Each message or distinct progress answer acts once.
    */
   async onCommand(job: CommandJob): Promise<void> {
     const done = doneKey(job.channel, job.ts);

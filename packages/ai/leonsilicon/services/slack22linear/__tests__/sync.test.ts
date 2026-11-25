@@ -1938,6 +1938,55 @@ test("stay keeps the status, and a command in an edit is read once Hermes stops 
   assert.equal(autolinearPosts(t).length, 0);
 });
 
+test("changing the answer on one task progress message can move the issue again", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const ts = tsAt(t.clock.now);
+  const edit = (answer: string, reports = "") => {
+    t.clock.now += 1000;
+    const revision = tsAt(t.clock.now);
+    return {
+      type: "message",
+      subtype: "message_changed",
+      channel: channel.id,
+      ts: revision,
+      message: {
+        ts,
+        user: HERMES,
+        text: `*Task progress*${reports}\n\n*Update from Hermes*\n${answer}`,
+        edited: { ts: revision },
+      },
+    };
+  };
+
+  const assigned = `The report is being checked.\n<@${AUTO}> move executing`;
+  const first = edit(assigned);
+  await t.sync.run("slack", first);
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+  const updates = t.linear.updates.length;
+
+  await t.sync.run("slack", edit(assigned, "\n\n*Latest agent updates*\n• Verified the recipient"));
+  assert.equal(t.store.timer(`command:${channel.id}:${ts}`), null);
+  assert.equal(t.linear.updates.length, updates);
+
+  const waiting = edit(`Please confirm the recipient.\n<@${AUTO}> move leon`);
+  await t.sync.run("slack", waiting);
+  await t.sync.run("slack", first);
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
+
+  const done = edit(`Sent and verified.\n<@${AUTO}> move done`);
+  await t.sync.run("slack", done);
+  await t.sync.run("slack", done);
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Done");
+  assert.equal(channel.archived, true);
+});
+
 test("a command that doesn't work is answered under it, and reminders stop after the limit", async () => {
   const t = setup();
   const { issue, channel } = await issueChannel(t);

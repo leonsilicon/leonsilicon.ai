@@ -107,6 +107,9 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS command_moves (
     issue_id TEXT PRIMARY KEY, ts TEXT NOT NULL, caller TEXT NOT NULL,
     from_state TEXT NOT NULL, to_state TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS progress_edits (
+    channel_id TEXT NOT NULL, message_ts TEXT NOT NULL, revision TEXT NOT NULL, answer_digest TEXT NOT NULL,
+    PRIMARY KEY (channel_id, message_ts))`,
 ];
 
 const MAX_ATTEMPTS = 6;
@@ -372,6 +375,26 @@ export class Store {
       prefix,
     )[0];
     return row?.t === null || row?.t === undefined ? null : Number(row.t);
+  }
+
+  /** Remember the newest card revision. Agent-report edits carry the same answer digest. */
+  progressAnswerChanged(channel: string, ts: string, revision: string, digest: string): boolean {
+    const prior = this.#sql.exec(
+      `SELECT revision, answer_digest FROM progress_edits WHERE channel_id = ? AND message_ts = ?`,
+      channel,
+      ts,
+    )[0];
+    if (prior && String(prior.revision) >= revision) return false;
+    this.#sql.exec(
+      `INSERT INTO progress_edits (channel_id, message_ts, revision, answer_digest) VALUES (?, ?, ?, ?)
+       ON CONFLICT (channel_id, message_ts) DO UPDATE SET
+         revision = excluded.revision, answer_digest = excluded.answer_digest`,
+      channel,
+      ts,
+      revision,
+      digest,
+    );
+    return prior ? prior.answer_digest !== digest : Boolean(digest);
   }
 
   /** Whether something that should happen once, such as an issue's due notice, already has. */
