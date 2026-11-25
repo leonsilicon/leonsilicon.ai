@@ -20,7 +20,7 @@ Services for Leon's agents (Hermes Cloud and others), each a Cloudflare Worker o
 | [Grok Bot Admin](https://grokbot-admin.leonsilicon.ai/) | Lists and deletes bots through MCP                                  |
 | [Gmail2Slack](https://gmail2slack.leonsilicon.ai/)      | Mirrors incoming email into Slack                                   |
 
-[Autotrigger](packages/ai/leonsilicon/services/autotrigger/README.md) routes relevant Slack feed messages to Awaiting Trigger issue channels.
+[Autotrigger](packages/ai/leonsilicon/services/autotrigger/README.md) routes relevant Slack feed messages to Awaiting Trigger issue channels, and opens an issue for each new case in Leon's [Watcher projects](packages/ai/leonsilicon/services/slack22linear/README.md#routine-and-watcher-projects). Routine projects follow his routines in Muse.
 
 [Slack Puppet migration](https://slack-as-leon.leonsilicon.ai/) covers the temporary `slack-as-leon` hostname. Each live service page links its source and deployment runbook.
 
