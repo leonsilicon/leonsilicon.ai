@@ -29,7 +29,8 @@ jobs:
             --rootdir=. --import-mode=importlib \
             apps/hermes-plugin-dropbox-task-memory/__tests__ \
             apps/hermes-plugin-slack22orca/__tests__ \
-            apps/hermes-plugin-hermes22muse/__tests__
+            apps/hermes-plugin-hermes22muse/__tests__ \
+            apps/muse-gadget/__tests__
       - run: vp build
 
   # Pushes to main deploy the Cloudflare Workers they changed, once the checks above pass.

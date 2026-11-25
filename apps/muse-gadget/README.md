@@ -12,7 +12,7 @@ Runs Hermes Cloud's (Captain Claude's) [Muse Gadget](https://github.com/facebook
 | State    | `/opt/data/muse-gadget/state`: `identity.json` (node `homelink-42967a`), `pairing.json` (device tokens), `sdk_token`, `origin-secret` (muse-mcp's `ORIGIN_SHARED_SECRET`). Never share them   |
 | Logs     | `runtime.log` (Gadget and server), `mcp-audit.log` (every muse-mcp call)                                                                                                                      |
 
-`serve-cloud.py` replaces muse-mcp's provenance stamp with nothing, so Muse receives hermes22muse's messages exactly as written, as the user's own.
+`serve-cloud.py` replaces muse-mcp's provenance stamp with nothing, so Muse receives hermes22muse's messages exactly as written, as the user's own. It also scopes `muse_chat_status`'s `approvals.snapshot` count to the requested chat (marking `pending_approvals_scoped: true`), since Muse emits an account-wide snapshot whose pending approvals from other side chats, the main chat or background tasks would otherwise block unrelated chats.
 
 ## Deploy a change
 
