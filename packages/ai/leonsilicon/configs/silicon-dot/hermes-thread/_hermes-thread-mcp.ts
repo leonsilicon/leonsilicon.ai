@@ -43,5 +43,5 @@ lines.on("line", (line) => {
   pending.add(work);
 });
 lines.on("close", () => {
-  void Promise.allSettled([...pending]).then(() => process.exit(0));
+  void Promise.allSettled(pending).then(() => process.exit(0));
 });
