@@ -7,13 +7,14 @@ import { parseArgs } from "@-/com.npmjs.citty";
  * Autolinear's bot; Leon can type the same words after `/autolinear`.
  *
  * ```text
- * @Autolinear move <status> [--who …] [--start …] [--event … --stop …] [--due …]
+ * @Autolinear move <status> [--who …] [--start …] [--event … --stop …] [--until …] [--due …]
  * @Autolinear stay
  * @Autolinear help
  * ```
  *
  * `<status>` is a Linear status available to Autolinear, with or without "Awaiting": `done`,
- * `leon`, `"Awaiting Trigger"`. Values with spaces are double-quoted.
+ * `leon`, `"Awaiting Trigger"`. Values with spaces are double-quoted. `--until` goes with Executing:
+ * when the work should be done, as a duration (`45m`, `2h`, `1h30m`) or a time.
  */
 
 export type AutolinearCommand =
@@ -28,6 +29,7 @@ const moveOptions = {
   start: { type: "string" },
   event: { type: "string" },
   stop: { type: "string" },
+  until: { type: "string" },
   due: { type: "string" },
 } as const;
 const moveArgs = { status: { type: "positional" }, ...moveOptions } as const;
@@ -45,8 +47,8 @@ export function commandUsage(lead: string): string {
     `\`${lead} move trigger --who "Apple App Review"\`: waiting on someone else`,
     `\`${lead} move trigger --event "Rogers BYOD deal" --stop 2026-12-01\`: waiting for an event until a stop date`,
     `\`${lead} move date --start 2026-12-01T09:00:00-05:00\`: work starts later`,
-    `\`${lead} move executing\`: work is already underway`,
-    `\`${lead} stay\`: leave the status as it is`,
+    `\`${lead} move executing --until 2h\`: an agent is still working on it; if nothing happens here by then, it goes to Leon`,
+    `\`${lead} stay\`: keep the status (after your :eyes:, the one from before it)`,
   ]
     .map((line) => `• ${line}`)
     .join("\n")
@@ -135,6 +137,18 @@ function parseMove(args: string[]): ParsedCommand {
   if (matchStatus(parsed.status, [AWAITING_HERMES]))
     return { ok: false, error: "Awaiting Hermes is only available in Linear" };
   return { ok: true, command: { verb: "move", status: parsed.status, keys } };
+}
+
+/**
+ * When a `--until` value ends (ms): a duration from `now` (`45m`, `2h`, `1h30m`), or null when it
+ * isn't one. Times are read by the caller.
+ */
+export function untilDuration(value: string, now: number): number | null {
+  const match = /^\s*(?:(\d+)\s*h(?:ours?|rs?)?)?\s*(?:(\d+)\s*m(?:in(?:utes?|s)?)?)?\s*$/i.exec(
+    value,
+  );
+  if (!match || (match[1] === undefined && match[2] === undefined)) return null;
+  return now + (Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0)) * 60_000;
 }
 
 /** Reads a command's words (after the mention or `/autolinear`). Errors say what's wrong in a sentence. */

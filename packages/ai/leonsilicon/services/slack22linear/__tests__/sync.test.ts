@@ -20,6 +20,8 @@ import {
   ANSWER_SETTLE_MS,
   autolinearIssueId,
   COMMAND_SETTLE_MS,
+  EXECUTING_MS,
+  LEASE_MS,
   MAX_REMINDERS,
   PROJECT_GRACE_MS,
   readMuseAnswer,
@@ -1093,7 +1095,7 @@ test("a due time in the title sets Linear's due date and posts in #feed-linear o
 
 test("Linear's own due date alone goes off at midnight starting that day", async () => {
   const { linear, slack, sync, clock, store, drain } = setup(DEC_1 - 3600_000);
-  const issue = linear.addIssue(402, "Renew passport", "Executing");
+  const issue = linear.addIssue(402, "Renew passport", "Awaiting Leon");
   issue.dueDate = "2026-12-01";
   await sync.run("linear", updateHook(issue.id, { dueDate: null }));
   assert.equal(store.timer(`timer:${issue.id}`), DEC_1);
@@ -1103,7 +1105,7 @@ test("Linear's own due date alone goes off at midnight starting that day", async
   await drain();
   assert.match(
     slack.posts.at(-1)!.text,
-    /^:date: Due: .*LEON-402: Renew passport.* · due Tue, Dec 1 · Executing/,
+    /^:date: Due: .*LEON-402: Renew passport.* · due Tue, Dec 1 · Awaiting Leon/,
   );
 });
 
@@ -1907,7 +1909,7 @@ test("a trigger command requires an external response or a complete timed event"
 
 test("stay keeps the status, and a command in an edit is read once Hermes stops editing, once", async () => {
   const t = setup();
-  const { issue, channel } = await issueChannel(t, "Executing");
+  const { issue, channel } = await issueChannel(t, "Awaiting Trigger");
   const message = await leonWrites(t, channel.id, "how's the migration going?");
   t.clock.now += 1000;
   const ts = tsAt(t.clock.now);
@@ -1929,14 +1931,14 @@ test("stay keeps the status, and a command in an edit is read once Hermes stops 
   t.clock.now += 1;
   await t.drain();
   assert.deepEqual(t.slack.reactions, []);
-  assert.equal(issue.state.name, "Executing");
+  assert.equal(issue.state.name, "Awaiting Trigger");
   assert.equal(autolinearPosts(t).length, 0, "the half-written command got no answer");
 
   // A later edit of the same message doesn't act again.
   await t.sync.run("slack", edit(`Halfway there, really.\n<@${AUTO}> move done`));
   t.clock.now += COMMAND_SETTLE_MS;
   await t.drain();
-  assert.equal(issue.state.name, "Executing");
+  assert.equal(issue.state.name, "Awaiting Trigger");
   await hermesReacts(t, channel.id, message);
   assert.equal(autolinearPosts(t).length, 0);
 });
@@ -2330,4 +2332,151 @@ test("other reactions, other people's reactions, and other channels ask for noth
   assert.equal(issue.state.name, "Awaiting Init");
   assert.equal(t.linear.updates.length, 0);
   assert.equal(autolinearPosts(t).length, 0);
+});
+
+// ── Executing's lease ────────────────────────────────────────────────────────
+
+const statusNotices = (t: ReturnType<typeof setup>) =>
+  t.slack.posts.filter((p) => p.user !== AUTO && p.text.includes("→"));
+
+test("Executing is a lease: once nothing works on an issue, it goes to Leon", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "is keto bad for my cholesterol?");
+  await hermesReacts(t, channel.id, question, "eyes");
+  assert.equal(issue.state.name, "Executing");
+
+  // A turn the gateway reports running holds the issue, however long it takes.
+  for (let minute = 0; minute < 40; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [channel.id] });
+    await t.drain();
+  }
+  assert.equal(issue.state.name, "Executing", "a running turn holds the lease");
+
+  // The gateway dies under the turn. Autolinear's reminder goes unanswered, and isn't work.
+  t.clock.now += LEASE_MS - 1;
+  await t.drain();
+  const [reminder, ...more] = autolinearPosts(t);
+  assert.equal(more.length, 0);
+  await t.sync.run("slack", {
+    type: "message",
+    channel: channel.id,
+    user: AUTO,
+    bot_id: "B0AUTOLIN1",
+    text: reminder!.text,
+    ts: reminder!.ts,
+  });
+  assert.equal(issue.state.name, "Executing");
+  t.clock.now += 1;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
+  const notice = statusNotices(t).at(-1)!;
+  assert.match(notice.text, /^\*Executing\* → \*Awaiting Leon\*/);
+  assert.ok(notice.text.includes(`<@${LEON}>`), "Leon hears about it");
+  const comment = [...t.linear.comments.values()].at(-1)!;
+  assert.match(comment.body, /^\*\*slack22linear:\*\* nothing is working on this any more/);
+  assert.equal(t.store.timer(`lease:${issue.id}`), null, "only Executing has a lease");
+});
+
+test("agents' posts and `move executing --until` hold the lease; Autolinear's posts don't", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const ask = await leonWrites(t, channel.id, "post my keyboard on marketplaces");
+  await hermesReacts(t, channel.id, ask, "eyes");
+  t.clock.now += 3000;
+  await hermesCommands(t, channel.id, "move executing --until 3h", "Grok is checking prices.");
+  await hermesReacts(t, channel.id, ask);
+  const lease = t.store.timer(`lease:${issue.id}`)!;
+  assert.equal(lease, t.clock.now - ANSWER_SETTLE_MS + 3 * 3600_000, "as long as Hermes said");
+
+  t.clock.now = lease - 60_000;
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+  // An agent reports in the task's thread, as Leon through slack-as-leon: it's still working.
+  await t.sync.run("slack", {
+    type: "message",
+    channel: channel.id,
+    user: LEON,
+    text: ":robot_face: *Task slack:…*: Prices are in; checking accounts next.",
+    ts: tsAt(t.clock.now),
+    thread_ts: ask,
+    client_msg_id: "a7011eae-0000-4000-8000-000000000001",
+  });
+  assert.equal(t.store.timer(`lease:${issue.id}`), t.clock.now + LEASE_MS);
+  t.clock.now += LEASE_MS - 60_000;
+  // Muse's bot edits its reply.
+  await t.sync.run("slack", {
+    type: "message",
+    subtype: "message_changed",
+    channel: channel.id,
+    ts: tsAt(t.clock.now),
+    message: {
+      ts: tsAt(t.clock.now - 1000),
+      user: "U0MUSEBOT1",
+      bot_id: "B0MUSEBOT1",
+      text: "Done.",
+    },
+  });
+  const held = t.store.timer(`lease:${issue.id}`)!;
+  assert.equal(held, t.clock.now + LEASE_MS);
+  t.clock.now += LEASE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon", "nobody acted on the agents' reports");
+
+  // A bare `move executing` holds for an hour.
+  const t2 = setup();
+  const other = await issueChannel(t2);
+  await hermesCommands(t2, other.channel.id, "move executing", "Handed to Codex.");
+  assert.equal(other.issue.state.name, "Executing");
+  assert.equal(t2.store.timer(`lease:${other.issue.id}`), t2.clock.now + EXECUTING_MS);
+});
+
+test("`--until` must be soon and goes with Executing only", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Executing");
+  await hermesCommands(t, channel.id, "move executing --until 25h");
+  await hermesCommands(t, channel.id, "move done --until 2h");
+  const [far, wrong] = autolinearPosts(t);
+  assert.ok(far!.text.includes("`--until` can be at most 24 hours away"), far!.text);
+  assert.ok(wrong!.text.includes("`--until` goes with *Executing* only"), wrong!.text);
+  assert.equal(issue.state.name, "Executing");
+});
+
+test("stay after Hermes's 👀 goes back to the wait before it; with none, it's refused", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Awaiting Leon");
+  const note = await leonWrites(t, channel.id, "always send conclusions in the main thread");
+  await hermesReacts(t, channel.id, note, "eyes");
+  assert.equal(issue.state.name, "Executing");
+  t.clock.now += 3000;
+  await hermesCommands(t, channel.id, "stay", "Understood. Saved as a standing rule.");
+  assert.equal(issue.state.name, "Awaiting Leon", "back where it was before the 👀");
+  assert.equal(autolinearPosts(t).length, 0);
+  assert.equal(t.store.timer(`lease:${issue.id}`), null);
+
+  // LEON-487 and 488: a new request has no wait to go back to.
+  const t2 = setup();
+  const fresh = await issueChannel(t2);
+  const ask = await leonWrites(t2, fresh.channel.id, "forward this email");
+  await hermesReacts(t2, fresh.channel.id, ask, "eyes");
+  t2.clock.now += 3000;
+  await hermesCommands(t2, fresh.channel.id, "stay");
+  assert.equal(fresh.issue.state.name, "Executing");
+  const [why] = autolinearPosts(t2);
+  assert.ok(why!.text.includes("(it was *Awaiting Init* before your :eyes:)"), why!.text);
+  assert.ok(why!.text.includes("`move executing --until <when it should be done>`"), why!.text);
+});
+
+test("the daily tick gives an issue already stuck in Executing a lease", async () => {
+  const t = setup();
+  const { issue } = await issueChannel(t, "Executing");
+  assert.equal(t.store.timer(`lease:${issue.id}`), t.clock.now - 60_000 + LEASE_MS);
+  // As if it went to Executing before leases existed.
+  t.store.setTimer(`lease:${issue.id}`, "lease", null, null, t.clock.now);
+  await t.sync.run("tick", {});
+  assert.equal(t.store.timer(`lease:${issue.id}`), t.clock.now + LEASE_MS);
+  t.clock.now += LEASE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
 });

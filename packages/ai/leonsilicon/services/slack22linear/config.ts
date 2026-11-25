@@ -31,6 +31,13 @@ export interface SyncConfig {
   hermesAckReaction: string;
   hermesAckState: string;
   /**
+   * Where an issue in `hermesAckState` goes when its lease ends with nothing working on it
+   * (`Sync.onLeaseEnded`): to someone who will see it.
+   */
+  leaseEndedTarget: string;
+  /** The status autolinear opens new issues in. `stay` never puts an issue back in it. */
+  intakeState: string;
+  /**
    * Hermes's reactions (Slack's names, no colons) to the message it took up once its turn is over
    * (✅), or once its turn failed (❌). Hermes then owes Autolinear a command (`Sync.onAnswered`).
    */
@@ -113,6 +120,8 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
       env.TRIGGER_EXPIRED_TARGET ?? env.LISTENER_EXPIRED_TARGET ?? "Awaiting Leon",
     hermesAckReaction: env.HERMES_ACK_REACTION ?? "eyes",
     hermesAckState: env.HERMES_ACK_STATE ?? "Executing",
+    leaseEndedTarget: env.LEASE_ENDED_TARGET ?? "Awaiting Leon",
+    intakeState: env.INTAKE_STATE ?? "Awaiting Init",
     hermesAnsweredReaction: env.HERMES_ANSWERED_REACTION ?? "white_check_mark",
     hermesFailedReaction: env.HERMES_FAILED_REACTION ?? "x",
     autolinearUserId: env.AUTOLINEAR_BOT_USER_ID?.trim() || null,

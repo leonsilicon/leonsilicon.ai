@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AWAITING_PREFIX, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
+import {
+  AWAITING_PREFIX,
+  commandLine,
+  commandUsage,
+  matchStatus,
+  parseCommand,
+  untilDuration,
+} from "#command";
 
 const AUTO = "U0AUTOLIN01";
 
@@ -79,11 +86,11 @@ test("a command that doesn't read says why", () => {
     ["move who=x", "`move` needs a status, such as `move done`"],
     [
       "move trigger colour=red",
-      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--due`",
+      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--until`, `--due`",
     ],
     [
       "move trigger --colour red",
-      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--due`",
+      "unknown option `--colour`. Use `--who`, `--start`, `--event`, `--stop`, `--until`, `--due`",
     ],
     ["move trigger who=", "`--who` has no value"],
     ["move trigger --who --due 2026-12-01", "`--who` has no value"],
@@ -93,6 +100,21 @@ test("a command that doesn't read says why", () => {
     ["stay put", "`stay` takes nothing after it"],
   ])
     assert.deepEqual(parseCommand(words!), { ok: false, error }, words);
+});
+
+test("`move executing --until` reads a duration; times are left to the caller", () => {
+  assert.deepEqual(parseCommand("move executing --until 2h"), {
+    ok: true,
+    command: { verb: "move", status: "executing", keys: { until: "2h" } },
+  });
+  const now = Date.UTC(2026, 10, 25, 23, 0);
+  assert.equal(untilDuration("45m", now), now + 45 * 60_000);
+  assert.equal(untilDuration("2h", now), now + 2 * 3600_000);
+  assert.equal(untilDuration("1h30m", now), now + 90 * 60_000);
+  assert.equal(untilDuration("90 minutes", now), now + 90 * 60_000);
+  assert.equal(untilDuration("2026-11-26T09:00:00-05:00", now), null);
+  assert.equal(untilDuration("soon", now), null);
+  assert.equal(untilDuration("", now), null);
 });
 
 test("a status matches without regard to case, with or without Awaiting", () => {

@@ -1,6 +1,13 @@
 import type { IssueMetadata } from "#issue-metadata";
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
-import { AWAITING_HERMES, commandLine, commandUsage, matchStatus, parseCommand } from "#command";
+import {
+  AWAITING_HERMES,
+  commandLine,
+  commandUsage,
+  matchStatus,
+  parseCommand,
+  untilDuration,
+} from "#command";
 import type { AutolinearCommand } from "#command";
 import type { SyncConfig } from "#config";
 import {
@@ -281,6 +288,21 @@ export const MAX_REMINDERS = 2;
  */
 export const STUCK_MS = 5 * 60_000;
 
+/**
+ * Executing is a lease (Leon's rule, 2026-11-25: nothing may sit in Executing with no one working on
+ * it; LEON-479–498 did, for up to 30 hours). Every issue in Executing has an end time, and when it
+ * comes the issue moves to `leaseEndedTarget` (`Sync.onLeaseEnded`). Signs of work push the end to
+ * at least `LEASE_MS` from now: Hermes's gateway reporting a turn running in the channel
+ * (`Sync.onTurns`, about every minute), Hermes's 👀, and any post or edit there other than
+ * Autolinear's and this sync's own, such as Hermes's Task progress or an agent's report. An issue
+ * that enters Executing any other way gets `LEASE_MS` too.
+ */
+export const LEASE_MS = 15 * 60_000;
+/** How long `move executing` holds an issue without `--until`. */
+export const EXECUTING_MS = 60 * 60_000;
+/** The furthest `--until` may be. A longer wait is Awaiting Date or Awaiting Trigger. */
+export const MAX_LEASE_MS = 24 * 3600_000;
+
 /** A Slack message ts as milliseconds. */
 const slackTsMs = (ts: string) => Math.round(Number(ts) * 1000);
 
@@ -330,6 +352,8 @@ const PROJECT_RETRY_MS = 30 * 60_000;
 
 /** The timer of an issue: when its next start, stop or due time comes. */
 const issueTimer = (issueId: string) => `timer:${issueId}`;
+/** When an issue in Executing goes to `leaseEndedTarget`, unless something works on it first. */
+const leaseKey = (issueId: string) => `lease:${issueId}`;
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
 /**
@@ -425,6 +449,7 @@ export class Sync {
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
     else if (kind === "stuck") await this.onStuck(payload as Stuck);
+    else if (kind === "lease") await this.onLeaseEnded((payload as { id: string }).id);
     else if (kind === "turns") this.onTurns(payload as Turns);
     else if (kind === "muse-answer") await this.onMuseAnswer(payload as MuseAnswer);
     else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
@@ -449,6 +474,7 @@ export class Sync {
   async onLinearIssue(hook: LinearWebhook): Promise<void> {
     if (hook.action === "remove") {
       this.#store.setTimer(issueTimer(hook.data.id), "timer", null, null, this.#now());
+      this.#store.setTimer(leaseKey(hook.data.id), "lease", null, null, this.#now());
       const rec = this.#store.issue(hook.data.id);
       if (rec) this.#issueMetadata.remove(rec);
       if (rec && !rec.archived) {
@@ -522,6 +548,7 @@ export class Sync {
    */
   async syncIssue(issue: LinearIssue, mode: "live" | "quiet"): Promise<IssueRecord | null> {
     this.#planTimer(issue);
+    this.#planLease(issue);
     const prev = this.#store.issue(issue.id);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
@@ -806,6 +833,7 @@ export class Sync {
 
   async onSlackMessage(event: SlackMessageEvent): Promise<void> {
     if (event.type !== "message") return;
+    await this.#noteWork(event);
     if (event.subtype === "message_changed") {
       const edited = event.message;
       // Hermes can stream a reply by editing it, so its command can first show up in an edit.
@@ -897,6 +925,7 @@ export class Sync {
       now,
     );
     if (!ended) {
+      this.#workedIn(channel);
       if (event.item_user === this.#c.leonUserId) return this.onHermesAck(rec, ts);
       if (!event.item_user || !this.#c.pingHermesStates.includes(rec.stateName)) return;
       if (event.item_user !== (await this.#botUser())) return;
@@ -990,8 +1019,75 @@ export class Sync {
    */
   onTurns(turns: Turns): void {
     const now = this.#now();
-    for (const channel of new Set(turns.channels))
+    for (const channel of new Set(turns.channels)) {
       this.#store.postponeTimers(stuckKey(channel), now + STUCK_MS, now);
+      this.#workedIn(channel);
+    }
+  }
+
+  // ── Executing's lease ──────────────────────────────────────────────────────
+
+  /** Gives an issue in Executing a lease when it has none; any other issue has none. */
+  #planLease(issue: LinearIssue): void {
+    const now = this.#now();
+    if (issue.state.name !== this.#c.hermesAckState)
+      this.#store.setTimer(leaseKey(issue.id), "lease", null, null, now);
+    else if (this.#store.timer(leaseKey(issue.id)) === null)
+      this.#extendLease(issue.id, now + LEASE_MS);
+  }
+
+  /** Moves the lease's end to `at` when that's later, or to `at` exactly with `exact`. */
+  #extendLease(issueId: string, at: number, exact = false): void {
+    const current = this.#store.timer(leaseKey(issueId));
+    if (!exact && current !== null && current >= at) return;
+    this.#store.setTimer(leaseKey(issueId), "lease", { id: issueId }, at, this.#now());
+  }
+
+  /** A sign of work in an issue's channel: an issue in Executing keeps its lease `LEASE_MS` more. */
+  #workedIn(channelId: string): void {
+    const rec = this.#store.issueByChannel(channelId);
+    if (rec && !rec.archived && rec.stateName === this.#c.hermesAckState)
+      this.#extendLease(rec.issueId, this.#now() + LEASE_MS);
+  }
+
+  /** Any post or edit in an issue's channel is a sign of work, except Autolinear's and the sync's. */
+  async #noteWork(event: SlackMessageEvent): Promise<void> {
+    const { subtype } = event;
+    if (
+      subtype &&
+      !["message_changed", "file_share", "thread_broadcast", "bot_message"].includes(subtype)
+    )
+      return;
+    const rec = this.#store.issueByChannel(event.channel);
+    if (!rec || rec.archived || rec.stateName !== this.#c.hermesAckState) return;
+    const author = subtype === "message_changed" ? event.message : event;
+    if (author?.user && author.user === this.#c.autolinearUserId) return;
+    if (author?.bot_id && author.user === (await this.#botUser())) return;
+    this.#workedIn(event.channel);
+  }
+
+  /**
+   * An issue's lease ended while it was in Executing: no Hermes turn has run in its channel, no one
+   * has posted there for `LEASE_MS`, and the time `move executing` gave has passed. Whatever was
+   * working on it stopped (a dropped turn, a failed handoff, an agent whose report nobody acted
+   * on), so it goes to `leaseEndedTarget`, which mentions Leon, with a comment that says why.
+   * Workflow details stay, so the issue can go back to a wait it had.
+   */
+  async onLeaseEnded(issueId: string): Promise<void> {
+    const issue = await this.#linear.issue(issueId);
+    if (!issue || issue.state.name !== this.#c.hermesAckState) return;
+    const to = this.#c.leaseEndedTarget;
+    const at = this.#now();
+    await this.#move(issue, to, { keepKeys: true });
+    this.#store.dropAck(issue.id);
+    await this.#linear.createComment({
+      id: await stableUuid(`lease-ended:${issue.id}:${at}`),
+      issueId: issue.id,
+      body: `**slack22linear:** nothing is working on this any more, so it left *${issue.state.name}*: no Hermes turn is running in its channel, no one has posted there for ${LEASE_MS / 60_000} minutes, and any time given with \`move executing --until\` has passed. Reply in the channel to pick it back up.`,
+    });
+    this.#log("lease_ended", { issue: issue.identifier, to });
+    const moved = await this.#linear.issue(issue.id);
+    if (moved) await this.syncIssue(moved, "live");
   }
 
   /**
@@ -1130,9 +1226,31 @@ export class Sync {
         ok: false,
         text: `Tell me what to do with ${issue.identifier}, which is *${issue.state.name}*:\n${commandUsage(lead)}`,
       };
-    if (command.verb === "stay")
-      return { ok: true, text: `${issue.identifier} stays *${issue.state.name}*.` };
+    if (command.verb === "stay") return this.#stay(issue, job, lead);
     return this.#commandMove(issue, command, job);
+  }
+
+  /**
+   * `stay` keeps the status. In Executing, which Hermes's 👀 moved the issue to, it means the
+   * status from before the 👀 (Leon's rule, 2026-11-25: LEON-487, 488 and 494 sat in Executing
+   * after a `stay`). With no wait to go back to, Hermes has to say who is next, or which agent is
+   * still working (`move executing --until`). Leon's `/autolinear stay` keeps the status as it is.
+   */
+  async #stay(issue: LinearIssue, job: CommandJob, lead: string): Promise<Outcome> {
+    const status = issue.state.name;
+    if (job.by === "leon" || status !== this.#c.hermesAckState)
+      return { ok: true, text: `${issue.identifier} stays *${status}*.` };
+    const before = this.#store.ack(issue.id)?.fromState;
+    const waits =
+      before &&
+      ![status, this.#c.intakeState, this.#c.hermesState, ...this.#c.pingHermesStates].includes(
+        before,
+      );
+    if (waits) return this.#commandMove(issue, { verb: "move", status: before, keys: {} }, job);
+    return {
+      ok: false,
+      text: `I couldn't do that: ${issue.identifier} is *${status}*${before ? ` (it was *${before}* before your :${this.#c.hermesAckReaction}:)` : ""}, and an issue only stays *${status}* while something works on it. If an agent is still on it, say \`move executing --until <when it should be done>\`; otherwise say who is next.\n${commandUsage(lead)}`,
+    };
   }
 
   /**
@@ -1154,9 +1272,23 @@ export class Sync {
       : command.status;
     const to = matchStatus(status, names);
     if (!to) return fail(`no status is called "${command.status}"; use one of ${names.join(", ")}`);
+    const { until, ...keys } = command.keys;
+    let leaseEnd: number | null = null;
+    if (to === this.#c.hermesAckState) {
+      const now = this.#now();
+      leaseEnd = until
+        ? (untilDuration(until, now) ?? metaInstant(until, this.#c.timeZone)?.getTime() ?? null)
+        : now + EXECUTING_MS;
+      if (leaseEnd === null)
+        return fail(`\`--until ${until}\` needs a duration (\`45m\`, \`2h\`) or an RFC 3339 time`);
+      if (leaseEnd <= now) return fail(`\`--until ${until}\` has already passed`);
+      if (leaseEnd - now > MAX_LEASE_MS)
+        return fail(
+          `\`--until\` can be at most ${MAX_LEASE_MS / 3600_000} hours away; for a longer wait, use \`move date\` or \`move trigger\``,
+        );
+    } else if (until) return fail(`\`--until\` goes with *${this.#c.hermesAckState}* only`);
     const previous = issueWorkflow(issue);
     const meta = { ...previous };
-    const { keys } = command;
     for (const status of [this.#c.dateState, this.#c.triggerState]) {
       if (status === to) continue;
       for (const key of this.#statusKeys(status)) {
@@ -1194,8 +1326,13 @@ export class Sync {
       const day = localDay(due.getTime(), this.#c.timeZone);
       if (day !== issue.dueDate) update.dueDate = day;
     }
+    const holds = () => {
+      if (leaseEnd === null) return "";
+      this.#extendLease(issue.id, leaseEnd, true);
+      return ` If nothing happens in its channel by ${localLabel(leaseEnd, this.#c.timeZone, true)}, it goes to *${this.#c.leaseEndedTarget}*.`;
+    };
     if (!Object.keys(update).length)
-      return { ok: true, text: `${issue.identifier} is already *${to}*.` };
+      return { ok: true, text: `${issue.identifier} is already *${to}*.${holds()}` };
     if (update.stateId !== undefined)
       this.#store.putCommandMove({
         issueId: issue.id,
@@ -1209,7 +1346,7 @@ export class Sync {
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved) await this.syncIssue(moved, "live");
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
-    return { ok: true, text: `${issue.identifier} is now *${to}*.` };
+    return { ok: true, text: `${issue.identifier} is now *${to}*.${holds()}` };
   }
 
   /**
@@ -1617,6 +1754,7 @@ export class Sync {
       else {
         this.#issueMetadata.save(rec.channelId, issue);
         this.#planTimer(issue);
+        this.#planLease(issue);
       }
     }
     for (const rec of this.#store.allIssues()) {
