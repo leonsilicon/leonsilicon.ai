@@ -25,7 +25,7 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Test Hermes plugins
         run: |
-          uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with pytest python -m pytest \
+          uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with cryptography --with pytest python -m pytest \
             --rootdir=. --import-mode=importlib \
             apps/hermes-plugin-dropbox-task-memory/__tests__ \
             apps/hermes-plugin-slack22orca/__tests__ \
