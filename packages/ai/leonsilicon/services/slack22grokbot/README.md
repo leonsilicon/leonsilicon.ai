@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.slack22grokbot
 
-The `slack22grokbot` MCP extension delivers each Hermes handoff in the bot's Beeper chat as Leon and connects the resulting task bot to its Slack thread.
+The `slack22grokbot` MCP extension delivers Hermes’s browser work, including work in signed-in sessions, in the bot's Beeper chat as Leon and connects the resulting task bot to its Slack thread.
 
 It runs inside the [Beeper inbox](../beeper-inbox/README.md) daemon on Hermes Cloud and uses that inbox to reach Grok Bot over Matrix.
 
