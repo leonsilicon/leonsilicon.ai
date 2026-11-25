@@ -150,6 +150,10 @@ export function sideChat(handoff: string) {
   return "https://muse.ai/thread/" + handoff;
 }
 
+export function museDmOpening(text: string, channel: string, thread: string) {
+  return text + "\n\nOriginal Slack thread: " + slackPermalink(channel, thread);
+}
+
 /** What Muse receives for a new handoff, and the thread post that shows all of it. */
 export function handoffTexts(task: string, channel: string, ts: string, handoff: string) {
   const muse =
@@ -158,10 +162,15 @@ export function handoffTexts(task: string, channel: string, ts: string, handoff:
     "). Work on it in this chat and reply here. Hermes reads your replies, may follow up, " +
     "and passes your final answer to Leon. Leon may also join this chat.\n\nTask:\n" +
     task;
+  const slackReply = channel.startsWith("D") ? "\nMuse will send replies in its own Slack DM." : "";
   return {
     muse,
     thread:
-      "Handed to Muse. Side chat: " + sideChat(handoff) + "\nEverything sent to Muse:\n\n" + muse,
+      "Handed to Muse. Side chat: " +
+      sideChat(handoff) +
+      slackReply +
+      "\nEverything sent to Muse:\n\n" +
+      muse,
   };
 }
 
@@ -178,7 +187,7 @@ export function handoffGuide(owner: string) {
       owner +
       "> so he is pinged.",
     "4. muse_handoff posts the full task in a thread under his message and returns Muse's reply. Judge it against his request. If it is incomplete, wrong or unclear, follow up with muse_reply; the exchange stays in that thread. If Muse is still working, call muse_wait.",
-    "5. When you are satisfied, give Leon a concise, checked answer in your normal reply. Muse's messages are already relayed in the handoff thread, so keep your own reply focused on the outcome, any corrections, and what Leon needs to know.",
+    "5. When you are satisfied, give Leon a concise, checked answer in your normal reply. The Muse bot relays the transcript in the original channel thread or, for a DM with you, in its own DM with Leon. Keep your own reply focused on the outcome, any corrections, and what Leon needs to know.",
     "Messages that ask for nothing (thanks, ok) and Hermes commands don't go to Muse.",
   ].join("\n");
 }
@@ -191,7 +200,7 @@ export function threadGuide(handoff: string) {
     sideChat(handoff) +
     "), and Leon just wrote in it. If his message is for Muse or changes the task, pass it on with " +
     "muse_reply, written so Muse can act on it, and judge Muse's answer before you reply to Leon. " +
-    "The Muse bot posts Muse's messages in channel threads. Keep your own reply focused on the checked outcome and any added context."
+    "The Muse bot posts Muse's messages in channel threads or in its own Slack DM with Leon. Keep your own reply focused on the checked outcome and any added context."
   );
 }
 

@@ -199,7 +199,8 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(posts(self.muse_client), [(REQUEST, "Soup")])
         self.assertEqual(self.store.pending_output(JOB), [])
 
-    async def test_hermes_dm_keeps_the_answer_without_posting_muse_transcript(self):
+    async def test_muse_dm_links_to_the_handoff_and_preserves_its_thread_after_restart(self):
+        self.muse_client.conversations_open = AsyncMock(return_value={"ok": True, "channel": {"id": "DMUSE"}})
         job = self.create(channel="D001")
         await self.tick()
         self.muse.chats[job].append(Message("answer", "assistant", "Soup"))
@@ -208,7 +209,21 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         await self.tick()
         self.assertEqual(self.store.answer(job), ("answered", [{"from": "muse", "text": "Soup"}]))
         self.assertEqual(len(posts(self.client)), 1)
-        self.assertEqual(posts(self.muse_client), [])
+        opening = self.muse_client.chat_postMessage.await_args.kwargs
+        self.assertEqual(opening["channel"], "DMUSE")
+        self.assertIsNone(opening["thread_ts"])
+        self.assertEqual(opening["text"], "Soup\n\nOriginal Slack thread: https://app.slack.com/archives/D001/p1795000000000001")
+
+        self.store = Store(self.directory)
+        self.relay = Relay(self.store, self.slack, self.muse, OWNER)
+        self.muse.chats[job].append(Message("second", "assistant", "Lentil soup"))
+        await self.tick()
+        await self.tick()
+        reply = self.muse_client.chat_postMessage.await_args.kwargs
+        self.assertEqual(reply["channel"], "DMUSE")
+        self.assertEqual(reply["thread_ts"], "1795000100.000001")
+        self.assertEqual(reply["text"], "Lentil soup")
+        self.muse_client.conversations_open.assert_awaited_once_with(users=OWNER)
         self.assertEqual(self.store.pending_output(job), [])
 
     async def test_idle_handoffs_back_off_then_stop(self):
