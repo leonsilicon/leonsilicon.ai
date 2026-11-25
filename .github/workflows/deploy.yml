@@ -4,8 +4,9 @@ name: Deploy
 # grok-bot-roster, landing, slack-as-leon / slack-puppet, slack22linear) whose code
 # changed since the last successful run on main, and publishes the Todoist Automations on every run. CI
 # calls this after its checks pass on a push to main; it can also be run by hand (Actions → Deploy → Run
-# workflow) for all or chosen Workers. What runs on Hermes Cloud is deployed by hand
-# (DEVELOPMENT.md).
+# workflow) for all or chosen Workers. Hermes plugins deploy through their mirrors instead: Sync Hermes
+# plugin mirrors publishes them after CI, and the autodeploy plugin on Hermes Cloud installs each new
+# mirror commit. The rest of what runs on Hermes Cloud is deployed by hand (DEVELOPMENT.md).
 #
 # Secrets live in the `production` environment, which only main can use: CLOUDFLARE_API_TOKEN (an
 # account-owned token: Workers Scripts edit, Workers Routes edit on leonsilicon.ai, Account Settings read; its Connectivity

@@ -71,6 +71,14 @@
         "@-/ai.leonsilicon.services.grok-bot-roster": "workspace:*",
       },
     },
+    "apps/hermes-plugin-autodeploy": {
+      "name": "@-/com.leonsilicon.hermes.plugins.autodeploy",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
+        "vite-plus": "1.5.0",
+      },
+    },
     "apps/hermes-plugin-autolinear": {
       "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
       "version": "1.0.0",
@@ -586,6 +594,8 @@
     "@-/ai.leonsilicon.services.whatsapp2slack": ["@-/ai.leonsilicon.services.whatsapp2slack@workspace:packages/ai/leonsilicon/services/whatsapp2slack"],
 
     "@-/ai.leonsilicon.services.x2slack": ["@-/ai.leonsilicon.services.x2slack@workspace:packages/ai/leonsilicon/services/x2slack"],
+
+    "@-/com.leonsilicon.hermes.plugins.autodeploy": ["@-/com.leonsilicon.hermes.plugins.autodeploy@workspace:apps/hermes-plugin-autodeploy"],
 
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:apps/hermes-plugin-autolinear"],
 
