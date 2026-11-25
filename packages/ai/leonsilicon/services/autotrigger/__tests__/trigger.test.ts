@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DecisionsClient } from "@-/ai.leonsilicon.services.feed-common";
-import type { LinearIssue, SlackCall, SlackParams } from "@-/ai.leonsilicon.services.slack22linear";
+import type {
+  LinearIssue,
+  LinearProjectText,
+  NewIssue,
+  SlackCall,
+  SlackParams,
+} from "@-/ai.leonsilicon.services.slack22linear";
 import {
   Autotrigger,
+  caseTitle,
   feedEvent,
   feedMessage,
   type FeedMessage,
@@ -165,7 +172,7 @@ test("accepts new bot messages and replies, and skips edits and held channels", 
 test("matches a fresh reply using its thread and posts one link to the mapped issue channel", async () => {
   const { trigger, calls, posts } = setup();
   const delivery = await trigger.select(message);
-  assert.ok(delivery);
+  assert.ok(delivery && delivery.kind !== "spawn");
   assert.equal(delivery.issueId, issue.id);
   assert.equal(delivery.channel, DESTINATION);
   assert.equal(delivery.permalink, LINK);
@@ -207,10 +214,211 @@ test("does not post for low confidence, no match, archived or expired issues, or
 test("does not post twice when Slack saved a notification before its response was lost", async () => {
   const { trigger, loseSlackResponse, posts } = setup();
   const delivery = await trigger.select(message);
-  assert.ok(delivery);
+  assert.ok(delivery && delivery.kind !== "spawn");
   delivery.startedAt = Date.now();
   loseSlackResponse();
   await assert.rejects(trigger.deliver(message, delivery, false), /response lost/);
   await trigger.deliver(message, delivery, true);
   assert.equal(posts.length, 1);
+});
+
+// ── Watchers ─────────────────────────────────────────────────────────────────
+
+const WATCHER: LinearProjectText = {
+  id: "project-sponsorships",
+  name: "Content Sponsorships",
+  url: "https://linear.app/example/project/content-sponsorships",
+  status: { name: "Watcher", type: "backlog" },
+  slackChannelId: "C0WATCHER1",
+  teamKeys: ["LEON"],
+  createdAt: 0,
+  gone: false,
+  summary: "New sponsorship or paid collaboration inquiries in #feed-gmail.",
+  content: "Reply with the standard quote: US$1,000 per TikTok. Never offer Instagram.",
+};
+
+const inquiry: FeedMessage = {
+  channel: SOURCE,
+  name: "feed-gmail",
+  ts: TS,
+  threadTs: null,
+  text: `<@${HERMES}> *New email* from Brand Partnerships <deals@brand.example>\n*Paid collab with Brand for your TikTok*\nto leon · Nov 25, 4:10 PM EST · <https://mail.google.com/x|open in Gmail>\n\nHi Leon, we'd love to sponsor a TikTok. What are your rates?`,
+  files: [],
+};
+
+function watcherSetup(
+  answers: string[],
+  options: { cases?: LinearIssue[]; watcher?: LinearProjectText | null } = {},
+) {
+  const decisions: Record<string, unknown>[] = [];
+  const created: NewIssue[] = [];
+  const posts: SlackParams[] = [];
+  let watcher = options.watcher === undefined ? WATCHER : options.watcher;
+  const cases = options.cases ?? [];
+  const client: DecisionsClient = {
+    decisions: {
+      async create(body) {
+        decisions.push(body as unknown as Record<string, unknown>);
+        const choice = answers[decisions.length - 1] ?? "no_match";
+        return {
+          model: "gpt-6-luna",
+          answers: [
+            {
+              name: "trigger",
+              type: "choice",
+              choice,
+              confidence: 0.97,
+              probabilities: [{ value: choice, probability: 0.97 }],
+            },
+          ],
+          usage: {
+            input_tokens: 1,
+            input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+            output_tokens: 1,
+            output_tokens_details: { reasoning_tokens: 0 },
+            total_tokens: 2,
+          },
+        };
+      },
+    },
+  };
+  const slack: SlackCall = async (method, params = {}) => {
+    if (method === "chat.getPermalink") return { ok: true, permalink: LINK };
+    if (method === "chat.postMessage") {
+      posts.push(params);
+      return { ok: true };
+    }
+    throw new Error(`unexpected ${method}`);
+  };
+  const trigger = new Autotrigger({
+    apiKey: "",
+    client,
+    linear: {
+      issuesInState: async () => [issue],
+      issue: async (id) => cases.find((c) => c.id === id) ?? null,
+    },
+    channelFor: async (id) => (cases.some((c) => c.id === id) ? DESTINATION : null),
+    session: slack,
+    bot: slack,
+    teamKey: "LEON",
+    state: "Awaiting Trigger",
+    timeZone: "America/Toronto",
+    hermesUserId: HERMES,
+    watchers: {
+      status: "Watcher",
+      hermesState: "Awaiting Hermes",
+      closedStateTypes: ["completed", "canceled", "duplicate"],
+      linear: {
+        projectsInStatus: async (team, status) => {
+          assert.equal(team, "LEON");
+          assert.equal(status, "Watcher");
+          return watcher ? [watcher] : [];
+        },
+        openIssuesInProjects: async (ids) => {
+          assert.deepEqual(ids, [WATCHER.id]);
+          return cases;
+        },
+        projectText: async () => watcher,
+        team: async () => ({
+          id: "team-leon",
+          states: [{ id: "state-hermes", name: "Awaiting Hermes", type: "started" }],
+        }),
+        createIssue: async (input) => {
+          if (created.some((c) => c.id === input.id)) throw new Error("Entity already exists");
+          created.push(input);
+          return { ...issue, id: input.id, title: input.title };
+        },
+      },
+    },
+  });
+  return {
+    trigger,
+    decisions,
+    created,
+    posts,
+    setWatcher: (value: LinearProjectText | null) => {
+      watcher = value;
+    },
+  };
+}
+
+test("a message a watcher is for opens a new Awaiting Hermes issue in the watcher's project", async () => {
+  const { trigger, decisions, created, posts } = watcherSetup(["no_match", "W1"]);
+  const delivery = await trigger.select(inquiry);
+  assert.ok(delivery && delivery.kind === "spawn");
+  assert.equal(decisions.length, 2);
+  const asked = JSON.stringify(decisions[1]);
+  assert.match(asked, /Content Sponsorships/);
+  assert.match(asked, /New sponsorship or paid collaboration inquiries/);
+  assert.equal(delivery.title, "Paid collab with Brand for your TikTok");
+  assert.match(delivery.description, /\[Content Sponsorships\]\(https:\/\/linear\.app/);
+  assert.match(delivery.description, /> Hi Leon, we'd love to sponsor a TikTok/);
+  assert.match(delivery.description, /Never offer Instagram/);
+  assert.ok(delivery.description.includes(`(${LINK})`));
+  assert.doesNotMatch(delivery.description, new RegExp(HERMES));
+
+  await trigger.deliver(inquiry, delivery, false);
+  await trigger.deliver(inquiry, delivery, true);
+  assert.equal(created.length, 1);
+  assert.equal(created[0]!.projectId, WATCHER.id);
+  assert.equal(created[0]!.stateId, "state-hermes");
+  assert.equal(created[0]!.id, delivery.issueId);
+  assert.deepEqual(posts, []);
+});
+
+test("an Awaiting Trigger issue that matches wins over the watchers", async () => {
+  const { trigger, decisions } = watcherSetup(["LEON-1", "W1"]);
+  const delivery = await trigger.select(inquiry);
+  assert.equal(decisions.length, 1);
+  assert.equal(delivery, null); // LEON-1 has no channel in this setup
+});
+
+test("a follow-up in a watcher's open case goes to that case, not a new issue", async () => {
+  const open: LinearIssue = {
+    ...issue,
+    id: "case-1",
+    identifier: "LEON-700",
+    title: "Paid collab with Brand",
+    state: { id: "state-leon", name: "Awaiting Leon", type: "started" },
+    projectId: WATCHER.id,
+  };
+  const { trigger, decisions, created, posts } = watcherSetup(["no_match", "LEON-700"], {
+    cases: [open],
+  });
+  const delivery = await trigger.select(inquiry);
+  assert.ok(delivery && delivery.kind !== "spawn");
+  assert.equal(delivery.watcherId, WATCHER.id);
+  assert.match(JSON.stringify(decisions[1]), /"open_cases":\[\{"id":"LEON-700","watcher":"W1"/);
+  await trigger.deliver(inquiry, delivery, false);
+  assert.equal(created.length, 0);
+  assert.equal(posts.length, 1);
+  assert.match(String(posts[0]!.text), /a possible follow-up for this case/);
+});
+
+test("nothing is opened when no watcher is clearly for the message, or the watcher closed", async () => {
+  const none = watcherSetup(["no_match", "no_match"]);
+  assert.equal(await none.trigger.select(inquiry), null);
+
+  const closed = watcherSetup(["no_match", "W1"]);
+  const delivery = await closed.trigger.select(inquiry);
+  assert.ok(delivery);
+  closed.setWatcher({ ...WATCHER, status: { name: "Completed", type: "completed" } });
+  await closed.trigger.deliver(inquiry, delivery, false);
+  assert.equal(closed.created.length, 0);
+
+  const without = watcherSetup([], { watcher: null });
+  assert.equal(await without.trigger.select({ ...inquiry, text: "Unrelated" }), null);
+  assert.equal(without.decisions.length, 1);
+});
+
+test("a case title is the email's subject, else the first line", () => {
+  assert.equal(caseTitle(inquiry.text, "x"), "Paid collab with Brand for your TikTok");
+  assert.equal(
+    caseTitle("Just one line about <https://a.example|a link>", "x"),
+    "Just one line about a link",
+  );
+  assert.equal(
+    caseTitle("", "New case for Content Sponsorships"),
+    "New case for Content Sponsorships",
+  );
 });

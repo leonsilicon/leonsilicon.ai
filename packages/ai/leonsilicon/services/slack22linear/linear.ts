@@ -18,6 +18,8 @@ export interface LinearIssue {
   teamKey: string;
   /** Linear's own due date, `YYYY-MM-DD`: a day with no time. */
   dueDate: string | null;
+  /** The project the issue is in, when the query asked for it. */
+  projectId?: string | null;
 }
 
 export interface LinearComment {
@@ -43,6 +45,14 @@ export interface LinearProject {
   createdAt: number;
   /** Archived or deleted (in the trash). */
   gone: boolean;
+}
+
+/** A project with its text: Routine and Watcher projects are defined by it. */
+export interface LinearProjectText extends LinearProject {
+  /** The one-line summary under the project's name (`description` in Linear's API). */
+  summary: string;
+  /** The project's body, Markdown (`content` in Linear's API). */
+  content: string;
 }
 
 /** The workspace's "Project channels" setting (Linear → Settings → Integrations → Slack). */
@@ -106,8 +116,19 @@ export interface NewProject {
   name: string;
   teamIds: string[];
   statusId: string;
-  startDate: string;
-  targetDate: string;
+  startDate?: string;
+  targetDate?: string;
+  /** The one-line summary. */
+  description?: string;
+  /** The body, Markdown. */
+  content?: string;
+}
+
+/** The project fields the sync and dailylinear change. */
+export interface ProjectUpdate {
+  statusId?: string;
+  description?: string;
+  content?: string;
 }
 
 /** A team's ID and statuses, which creating an issue needs. */
@@ -131,7 +152,7 @@ export class LinearError extends Error {
   }
 }
 
-const ISSUE_FIELDS = `id identifier number title url description priority archivedAt trashed dueDate state { id name type color } team { key }`;
+const ISSUE_FIELDS = `id identifier number title url description priority archivedAt trashed dueDate state { id name type color } team { key } project { id }`;
 
 interface IssueNode {
   id: string;
@@ -146,6 +167,7 @@ interface IssueNode {
   dueDate: string | null;
   state: LinearIssue["state"];
   team: { key: string };
+  project?: { id: string } | null;
 }
 
 const toIssue = (node: IssueNode): LinearIssue => ({
@@ -161,6 +183,7 @@ const toIssue = (node: IssueNode): LinearIssue => ({
   state: node.state,
   teamKey: node.team.key,
   dueDate: node.dueDate ?? null,
+  projectId: node.project?.id ?? null,
 });
 
 const PROJECT_FIELDS = `id name url icon color createdAt archivedAt trashed status { name type } slackChannelId
@@ -191,6 +214,17 @@ const toProject = (node: ProjectNode): LinearProject => ({
   teamKeys: node.teams.nodes.map((t) => t.key),
   createdAt: Date.parse(node.createdAt),
   gone: Boolean(node.archivedAt || node.trashed),
+});
+
+interface ProjectTextNode extends ProjectNode {
+  description: string | null;
+  content: string | null;
+}
+
+const toProjectText = (node: ProjectTextNode): LinearProjectText => ({
+  ...toProject(node),
+  summary: node.description ?? "",
+  content: node.content ?? "",
 });
 
 const notFound = (error: unknown) =>
@@ -446,6 +480,61 @@ export class LinearClient implements LinearApi {
     return data.projects.nodes.map(toProject);
   }
 
+  /**
+   * The team's open projects in the status with this name (Routine, Watcher), with their summary and
+   * body. Archived and deleted ones are left out.
+   */
+  async projectsInStatus(teamKey: string, statusName: string): Promise<LinearProjectText[]> {
+    const projects: LinearProjectText[] = [];
+    let after: string | null = null;
+    do {
+      const data: {
+        projects: {
+          nodes: ProjectTextNode[];
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        };
+      } = await this.gql(
+        `query($team: String!, $status: String!, $after: String) {
+          projects(first: 50, after: $after, filter: {
+            accessibleTeams: { some: { key: { eq: $team } } }, status: { name: { eq: $status } } }) {
+            nodes { ${PROJECT_FIELDS} description content } pageInfo { hasNextPage endCursor } } }`,
+        { team: teamKey, status: statusName, after },
+      );
+      projects.push(...data.projects.nodes.map(toProjectText));
+      after = data.projects.pageInfo.hasNextPage ? data.projects.pageInfo.endCursor : null;
+    } while (after);
+    return projects.filter((project) => !project.gone);
+  }
+
+  /** A project with its summary and body, or null. */
+  async projectText(id: string): Promise<LinearProjectText | null> {
+    const data = await this.gql<{ project: ProjectTextNode | null }>(
+      `query($id: String!) { project(id: $id) { ${PROJECT_FIELDS} description content } }`,
+      { id },
+    ).catch((error: unknown) => {
+      if (notFound(error)) return { project: null };
+      throw error;
+    });
+    return data.project ? toProjectText(data.project) : null;
+  }
+
+  /** The open issues in these projects, newest first, at most `limit`. */
+  async openIssuesInProjects(
+    projectIds: string[],
+    closedTypes: string[],
+    limit = 100,
+  ): Promise<LinearIssue[]> {
+    if (!projectIds.length) return [];
+    const data = await this.gql<{ issues: { nodes: IssueNode[] } }>(
+      `query($projects: [ID!], $closed: [String!], $first: Int) {
+        issues(first: $first, orderBy: createdAt, filter: {
+          project: { id: { in: $projects } }, state: { type: { nin: $closed } } }) {
+          nodes { ${ISSUE_FIELDS} } } }`,
+      { projects: projectIds, closed: closedTypes, first: limit },
+    );
+    return data.issues.nodes.map(toIssue);
+  }
+
   /** The workspace's project statuses (Backlog, Planned, In Progress…), each with its type. */
   async projectStatuses(): Promise<LinearState[]> {
     const data = await this.gql<{ projectStatuses: { nodes: LinearState[] } }>(
@@ -470,8 +559,8 @@ export class LinearClient implements LinearApi {
     return toProject(data.projectCreate.project);
   }
 
-  /** Changes a project's status (`statusId`, one of `projectStatuses`). */
-  async updateProject(id: string, input: { statusId: string }): Promise<void> {
+  /** Changes a project's status (`statusId`, one of `projectStatuses`), summary or body. */
+  async updateProject(id: string, input: ProjectUpdate): Promise<void> {
     const data = await this.gql<{ projectUpdate: { success: boolean } }>(
       `mutation($id: String!, $input: ProjectUpdateInput!) { projectUpdate(id: $id, input: $input) { success } }`,
       { id, input },

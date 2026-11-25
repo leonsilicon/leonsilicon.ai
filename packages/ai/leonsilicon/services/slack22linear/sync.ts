@@ -32,6 +32,7 @@ import type {
 import { Sidebar, SlackError, tolerate } from "#slack";
 import type { SlackCall, SlackParams, SlackResponse } from "#slack";
 import type { IssueRecord, ProjectRecord, Store } from "#store";
+import type { Routines } from "#routines";
 
 export interface LinearWebhook {
   action: string;
@@ -162,6 +163,8 @@ export interface SyncDeps {
   autolinear?: SlackCall | null;
   /** Answers Leon's `/autolinear` at Slack's `response_url`. Tests pass a fake. */
   respond?: (url: string, text: string) => Promise<void>;
+  /** Keeps Routine projects in step with Muse's routines (`routines` jobs). Without it they're logged. */
+  routines?: Pick<Routines, "run"> | null;
 }
 
 /** Answers a slash command, visible only to whoever typed it. */
@@ -316,6 +319,7 @@ export class Sync {
   readonly #sleep: (ms: number) => Promise<void>;
   readonly #autolinear: SlackCall | null;
   readonly #respond: (url: string, text: string) => Promise<void>;
+  readonly #routines: Pick<Routines, "run"> | null;
   #botUserId: string | null = null;
   #channels: ChannelInfo[] | null = null;
   #projectChannels: ProjectChannelSettings | null | undefined;
@@ -337,6 +341,7 @@ export class Sync {
     this.#botUserId = deps.botUserId ?? null;
     this.#autolinear = deps.autolinear ?? null;
     this.#respond = deps.respond ?? respondAt;
+    this.#routines = deps.routines ?? null;
   }
 
   async run(kind: string, payload: unknown): Promise<void> {
@@ -365,7 +370,13 @@ export class Sync {
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
     else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
-    else if (kind === "tick") {
+    else if (kind === "routines") {
+      // Muse's schedules, from the hermes22muse relay through autolinear's Worker.
+      if (!this.#routines) return this.#log("routines_unconfigured");
+      const report = await this.#routines.run(payload);
+      if (report.skipped || report.created.length || report.linked.length || report.raised.length)
+        this.#log("routines", { ...report });
+    } else if (kind === "tick") {
       await this.tick();
       await this.#refreshProjectVisibility();
     } else if (kind === "backfill") {

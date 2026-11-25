@@ -12,6 +12,7 @@ import {
   commandUsage,
   LinearClient,
   parseCommand,
+  readSnapshot,
   verifySlack,
 } from "@-/ai.leonsilicon.services.slack22linear";
 import type { Adoption, CommandJob } from "@-/ai.leonsilicon.services.slack22linear";
@@ -199,6 +200,30 @@ export default {
       const message = readMessage(body);
       if (!message) return json({ error: "channel, ts and user are required" }, 400);
       return startIntake(env, message);
+    }
+
+    // Leon's routines as Muse has them, from the hermes22muse relay on Hermes Cloud every few
+    // minutes. slack22linear's queue keeps the Routine projects in step with them.
+    if (request.method === "POST" && url.pathname === "/routines") {
+      if (
+        !env.AUTOLINEAR_TOKEN ||
+        request.headers.get("authorization") !== `Bearer ${env.AUTOLINEAR_TOKEN}`
+      )
+        return json({ error: "unauthorized" }, 401);
+      const snapshot = readSnapshot(await request.json().catch(() => null));
+      if (!snapshot) return json({ error: "at and schedules are required" }, 400);
+      const queued = await env.SYNC.get(env.SYNC.idFromName("sync")).fetch(
+        new Request("https://sync/enqueue", {
+          method: "POST",
+          body: JSON.stringify({
+            id: `routines:${snapshot.at}`,
+            kind: "routines",
+            payload: snapshot,
+          }),
+        }),
+      );
+      log("routines", { schedules: snapshot.schedules.length, status: queued.status });
+      return queued.ok ? json({ queued: true }) : json({ error: "couldn't queue it" }, 502);
     }
 
     // Leon's /autolinear: the commands Hermes gives Autolinear by mention, for the issue channel he

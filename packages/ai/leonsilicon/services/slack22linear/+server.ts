@@ -41,12 +41,32 @@ export type {
   LinearComment,
   LinearIssue,
   LinearProject,
+  LinearProjectText,
   LinearState,
   LinearTeam,
   NewIssue,
   NewProject,
   ProjectChannelSettings,
+  ProjectUpdate,
 } from "#linear";
+export {
+  isRoutine,
+  readSnapshot,
+  ROUTINE_MISSING_GRACE_MS,
+  ROUTINE_SNAPSHOT_MAX_AGE_MS,
+  routineLink,
+  routineName,
+  routineProjectText,
+  Routines,
+  withRoutineLink,
+} from "#routines";
+export type {
+  MuseSchedule,
+  RoutineReport,
+  RoutinesDeps,
+  RoutinesLinear,
+  RoutineSnapshot,
+} from "#routines";
 export { botClient, Sidebar, SlackError, tolerate } from "#slack";
 export type { Section, SlackCall, SlackParams, SlackResponse } from "#slack";
 export { Store } from "#store";

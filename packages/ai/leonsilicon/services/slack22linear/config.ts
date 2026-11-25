@@ -51,6 +51,21 @@ export interface SyncConfig {
   projectSection: string;
   /** Linear project status types that close a project; its channel is archived. */
   closedProjectTypes: string[];
+  /**
+   * The status that asks Hermes to pick an issue up. Issues the sync opens for Hermes start in it:
+   * a Watcher's new case, a Routine project that needs a look.
+   */
+  hermesState: string;
+  /**
+   * The project status of Leon's routines (Leon's rule, 2026-11-25): each project in it is one
+   * routine Muse runs on a schedule, linked by a `Muse routine: <id>` line in its body.
+   */
+  routineProjectStatus: string;
+  /**
+   * The project status of Leon's watchers: each project in it watches the `#feed-*` channels for
+   * what its summary and body describe, and gets a new issue for each case Autotrigger finds.
+   */
+  watcherProjectStatus: string;
 }
 
 const list = (value: string | undefined, fallback: string[]) =>
@@ -105,5 +120,8 @@ export function loadConfig(env: Record<string, string | undefined>): SyncConfig 
     feedChannel: (env.LINEAR_FEED_CHANNEL ?? "feed-linear").replace(/^#/, ""),
     projectSection: env.PROJECT_SECTION ?? "Projects",
     closedProjectTypes: list(env.CLOSED_PROJECT_TYPES, ["completed", "canceled"]),
+    hermesState: env.HERMES_STATE ?? "Awaiting Hermes",
+    routineProjectStatus: env.ROUTINE_PROJECT_STATUS ?? "Routine",
+    watcherProjectStatus: env.WATCHER_PROJECT_STATUS ?? "Watcher",
   };
 }

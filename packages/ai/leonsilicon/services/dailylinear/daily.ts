@@ -253,7 +253,7 @@ export class Daily {
         id,
         name: dayProjectName(today),
         teamIds: [await this.#team()],
-        statusId: await this.#status(this.#c.projectStatus, "backlog"),
+        statusId: await this.#status(this.#c.projectStatus, "started"),
         startDate: today,
         targetDate: today,
       });

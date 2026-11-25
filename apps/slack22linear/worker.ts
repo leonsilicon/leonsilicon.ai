@@ -2,8 +2,8 @@ import {
   Autotrigger,
   feedEvent,
   feedMessage,
+  type Delivery,
   type FeedMessage,
-  type TriggerDelivery,
 } from "@-/ai.leonsilicon.services.autotrigger";
 import {
   botClient,
@@ -11,6 +11,7 @@ import {
   IssueMetadata,
   LinearClient,
   loadConfig,
+  Routines,
   Store,
   Sync,
   verifyLinear,
@@ -277,6 +278,7 @@ export class SyncObject {
   readonly #env: Env;
   readonly #store: Store;
   readonly #issueMetadata: IssueMetadata;
+  readonly #sql: Sql;
   #teamId?: string;
   #draining = false;
   readonly #feedChannels: Parameters<typeof feedMessage>[2] = new Map();
@@ -289,6 +291,7 @@ export class SyncObject {
     const sql: Sql = {
       exec: (query, ...params) => state.storage.sql.exec(query, ...params).toArray(),
     };
+    this.#sql = sql;
     this.#store = new Store(sql);
     this.#issueMetadata = new IssueMetadata(sql);
   }
@@ -299,11 +302,14 @@ export class SyncObject {
   }
 
   #sync(): Sync {
+    const config = loadConfig(this.#env as Record<string, string | undefined>);
+    const linear = new LinearClient(this.#env.LINEAR_API_KEY);
     return new Sync({
-      config: loadConfig(this.#env as Record<string, string | undefined>),
+      config,
       store: this.#store,
       issueMetadata: this.#issueMetadata,
-      linear: new LinearClient(this.#env.LINEAR_API_KEY),
+      linear,
+      routines: new Routines({ config, linear, sql: this.#sql, log }),
       bot: botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN),
       session: this.#session(),
       log,
@@ -470,7 +476,7 @@ export class SyncObject {
   }
 }
 
-type TriggerJob = { source: FeedMessage; delivery?: TriggerDelivery } | "done";
+type TriggerJob = { source: FeedMessage; delivery?: Delivery } | "done";
 const TRIGGER_KEEP_MS = 3 * 24 * 3600_000;
 
 /** One alarm-backed delivery per source message, shared by both Slack subscriptions. */
@@ -521,9 +527,17 @@ export class AutotriggerObject {
     const env = this.#env;
     if (!env.OPENAI_API_KEY) return;
     const config = loadConfig(env as Record<string, string | undefined>);
+    const linear = new LinearClient(env.LINEAR_API_KEY);
     const trigger = new Autotrigger({
       apiKey: env.OPENAI_API_KEY,
-      linear: new LinearClient(env.LINEAR_API_KEY),
+      linear,
+      // Leon's Watcher projects: each new case they're for becomes an issue in them.
+      watchers: {
+        status: config.watcherProjectStatus,
+        hermesState: config.hermesState,
+        closedStateTypes: config.closedStateTypes,
+        linear,
+      },
       channelFor: async (issueId) => {
         const response = await stub(env).fetch(
           new Request("https://sync/autotrigger-channel", {
@@ -548,7 +562,7 @@ export class AutotriggerObject {
     const delivery = job.delivery ?? (await trigger.select(job.source));
     if (!delivery) return;
     if (!job.delivery) {
-      delivery.startedAt = Date.now();
+      if (delivery.kind !== "spawn") delivery.startedAt = Date.now();
       await this.#storage.put("job", { source: job.source, delivery });
     }
     await trigger.deliver(job.source, delivery, Boolean(job.delivery));

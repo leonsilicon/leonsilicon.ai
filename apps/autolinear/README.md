@@ -12,7 +12,10 @@ Hermes (autolinear plugin) ─────────────────�
                                                           ├─▶ Slack: chat.postMessage (copy) → chat.update (channel link)
                                                           └─▶ slack22linear's SyncObject /adopt (runs alongside the copy)
 Slack's /autolinear (Leon) ──────────────────── POST /slack/commands ──▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `command`)
+hermes22muse relay (Muse's routines, every 10 min) ── POST /routines ──▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `routines`)
 ```
+
+Since 2026-11-25 it also carries Leon's routines from Muse to Linear: the [hermes22muse](../hermes-plugin-hermes22muse/README.md#routines) relay on Hermes Cloud posts Muse's scheduled tasks to `/routines` with the same bearer token as `/intake`, and slack22linear keeps a Routine project for each ([Routine and Watcher projects](../../packages/ai/leonsilicon/services/slack22linear/README.md#routine-and-watcher-projects)).
 
 ## Speed
 
@@ -58,3 +61,4 @@ slack22linear must already have `/adopt` (deployed with it on 2026-11-21): autol
 
 - It acts as Leon through his Slack web session and creates issues with slack22linear's personal Linear key, both stored as Worker secrets.
 - `/intake` needs the bearer token. It only edits the message it was told about, and Slack lets the session edit only Leon's own messages.
+- `/routines` needs the same token. It only queues the schedule list for slack22linear, which checks it field by field.

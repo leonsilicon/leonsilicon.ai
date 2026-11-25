@@ -10,6 +10,7 @@
     "#config": "./config.ts",
     "#format": "./format.ts",
     "#linear": "./linear.ts",
+    "#routines": "./routines.ts",
     "#slack": "./slack.ts",
     "#store": "./store.ts",
     "#sync": "./sync.ts",

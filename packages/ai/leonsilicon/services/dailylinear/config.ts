@@ -8,7 +8,10 @@ export interface DailyConfig {
   timeZone: string;
   /** Hermes's Slack user ID: invited to every day's channel. Leon's session joins him itself. */
   hermesUserId: string;
-  /** The project status a new day's project starts in, by name (Linear's Backlog). */
+  /**
+   * The project status a new day's project starts in, by name: In Progress, since its day has
+   * begun. Until 2026-11-25 it was Backlog, which Leon then turned into Routine (his routines).
+   */
   projectStatus: string;
   /** The project status a day's project gets once its day is over, by name (Linear's Completed). */
   doneStatus: string;
@@ -37,7 +40,7 @@ export function loadConfig(env: Record<string, string | undefined>): DailyConfig
     teamKey: env.LINEAR_TEAM_KEY ?? "LEON",
     timeZone: env.TIME_ZONE ?? "America/Toronto",
     hermesUserId,
-    projectStatus: env.DAY_PROJECT_STATUS ?? "Backlog",
+    projectStatus: env.DAY_PROJECT_STATUS ?? "In Progress",
     doneStatus: env.DAY_DONE_STATUS ?? "Completed",
     closedProjectTypes: list(env.CLOSED_PROJECT_TYPES, ["completed", "canceled"]),
     sectionOrder: list(env.SECTION_ORDER, DEFAULT_SECTION_ORDER),
