@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -34,12 +34,23 @@ test("mirrors publish standalone trees and advance only when their contents chan
   writeFileSync(join(worker, "wrangler.jsonc"), "{}\n");
 
   const shared = "packages/ai/leonsilicon/configs/hermes-mirrors";
-  mkdirSync(join(cwd, shared, "runtime"), { recursive: true });
-  const loader = join(cwd, shared, "runtime", "_pythonmonkey.py");
+  const sharedPackage = "@-/ai.leonsilicon.configs.hermes-mirrors";
+  mkdirSync(join(cwd, shared), { recursive: true });
+  const loader = join(cwd, shared, "_pythonmonkey.py");
   writeFileSync(loader, "runtime = 1\n");
+  writeFileSync(join(cwd, shared, "slack.ts"), "export const slack = true;\n");
   writeFileSync(join(cwd, shared, "plugin-config.ts"), "export default {}\n");
-  symlinkSync("../../" + shared + "/runtime/_pythonmonkey.py", join(path, "_pythonmonkey.py"));
-  symlinkSync("../../" + shared + "/plugin-config.ts", join(path, "vite.config.ts"));
+  writeFileSync(
+    join(path, "vite.config.ts"),
+    'export { default } from "' + sharedPackage + '/plugin-config";\n',
+  );
+  writeFileSync(
+    join(path, "package.json"),
+    JSON.stringify({
+      imports: { "#slack": sharedPackage + "/slack" },
+      devDependencies: { [sharedPackage]: "workspace:*", "vite-plus": "1.5.0" },
+    }),
+  );
 
   const publish = () => {
     git(["add", "."]);
@@ -53,11 +64,23 @@ test("mirrors publish standalone trees and advance only when their contents chan
   const first = publish();
   assert.equal(
     git(["ls-tree", "--name-only", "HEAD"], remote),
-    "_pythonmonkey.py\nplugin.yaml\nvite.config.ts",
+    "_pythonmonkey.py\npackage.json\nplugin.yaml\nslack.ts\nvite.config.ts",
   );
   assert.match(git(["ls-tree", "HEAD", "_pythonmonkey.py"], remote), /^100644 blob /);
   assert.equal(git(["show", "HEAD:_pythonmonkey.py"], remote), "runtime = 1");
   assert.equal(git(["show", "HEAD:vite.config.ts"], remote), "export default {}");
+  assert.equal(git(["show", "HEAD:slack.ts"], remote), "export const slack = true;");
+  assert.equal(
+    git(["show", "HEAD:package.json"], remote),
+    JSON.stringify(
+      {
+        imports: { "#slack": "./slack.ts" },
+        devDependencies: { "vite-plus": "1.5.0" },
+      },
+      null,
+      2,
+    ),
+  );
   assert.equal(git(["show", "HEAD:plugin.yaml"], remote), "name: autolinear\nversion: 1.0.0");
   writeFileSync(join(cwd, "other.txt"), "unrelated source change");
   assert.equal(publish(), first);

@@ -75,6 +75,7 @@
       "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -82,12 +83,14 @@
       "name": "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
     "apps/hermes-plugin-hermes22muse": {
       "name": "@-/com.leonsilicon.hermes.plugins.hermes22muse",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -95,6 +98,7 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-always-react",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -102,6 +106,7 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -109,6 +114,7 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-auto-join",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -116,6 +122,7 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-flat-replies",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
@@ -123,12 +130,14 @@
       "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
       "version": "1.0.0",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },
     "apps/hermes-plugin-slack22orca": {
       "name": "@-/com.leonsilicon.hermes.plugins.slack22orca",
       "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
       },
     },

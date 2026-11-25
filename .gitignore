@@ -11,3 +11,5 @@ __pycache__/
 dist/
 .wrangler/
 .env.local
+
+/apps/hermes-plugin-*/_pythonmonkey.py

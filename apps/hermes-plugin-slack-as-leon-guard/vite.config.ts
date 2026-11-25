@@ -1,1 +1,1 @@
-../../packages/ai/leonsilicon/configs/hermes-mirrors/plugin-config.ts
+export { default } from "@-/ai.leonsilicon.configs.hermes-mirrors/plugin-config";

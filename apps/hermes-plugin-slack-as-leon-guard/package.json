@@ -5,7 +5,8 @@
   "description": "Hermes plugin: Hermes ignores the Slack messages it posted as Leon.",
   "type": "module",
   "imports": {
-    "#plugin": "./plugin.ts"
+    "#plugin": "./plugin.ts",
+    "#slack": "@-/ai.leonsilicon.configs.hermes-mirrors/slack"
   },
   "exports": {
     ".": "./+.ts"
@@ -14,6 +15,7 @@
     "build": "vp pack"
   },
   "devDependencies": {
+    "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
     "vite-plus": "1.5.0"
   }
 }

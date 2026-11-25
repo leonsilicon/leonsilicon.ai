@@ -9,10 +9,14 @@
   },
   "type": "module",
   "imports": {
-    "#mirror": "./mirror.ts"
+    "#mirror": "./mirror.ts",
+    "#plugin-config": "./plugin-config.ts",
+    "#slack": "./slack.ts"
   },
   "exports": {
-    ".": "./+.ts"
+    ".": "./+.ts",
+    "./plugin-config": "./+plugin-config.ts",
+    "./slack": "./+slack.ts"
   },
   "devDependencies": {
     "vite-plus": "catalog:"

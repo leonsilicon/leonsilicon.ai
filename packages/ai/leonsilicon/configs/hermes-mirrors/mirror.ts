@@ -2,11 +2,7 @@ import { execFileSync } from "node:child_process";
 
 const APPS = "apps";
 const SHARED = "packages/ai/leonsilicon/configs/hermes-mirrors";
-const sharedFiles = new Map([
-  ["_pythonmonkey.py", "runtime/_pythonmonkey.py"],
-  ["slack.ts", "slack.ts"],
-  ["vite.config.ts", "plugin-config.ts"],
-]);
+const sharedPackage = "@-/ai.leonsilicon.configs.hermes-mirrors";
 const PLUGIN_APP_PREFIX = "hermes-plugin-";
 
 function git(args: string[], cwd: string, env = process.env, input?: string): string {
@@ -29,22 +25,49 @@ export function mirrorNames(source: string, cwd: string): string[] {
     .filter((name) => name.startsWith(PLUGIN_APP_PREFIX));
 }
 
+interface Manifest {
+  devDependencies?: Record<string, string>;
+  imports?: Record<string, string>;
+}
+
 function standaloneTree(source: string, directory: string, cwd: string): string {
-  const entries = git(["ls-tree", "-z", directory], cwd)
-    .split("\0")
-    .filter(Boolean)
-    .map((entry) => {
-      if (!entry.startsWith("120000 ")) return entry;
-      const name = entry.slice(entry.indexOf("\t") + 1);
-      const shared = sharedFiles.get(name);
-      if (!shared) return entry;
-      const target = `${SHARED}/${shared}`;
-      if (git(["show", `${directory}/${name}`], cwd) !== `../../${target}`)
-        throw new Error(`Unexpected shared file target in ${directory}/${name}`);
-      const blob = git(["rev-parse", `${source}:${target}`], cwd);
-      return `100644 blob ${blob}\t${name}`;
-    });
-  return git(["mktree", "-z"], cwd, process.env, entries.join("\0") + "\0");
+  const entries = new Map(
+    git(["ls-tree", "-z", directory], cwd)
+      .split("\0")
+      .filter(Boolean)
+      .map((entry) => [entry.slice(entry.indexOf("\t") + 1), entry]),
+  );
+  if (!entries.has("package.json")) return git(["rev-parse", directory], cwd);
+
+  const manifest = JSON.parse(git(["show", `${directory}/package.json`], cwd)) as Manifest;
+  if (!manifest.devDependencies?.[sharedPackage]) return git(["rev-parse", directory], cwd);
+
+  function addFile(name: string, blob: string): void {
+    entries.set(name, `100644 blob ${blob}\t${name}`);
+  }
+
+  function addShared(name: string, path: string): void {
+    addFile(name, git(["rev-parse", `${source}:${SHARED}/${path}`], cwd));
+  }
+
+  // These are committed inputs to the Vite+ build. Publish their exact bytes so
+  // the mirrored bundle can load in Hermes and the project can rebuild on its own.
+  addShared("vite.config.ts", "plugin-config.ts");
+  addShared("_pythonmonkey.py", "_pythonmonkey.py");
+  if (manifest.imports?.["#slack"] === sharedPackage + "/slack") {
+    addShared("slack.ts", "slack.ts");
+    manifest.imports["#slack"] = "./slack.ts";
+  }
+  delete manifest.devDependencies[sharedPackage];
+  const manifestBlob = git(
+    ["hash-object", "-w", "--stdin"],
+    cwd,
+    process.env,
+    JSON.stringify(manifest, null, 2) + "\n",
+  );
+  addFile("package.json", manifestBlob);
+
+  return git(["mktree", "-z"], cwd, process.env, [...entries.values()].join("\0") + "\0");
 }
 
 export function syncMirror({

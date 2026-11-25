@@ -2,10 +2,14 @@
   "name": "@-/com.leonsilicon.hermes.plugins.slack22orca",
   "private": true,
   "type": "module",
+  "imports": {
+    "#slack": "@-/ai.leonsilicon.configs.hermes-mirrors/slack"
+  },
   "scripts": {
     "build": "vp pack"
   },
   "devDependencies": {
+    "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
     "vite-plus": "1.5.0"
   }
 }
