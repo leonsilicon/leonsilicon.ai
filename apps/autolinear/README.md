@@ -13,9 +13,13 @@ Hermes (autolinear plugin) ─────────────────�
                                                           └─▶ slack22linear's SyncObject /adopt (runs alongside the copy)
 Slack's /autolinear (Leon) ──────────────────── POST /slack/commands ──▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `command`)
 hermes22muse relay (Muse's routines, every 10 min) ── POST /routines ──▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `routines`)
+hermes22muse relay (running turns, every minute) ──── POST /turns ─────▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `turns`)
+hermes22muse relay (a Muse answer nobody read) ────── POST /muse-answer ▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `muse-answer`)
 ```
 
 Since 2026-11-25 it also carries Leon's routines from Muse to Linear: the [hermes22muse](../hermes-plugin-hermes22muse/README.md#routines) relay on Hermes Cloud posts Muse's scheduled tasks to `/routines` with the same bearer token as `/intake`, and slack22linear keeps a Routine project for each ([Routine and Watcher projects](../../packages/ai/leonsilicon/services/slack22linear/README.md#routine-and-watcher-projects)).
+
+Since 2026-11-25 the relay also helps Autolinear tell when Hermes has dropped a turn (LEON-509: a gateway restart dropped the turn waiting for Muse's answer, and the issue sat in Executing for an hour). It posts the issue channels with a running turn to `/turns`, and a Muse answer that no running turn will read to `/muse-answer`. slack22linear reminds Hermes about each ([What it does](../../packages/ai/leonsilicon/services/slack22linear/README.md#what-it-does)).
 
 ## Speed
 
@@ -62,3 +66,4 @@ slack22linear must already have `/adopt` (deployed with it on 2026-11-21): autol
 - It acts as Leon through his Slack web session and creates issues with slack22linear's personal Linear key, both stored as Worker secrets.
 - `/intake` needs the bearer token. It only edits the message it was told about, and Slack lets the session edit only Leon's own messages.
 - `/routines` needs the same token. It only queues the schedule list for slack22linear, which checks it field by field.
+- `/turns` and `/muse-answer` need the same token. They only queue channel IDs and a handoff's thread for slack22linear, which reminds Hermes in channels of open issues only.

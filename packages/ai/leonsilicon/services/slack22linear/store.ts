@@ -366,6 +366,21 @@ export class Store {
     );
   }
 
+  /** Moves each timer whose key starts with `prefix` and goes off before `at` to `at`. */
+  postponeTimers(prefix: string, at: number, now: number): void {
+    const rows = this.#sql.exec(
+      `SELECT id, kind, payload FROM queue WHERE substr(id, 1, ?) = ? AND not_before < ?`,
+      prefix.length,
+      prefix,
+      at,
+    );
+    for (const row of rows) {
+      const id = row.id as string;
+      const key = id.slice(0, id.lastIndexOf("@"));
+      this.setTimer(key, row.kind as string, JSON.parse(row.payload as string), at, now);
+    }
+  }
+
   /** When `key` goes off next (ms), or null when it isn't set. */
   timer(key: string): number | null {
     const prefix = `${key}@`;

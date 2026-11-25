@@ -90,16 +90,21 @@ export {
   isAutolinearIssue,
   MAX_REMINDERS,
   PROJECT_GRACE_MS,
+  readMuseAnswer,
+  readTurns,
   stableUuid,
+  STUCK_MS,
   Sync,
 } from "#sync";
 export type {
   Adoption,
   CommandJob,
   LinearWebhook,
+  MuseAnswer,
   SlackFile,
   SlackMessageEvent,
   SlackReactionEvent,
   SyncDeps,
+  Turns,
 } from "#sync";
 export { hmacHex, verifyLinear, verifySlack } from "#verify";

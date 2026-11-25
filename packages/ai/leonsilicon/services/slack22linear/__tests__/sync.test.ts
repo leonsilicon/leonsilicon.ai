@@ -22,6 +22,9 @@ import {
   COMMAND_SETTLE_MS,
   MAX_REMINDERS,
   PROJECT_GRACE_MS,
+  readMuseAnswer,
+  readTurns,
+  STUCK_MS,
   Sync,
   type Adoption,
   type CommandJob,
@@ -2033,6 +2036,132 @@ test("a command that doesn't work is answered under it, and reminders stop after
   assert.ok(
     autolinearPosts(t, posts).at(-1)!.text.startsWith(`<@${HERMES}> Your turn here is over`),
   );
+});
+
+test("a turn the gateway stopped running gets a reminder; one that ends or is reported running doesn't", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "is keto bad for my cholesterol?");
+  await hermesReacts(t, channel.id, question, "eyes");
+  const posts = t.slack.posts.length;
+
+  // The gateway reports a turn running here about every minute: the timer keeps moving on.
+  for (let minute = 0; minute < 8; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [channel.id, "C0ELSEWHERE"] });
+    await t.drain();
+  }
+  assert.equal(autolinearPosts(t, posts).length, 0, "a running turn isn't overdue");
+
+  // The gateway restarted under the turn: no ✅ and no more reports.
+  t.clock.now += STUCK_MS;
+  await t.drain();
+  const [reminder, ...more] = autolinearPosts(t, posts);
+  assert.equal(more.length, 0);
+  assert.ok(
+    reminder!.text.startsWith(
+      `<@${HERMES}> Your turn on <https://app.slack.com/archives/${channel.id}/p${question.replace(".", "")}|this message> never ended: no :white_check_mark: or :x:, and your gateway hasn't been running a turn here for 5 minutes, so it was most likely cut off.`,
+    ),
+    reminder!.text,
+  );
+  assert.ok(reminder!.text.includes("which is *Executing*"));
+  assert.equal(reminder!.thread_ts, undefined, "at the top of the channel");
+  assert.equal(issue.state.name, "Executing", "a reminder moves nothing");
+  t.clock.now += STUCK_MS;
+  await t.drain();
+  assert.equal(autolinearPosts(t, posts).length, 1, "once per turn");
+
+  // Hermes's turn on the reminder ends with a command: nothing more is owed.
+  await hermesReacts(t, channel.id, reminder!.ts, "eyes");
+  t.clock.now += 3000;
+  await hermesCommands(t, channel.id, "move leon", "Here's what Muse found.");
+  await hermesReacts(t, channel.id, reminder!.ts);
+  t.clock.now += 2 * STUCK_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(autolinearPosts(t, posts).length, 1);
+});
+
+test("a turn that ends, or that Leon wrote after, is never overdue", async () => {
+  const t = setup();
+  const { channel } = await issueChannel(t);
+  const first = await leonWrites(t, channel.id, "log my lunch");
+  await hermesReacts(t, channel.id, first, "eyes");
+  t.clock.now += 3000;
+  await hermesCommands(t, channel.id, "move done", "Logged.");
+  await hermesReacts(t, channel.id, first);
+  t.clock.now += 2 * STUCK_MS;
+  await t.drain();
+  assert.equal(autolinearPosts(t).length, 0, "the turn ended");
+
+  const t2 = setup();
+  const other = await issueChannel(t2);
+  const older = await leonWrites(t2, other.channel.id, "book the dentist");
+  await hermesReacts(t2, other.channel.id, older, "eyes");
+  t2.clock.now += 1000;
+  await leonWrites(t2, other.channel.id, "actually, next week");
+  t2.clock.now += 2 * STUCK_MS;
+  await t2.drain();
+  assert.equal(autolinearPosts(t2).length, 0, "his newer message's turn counts");
+});
+
+test("Muse's unread answer gets Hermes asked in the handoff's thread", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "is keto bad for my cholesterol?");
+  await hermesReacts(t, channel.id, question, "eyes");
+  const handoff = "a65e4fb8-2606-50ee-9c8c-79817beda442";
+  const answer = readMuseAnswer({
+    channel: channel.id,
+    thread: question,
+    handoff,
+    sideChat: `https://muse.ai/thread/${handoff}`,
+  });
+  assert.ok(answer);
+  const posts = t.slack.posts.length;
+  await t.sync.run("muse-answer", answer);
+  const [ask] = autolinearPosts(t, posts);
+  assert.equal(ask!.thread_ts, question, "in the handoff's thread");
+  assert.ok(
+    ask!.text.startsWith(
+      `<@${HERMES}> Muse answered handoff \`${handoff}\` (https://muse.ai/thread/${handoff}), but none of your turns has read the answer`,
+    ),
+    ask!.text,
+  );
+  assert.ok(ask!.text.includes(`Read it with \`muse_wait\` (handoff \`${handoff}\`)`));
+  assert.ok(ask!.text.includes("LEON-427, which is *Executing*"));
+
+  // It shares the reminders' budget: after MAX_REMINDERS, Leon hears about it instead.
+  for (let i = 1; i < MAX_REMINDERS; i++) await t.sync.run("muse-answer", answer);
+  await t.sync.run("muse-answer", answer);
+  const last = autolinearPosts(t, posts).at(-1)!;
+  assert.ok(
+    last.text.startsWith(`<@${LEON}> Hermes still hasn't told me what to do with LEON-427`),
+  );
+  assert.equal(issue.state.name, "Executing");
+
+  // Outside an open issue's channel there's no one to ask.
+  const before = t.slack.posts.length;
+  await t.sync.run("muse-answer", { ...answer, channel: "C0NOTANISSUE" });
+  assert.equal(t.slack.posts.length, before);
+});
+
+test("the gateway's reports are checked before they're queued", () => {
+  assert.deepEqual(readTurns({ channels: ["C0ABC123", "D0DM12345", 7, "G0PRIVATE1"] }), {
+    channels: ["C0ABC123", "G0PRIVATE1"],
+  });
+  assert.equal(readTurns({}), null);
+  const handoff = "a65e4fb8-2606-50ee-9c8c-79817beda442";
+  const answer = {
+    channel: "C0ABC123",
+    thread: "1795641485.007579",
+    handoff,
+    sideChat: `https://muse.ai/thread/${handoff}`,
+  };
+  assert.deepEqual(readMuseAnswer(answer), answer);
+  assert.equal(readMuseAnswer({ ...answer, sideChat: "https://example.com/" }), null);
+  assert.equal(readMuseAnswer({ ...answer, thread: "now" }), null);
+  assert.equal(readMuseAnswer({ ...answer, channel: "D0DM12345" }), null);
 });
 
 test("a failed turn gets a reminder too, and nothing moves", async () => {

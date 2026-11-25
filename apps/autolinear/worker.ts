@@ -12,7 +12,9 @@ import {
   commandUsage,
   LinearClient,
   parseCommand,
+  readMuseAnswer,
   readSnapshot,
+  readTurns,
   verifySlack,
 } from "@-/ai.leonsilicon.services.slack22linear";
 import type { Adoption, CommandJob } from "@-/ai.leonsilicon.services.slack22linear";
@@ -161,6 +163,25 @@ function startIntake(env: Env, message: IntakeMessage): Promise<Response> {
   );
 }
 
+/** Whether a request carries the token Hermes's plugins send. */
+function fromHermes(request: Request, env: Env): boolean {
+  return (
+    Boolean(env.AUTOLINEAR_TOKEN) &&
+    request.headers.get("authorization") === `Bearer ${env.AUTOLINEAR_TOKEN}`
+  );
+}
+
+/** Puts a job on slack22linear's queue. */
+async function queueSync(
+  env: Env,
+  job: { id: string; kind: string; payload: unknown },
+): Promise<Response> {
+  const queued = await env.SYNC.get(env.SYNC.idFromName("sync")).fetch(
+    new Request("https://sync/enqueue", { method: "POST", body: JSON.stringify(job) }),
+  );
+  return queued.ok ? json({ queued: true }) : json({ error: "couldn't queue it" }, 502);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const page = await serveSite(request, env.ASSETS);
@@ -191,11 +212,7 @@ export default {
 
     // Hermes's autolinear plugin, the moment one of Leon's messages reaches it.
     if (request.method === "POST" && url.pathname === "/intake") {
-      if (
-        !env.AUTOLINEAR_TOKEN ||
-        request.headers.get("authorization") !== `Bearer ${env.AUTOLINEAR_TOKEN}`
-      )
-        return json({ error: "unauthorized" }, 401);
+      if (!fromHermes(request, env)) return json({ error: "unauthorized" }, 401);
       const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
       const message = readMessage(body);
       if (!message) return json({ error: "channel, ts and user are required" }, 400);
@@ -205,11 +222,7 @@ export default {
     // Leon's routines as Muse has them, from the hermes22muse relay on Hermes Cloud every few
     // minutes. slack22linear's queue keeps the Routine projects in step with them.
     if (request.method === "POST" && url.pathname === "/routines") {
-      if (
-        !env.AUTOLINEAR_TOKEN ||
-        request.headers.get("authorization") !== `Bearer ${env.AUTOLINEAR_TOKEN}`
-      )
-        return json({ error: "unauthorized" }, 401);
+      if (!fromHermes(request, env)) return json({ error: "unauthorized" }, 401);
       const snapshot = readSnapshot(await request.json().catch(() => null));
       if (!snapshot) return json({ error: "at and schedules are required" }, 400);
       const queued = await env.SYNC.get(env.SYNC.idFromName("sync")).fetch(
@@ -224,6 +237,28 @@ export default {
       );
       log("routines", { schedules: snapshot.schedules.length, status: queued.status });
       return queued.ok ? json({ queued: true }) : json({ error: "couldn't queue it" }, 502);
+    }
+
+    // The hermes22muse relay on Hermes Cloud, about every minute while Hermes runs turns: the
+    // channels they're in. slack22linear reminds Hermes about a turn it took up (👀) that never
+    // ended once its channel stops showing up here, as after a gateway restart.
+    if (request.method === "POST" && url.pathname === "/turns") {
+      if (!fromHermes(request, env)) return json({ error: "unauthorized" }, 401);
+      const turns = readTurns(await request.json().catch(() => null));
+      if (!turns) return json({ error: "channels are required" }, 400);
+      return queueSync(env, { id: `turns:${crypto.randomUUID()}`, kind: "turns", payload: turns });
+    }
+
+    // The hermes22muse relay: Muse answered a handoff that no running Hermes turn will read.
+    // slack22linear's Autolinear bot asks Hermes in the handoff's thread, once per answer.
+    if (request.method === "POST" && url.pathname === "/muse-answer") {
+      if (!fromHermes(request, env)) return json({ error: "unauthorized" }, 401);
+      const body = (await request.json().catch(() => null)) as { id?: unknown } | null;
+      const answer = readMuseAnswer(body);
+      if (!answer || typeof body?.id !== "string" || !/^[\w:.-]{1,200}$/.test(body.id))
+        return json({ error: "id, channel, thread, handoff and sideChat are required" }, 400);
+      log("muse_answer", { channel: answer.channel, handoff: answer.handoff });
+      return queueSync(env, { id: `muse-answer:${body.id}`, kind: "muse-answer", payload: answer });
     }
 
     // Leon's /autolinear: the commands Hermes gives Autolinear by mention, for the issue channel he

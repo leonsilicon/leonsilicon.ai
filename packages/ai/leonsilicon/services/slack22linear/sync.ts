@@ -121,6 +121,52 @@ interface Answer {
   failed: boolean;
 }
 
+/** A turn Hermes took up (👀) whose end is overdue (`Sync.onStuck`). */
+interface Stuck {
+  channel: string;
+  /** The message Hermes took up. */
+  ts: string;
+}
+
+/** The channels where Hermes's gateway is running a turn now (`Sync.onTurns`). */
+export interface Turns {
+  channels: string[];
+}
+
+/**
+ * Muse answered a handoff that no running Hermes turn will read (`Sync.onMuseAnswer`), from the
+ * hermes22muse relay through autolinear's Worker.
+ */
+export interface MuseAnswer {
+  channel: string;
+  /** The handoff's Slack thread. */
+  thread: string;
+  handoff: string;
+  sideChat: string;
+}
+
+const SLACK_CHANNEL = /^[CG][A-Z0-9]{1,30}$/;
+const SLACK_TS = /^[0-9]{10}\.[0-9]{6}$/;
+
+/** The gateway's report of its running turns, or null when it isn't one. */
+export function readTurns(input: unknown): Turns | null {
+  const channels = (input as { channels?: unknown } | null)?.channels;
+  if (!Array.isArray(channels) || channels.length > 200) return null;
+  return {
+    channels: channels.filter((c): c is string => typeof c === "string" && SLACK_CHANNEL.test(c)),
+  };
+}
+
+/** The relay's report of an unread Muse answer, or null when it isn't one. */
+export function readMuseAnswer(input: unknown): MuseAnswer | null {
+  const { channel, thread, handoff, sideChat } = (input ?? {}) as Record<string, unknown>;
+  if (typeof channel !== "string" || !SLACK_CHANNEL.test(channel)) return null;
+  if (typeof thread !== "string" || !SLACK_TS.test(thread)) return null;
+  if (typeof handoff !== "string" || !/^[0-9a-f-]{36}$/.test(handoff)) return null;
+  if (typeof sideChat !== "string" || sideChat !== `https://muse.ai/thread/${handoff}`) return null;
+  return { channel, thread, handoff, sideChat };
+}
+
 /** A command for Autolinear (`Sync.onCommand`): from Hermes's message, or Leon's `/autolinear`. */
 export interface CommandJob {
   channel: string;
@@ -228,6 +274,13 @@ export const COMMAND_SETTLE_MS = 3000;
  */
 export const MAX_REMINDERS = 2;
 
+/**
+ * How long a turn Hermes took up (👀) may go without ending (✅ or ❌) once its gateway stops
+ * reporting a turn running in the channel (`Sync.onTurns`, about every minute). Then Autolinear
+ * reminds Hermes: a gateway restart drops the turns it was running (LEON-509, 2026-11-25).
+ */
+export const STUCK_MS = 5 * 60_000;
+
 /** A Slack message ts as milliseconds. */
 const slackTsMs = (ts: string) => Math.round(Number(ts) * 1000);
 
@@ -289,6 +342,8 @@ const saidKey = (channel: string, ts = "") => `said:${channel}:${ts}`;
 const doneKey = (channel: string, ts = "") => `done:${channel}:${ts}`;
 const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
 const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
+/** The timer of a turn Hermes took up (👀) and hasn't ended (`Sync.onStuck`). */
+const stuckKey = (channel: string, ts = "") => `stuck:${channel}:${ts}`;
 // Ignore late Slack deliveries of continuation messages sent before the command was retired.
 const RETIRED_RESUME_MSG_ID_PREFIX = "a7011eaf-";
 /** A notice for a due time (not a bare day) this late says "Overdue". */
@@ -369,6 +424,9 @@ export class Sync {
     else if (kind === "adopted") await this.onAdopted(payload as Adoption);
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
+    else if (kind === "stuck") await this.onStuck(payload as Stuck);
+    else if (kind === "turns") this.onTurns(payload as Turns);
+    else if (kind === "muse-answer") await this.onMuseAnswer(payload as MuseAnswer);
     else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
     else if (kind === "routines") {
       // Muse's schedules, from the hermes22muse relay through autolinear's Worker.
@@ -817,6 +875,7 @@ export class Sync {
    * - ✅ or ❌ on any message in an issue channel (Leon's, a bot's ping, Autolinear's reminder) ends
    *   a turn, after which Hermes owes Autolinear a command. `onAnswered` checks a few seconds later,
    *   once Hermes's last posts are in. The answer itself moves nothing (Leon's rule, 2026-11-23).
+   * - A turn that never ends, because its gateway stopped running it, gets a reminder (`onStuck`).
    */
   async onSlackReaction(event: SlackReactionEvent): Promise<void> {
     const { hermesAckReaction, hermesAnsweredReaction, hermesFailedReaction } = this.#c;
@@ -828,6 +887,15 @@ export class Sync {
     if (event.item.type !== "message" || !channel || !ts) return;
     const rec = this.#store.issueByChannel(channel);
     if (!rec || rec.archived) return;
+    const now = this.#now();
+    // The turn now owes an end. Its gateway pushes the timer on while it runs (`onTurns`).
+    this.#store.setTimer(
+      stuckKey(channel, ts),
+      "stuck",
+      { channel, ts } satisfies Stuck,
+      ended ? null : now + STUCK_MS,
+      now,
+    );
     if (!ended) {
       if (event.item_user === this.#c.leonUserId) return this.onHermesAck(rec, ts);
       if (!event.item_user || !this.#c.pingHermesStates.includes(rec.stateName)) return;
@@ -836,7 +904,6 @@ export class Sync {
       if (ping?.text && mentions(ping.text, this.#c.hermesUserId)) await this.onHermesAck(rec, ts);
       return;
     }
-    const now = this.#now();
     const answer: Answer = { channel, ts, failed: event.reaction === hermesFailedReaction };
     this.#store.enqueue(
       `answered:${channel}:${ts}`,
@@ -915,6 +982,54 @@ export class Sync {
       `${opening} what to do with ${issue.identifier}, which is *${status}*.${before} Answer with a line of its own that starts with my mention:\n${commandUsage("@Autolinear")}`,
     );
     this.#log("autolinear_reminded", { issue: issue.identifier, failed: answer.failed });
+  }
+
+  /**
+   * Hermes's gateway reports the channels where it is running a turn, about every minute. Their
+   * turns aren't overdue yet, so their timers go off `STUCK_MS` after this report instead.
+   */
+  onTurns(turns: Turns): void {
+    const now = this.#now();
+    for (const channel of new Set(turns.channels))
+      this.#store.postponeTimers(stuckKey(channel), now + STUCK_MS, now);
+  }
+
+  /**
+   * A turn Hermes took up (👀) never ended (✅ or ❌), and its gateway hasn't reported it running for
+   * `STUCK_MS`: the gateway most likely restarted under it, which drops the turn (LEON-509,
+   * 2026-11-25). Autolinear reminds Hermes, so the issue isn't left in Executing with no one on it.
+   * Skipped once Leon has written again (Hermes's turn on his newer message counts), a command came
+   * after the message, or the issue left Executing.
+   */
+  async onStuck(stuck: Stuck): Promise<void> {
+    const issue = await this.#openIssueIn(stuck.channel);
+    if (!issue || issue.state.name !== this.#c.hermesAckState) return;
+    if (this.#store.spokeAfter(stuck.channel, stuck.ts)) return;
+    if (this.#store.firedSince(saidKey(stuck.channel), slackTsMs(stuck.ts)).length) return;
+    const message = `<https://app.slack.com/archives/${stuck.channel}/p${stuck.ts.replace(".", "")}|this message>`;
+    await this.#askHermes(
+      issue,
+      stuck.channel,
+      `Your turn on ${message} never ended: no :${this.#c.hermesAnsweredReaction}: or :${this.#c.hermesFailedReaction}:, and your gateway hasn't been running a turn here for ${STUCK_MS / 60_000} minutes, so it was most likely cut off. Pick the task up from where it stopped: check what the agents in this channel's threads came back with, give Leon the outcome, then tell me what to do with ${issue.identifier}, which is *${issue.state.name}*. Answer with a line of its own that starts with my mention:\n${commandUsage("@Autolinear")}`,
+    );
+    this.#log("autolinear_stuck", { issue: issue.identifier, ts: stuck.ts });
+  }
+
+  /**
+   * Muse answered a handoff after the Hermes turn that sent it had ended (it didn't wait, or the
+   * gateway restarted under it), so no turn will read the answer. Autolinear asks Hermes in the
+   * handoff's thread, with the same budget as its other reminders.
+   */
+  async onMuseAnswer(answer: MuseAnswer): Promise<void> {
+    const issue = await this.#openIssueIn(answer.channel);
+    if (!issue) return this.#log("muse_answer_outside_issue", { channel: answer.channel });
+    await this.#askHermes(
+      issue,
+      answer.channel,
+      `Muse answered handoff \`${answer.handoff}\` (${answer.sideChat}), but none of your turns has read the answer: the turn that sent it ended or was cut off. Read it with \`muse_wait\` (handoff \`${answer.handoff}\`), check it against Leon's request, give Leon the outcome, then tell me what to do with ${issue.identifier}, which is *${issue.state.name}*. Answer with a line of its own that starts with my mention:\n${commandUsage("@Autolinear")}`,
+      answer.thread,
+    );
+    this.#log("autolinear_muse_answer", { issue: issue.identifier, handoff: answer.handoff });
   }
 
   /**
