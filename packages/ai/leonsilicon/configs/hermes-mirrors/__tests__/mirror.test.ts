@@ -84,6 +84,10 @@ test("mirrors publish standalone trees and advance only when their contents chan
   assert.equal(git(["show", "HEAD:plugin.yaml"], remote), "name: autolinear\nversion: 1.0.0");
   writeFileSync(join(cwd, "other.txt"), "unrelated source change");
   assert.equal(publish(), first);
+  // An unchanged mirror still checks that it can be pushed to.
+  const source = git(["rev-parse", "HEAD"]);
+  const unwritable = join(tmp, "missing.git");
+  assert.throws(() => syncMirror({ source, name, fetchUrl: remote, pushUrl: unwritable, cwd }));
   writeFileSync(loader, "runtime = 2\n");
   const second = publish();
   assert.notEqual(second, first);

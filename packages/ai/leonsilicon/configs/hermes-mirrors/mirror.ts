@@ -94,6 +94,9 @@ export function syncMirror({
     git(["fetch", "--no-tags", fetchUrl, "refs/heads/main"], cwd);
     parent = git(["rev-parse", "FETCH_HEAD"], cwd);
     if (git(["rev-parse", `${parent}^{tree}`], cwd) === tree) {
+      // A dry-run push still asks the server for push access, so a token that can't push fails now
+      // instead of on the plugin's next change.
+      git(["push", "--dry-run", pushUrl, `${parent}:refs/heads/main`], cwd, env);
       return `Unchanged ${name} at ${parent}`;
     }
   }
