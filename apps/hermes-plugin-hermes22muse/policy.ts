@@ -178,7 +178,7 @@ export function handoffGuide(owner: string) {
       owner +
       "> so he is pinged.",
     "4. muse_handoff posts the full task in a thread under his message and returns Muse's reply. Judge it against his request. If it is incomplete, wrong or unclear, follow up with muse_reply; the exchange stays in that thread. If Muse is still working, call muse_wait.",
-    "5. When you are satisfied, give Leon the answer in your normal reply. It goes to the channel, not the thread.",
+    "5. When you are satisfied, give Leon a concise, checked answer in your normal reply. Muse's messages are already relayed in the handoff thread, so keep your own reply focused on the outcome, any corrections, and what Leon needs to know.",
     "Messages that ask for nothing (thanks, ok) and Hermes commands don't go to Muse.",
   ].join("\n");
 }
@@ -191,14 +191,14 @@ export function threadGuide(handoff: string) {
     sideChat(handoff) +
     "), and Leon just wrote in it. If his message is for Muse or changes the task, pass it on with " +
     "muse_reply, written so Muse can act on it, and judge Muse's answer before you reply to Leon. " +
-    "Muse's replies in this thread are posted by the relay."
+    "The Muse bot posts Muse's messages in channel threads. Keep your own reply focused on the checked outcome and any added context."
   );
 }
 
 const nextSteps: Record<string, string> = {
   answered:
-    "Check Muse's answer against Leon's request. If it is complete, reply to Leon with it " +
-    "(your reply goes to the channel). Otherwise follow up with muse_reply.",
+    "Check Muse's answer against Leon's request. If it is complete, give Leon the checked outcome in " +
+    "your usual reply. Otherwise follow up with muse_reply.",
   working: "Muse is still working. Call muse_wait to keep waiting.",
   not_delivered:
     "Muse has not received the message yet (the Muse link may be down). Call muse_wait to keep " +
