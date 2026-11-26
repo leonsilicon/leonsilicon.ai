@@ -513,6 +513,15 @@ export class Store {
     this.#sql.exec(`INSERT OR IGNORE INTO fired (key, at) VALUES (?, ?)`, key, now);
   }
 
+  /** Records that something that keeps happening, such as the gateway's report, just did. */
+  markLatest(key: string, now: number): void {
+    this.#sql.exec(
+      `INSERT INTO fired (key, at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET at = excluded.at`,
+      key,
+      now,
+    );
+  }
+
   dueJobs(now: number, limit: number): Job[] {
     return this.#sql
       .exec(

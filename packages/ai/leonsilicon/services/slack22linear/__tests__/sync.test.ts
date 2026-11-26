@@ -597,6 +597,8 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
   const issueMetadata = new IssueMetadata(sql);
   /** What Leon's `/autolinear` was told, through Slack's response URL. */
   const responses: { url: string; text: string }[] = [];
+  /** What the sync logged, as [event, fields]. */
+  const logs: [string, Record<string, unknown> | undefined][] = [];
   const sync = new Sync({
     config: loadConfig({
       SLACK_LEON_USER_ID: LEON,
@@ -614,6 +616,7 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     },
     now: () => clock.now,
     sleep: async () => {},
+    log: (event, fields) => logs.push([event, fields]),
   });
   /** Runs every queued job that is due by the clock, as the Durable Object's alarm does. */
   const drain = async () => {
@@ -627,7 +630,7 @@ function setup(now = Date.UTC(2026, 10, 18, 20, 0)) {
     }
     throw new Error("the queue never settled");
   };
-  return { linear, slack, store, sync, clock, drain, responses, issueMetadata };
+  return { linear, slack, store, sync, clock, drain, responses, issueMetadata, logs };
 }
 
 const issueHook = (id: string, action = "update") => ({ action, type: "Issue", data: { id } });
@@ -2055,9 +2058,12 @@ test("a turn the gateway stopped running gets a reminder; one that ends or is re
   }
   assert.equal(autolinearPosts(t, posts).length, 0, "a running turn isn't overdue");
 
-  // The gateway restarted under the turn: no ✅ and no more reports.
-  t.clock.now += STUCK_MS;
-  await t.drain();
+  // The gateway restarted under the turn: no ✅, and its reports no longer name the channel.
+  for (let minute = 0; minute < STUCK_MS / 60_000; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [] });
+    await t.drain();
+  }
   const [reminder, ...more] = autolinearPosts(t, posts);
   assert.equal(more.length, 0);
   assert.ok(
@@ -2082,6 +2088,25 @@ test("a turn the gateway stopped running gets a reminder; one that ends or is re
   await t.drain();
   assert.equal(issue.state.name, "Awaiting Leon");
   assert.equal(autolinearPosts(t, posts).length, 1);
+});
+
+test("a gateway that stopped reporting its turns gets no reminder; the lease decides", async () => {
+  // 2026-11-26: a live plugin reload left the gateway reporting nothing, so LEON-533's 5-minute
+  // turn got "never ended" 3 seconds before it ended.
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  await t.sync.run("turns", { channels: [] });
+  const question = await leonWrites(t, channel.id, "submit the helpdesk request");
+  await hermesReacts(t, channel.id, question, "eyes");
+  const posts = t.slack.posts.length;
+  t.clock.now += STUCK_MS;
+  await t.drain();
+  assert.equal(autolinearPosts(t, posts).length, 0, "silence proves nothing");
+  assert.ok(t.logs.some(([event]) => event === "autolinear_stuck_unreported"));
+  assert.equal(issue.state.name, "Executing");
+  t.clock.now += LEASE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon", "the lease still catches a turn that stopped");
 });
 
 test("a turn that ends, or that Leon wrote after, is never overdue", async () => {
@@ -2354,8 +2379,15 @@ test("Executing is a lease: once nothing works on an issue, it goes to Leon", as
   }
   assert.equal(issue.state.name, "Executing", "a running turn holds the lease");
 
-  // The gateway dies under the turn. Autolinear's reminder goes unanswered, and isn't work.
-  t.clock.now += LEASE_MS - 1;
+  // The gateway restarts under the turn: its reports stop naming the channel. Autolinear's
+  // reminder goes unanswered, and isn't work.
+  const leaseEnd = t.store.timer(`lease:${issue.id}`)!;
+  while (t.clock.now + 60_000 < leaseEnd) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [] });
+    await t.drain();
+  }
+  t.clock.now = leaseEnd - 1;
   await t.drain();
   const [reminder, ...more] = autolinearPosts(t);
   assert.equal(more.length, 0);

@@ -289,6 +289,15 @@ export const MAX_REMINDERS = 2;
 export const STUCK_MS = 5 * 60_000;
 
 /**
+ * How recent the gateway's last report of its running turns must be for a turn missing from it to
+ * count as cut off. The relay reports every minute, with no channels when no turn is running. A
+ * gateway that reports nothing has lost track of its turns, as after the live plugin reload of
+ * 2026-11-26 (LEON-533 got a reminder 3 seconds before its 5-minute turn ended), so a quiet report
+ * proves nothing; Executing's lease still catches a turn that really stopped.
+ */
+export const REPORTS_MS = 3 * 60_000;
+
+/**
  * Executing is a lease (Leon's rule, 2026-11-25: nothing may sit in Executing with no one working on
  * it; LEON-479–498 did, for up to 30 hours). Every issue in Executing has an end time, and when it
  * comes the issue moves to `leaseEndedTarget` (`Sync.onLeaseEnded`). Signs of work push the end to
@@ -368,6 +377,8 @@ const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
 const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
 /** The timer of a turn Hermes took up (👀) and hasn't ended (`Sync.onStuck`). */
 const stuckKey = (channel: string, ts = "") => `stuck:${channel}:${ts}`;
+/** When the gateway last reported its running turns (`Sync.onTurns`). */
+const TURNS_REPORTED = "turns-reported";
 // Ignore late Slack deliveries of continuation messages sent before the command was retired.
 const RETIRED_RESUME_MSG_ID_PREFIX = "a7011eaf-";
 /** A notice for a due time (not a bare day) this late says "Overdue". */
@@ -1014,11 +1025,13 @@ export class Sync {
   }
 
   /**
-   * Hermes's gateway reports the channels where it is running a turn, about every minute. Their
-   * turns aren't overdue yet, so their timers go off `STUCK_MS` after this report instead.
+   * Hermes's gateway reports the channels where it is running a turn, about every minute, and an
+   * empty list when it runs none. Their turns aren't overdue yet, so their timers go off `STUCK_MS`
+   * after this report instead.
    */
   onTurns(turns: Turns): void {
     const now = this.#now();
+    this.#store.markLatest(TURNS_REPORTED, now);
     for (const channel of new Set(turns.channels)) {
       this.#store.postponeTimers(stuckKey(channel), now + STUCK_MS, now);
       this.#workedIn(channel);
@@ -1095,13 +1108,16 @@ export class Sync {
    * `STUCK_MS`: the gateway most likely restarted under it, which drops the turn (LEON-509,
    * 2026-11-25). Autolinear reminds Hermes, so the issue isn't left in Executing with no one on it.
    * Skipped once Leon has written again (Hermes's turn on his newer message counts), a command came
-   * after the message, or the issue left Executing.
+   * after the message, or the issue left Executing; and when the gateway hasn't reported its turns
+   * for `REPORTS_MS`, because then a missing report says nothing about the turn (the lease decides).
    */
   async onStuck(stuck: Stuck): Promise<void> {
     const issue = await this.#openIssueIn(stuck.channel);
     if (!issue || issue.state.name !== this.#c.hermesAckState) return;
     if (this.#store.spokeAfter(stuck.channel, stuck.ts)) return;
     if (this.#store.firedSince(saidKey(stuck.channel), slackTsMs(stuck.ts)).length) return;
+    if (!this.#store.firedSince(TURNS_REPORTED, this.#now() - REPORTS_MS).length)
+      return this.#log("autolinear_stuck_unreported", { issue: issue.identifier, ts: stuck.ts });
     const message = `<https://app.slack.com/archives/${stuck.channel}/p${stuck.ts.replace(".", "")}|this message>`;
     await this.#askHermes(
       issue,
