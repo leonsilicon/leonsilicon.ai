@@ -61,9 +61,9 @@ class Config:
         self.shared = _env("GROK_BOX_SHARED_DIR", f"{home}/grok-box-browser")
         # grokbot-admin's /sandbox/ensure: wakes the Grok Bot cloud computer when Grok Bot paused it.
         self.wake_url = _env("GROK_BOX_WAKE_URL", "https://grokbot-admin.leonsilicon.ai/sandbox/ensure")
-        # grokbot-admin's own bearer token, which slack22grokbot already holds on this host.
+        # grokbot-admin's own bearer token, which slack22grokbot (in beeperd) already holds on this host.
         self.wake_token = _env("GROK_BOX_WAKE_TOKEN") or _env_file_value(
-            _env("GROK_BOX_WAKE_TOKEN_FILE", f"{home}/beeper-inbox/slack22grokbot/slack22grokbot.env"),
+            _env("GROK_BOX_WAKE_TOKEN_FILE", f"{home}/beeperd/slack22grokbot/slack22grokbot.env"),
             "GROK_BOT_ROSTER_MCP_TOKEN")
 
     def dial(self):

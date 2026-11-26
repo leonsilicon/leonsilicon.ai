@@ -254,6 +254,11 @@ class WakeTests(unittest.TestCase):
             handle.write('SLACK_HERMES_USER_ID=U1\nGROK_BOT_ROSTER_MCP_TOKEN="roster-token"\n')
         with patch.dict(os.environ, {"GROK_BOX_WAKE_TOKEN": "", "GROK_BOX_WAKE_TOKEN_FILE": settings}):
             self.assertEqual(plugin.Config().wake_token, "roster-token")
+        # Unset, it reads the settings of slack22grokbot in beeperd (since 2026-11-26).
+        os.makedirs(os.path.join(folder, "beeperd", "slack22grokbot"))
+        shutil.copy(settings, os.path.join(folder, "beeperd", "slack22grokbot", "slack22grokbot.env"))
+        with patch.dict(os.environ, {"GROK_BOX_WAKE_TOKEN": "", "GROK_BOX_WAKE_TOKEN_FILE": "", "HERMES_HOME": folder}):
+            self.assertEqual(plugin.Config().wake_token, "roster-token")
 
     def test_the_keepalive_only_wakes_while_a_browser_is_in_use(self):
         waker = FakeWaker()
