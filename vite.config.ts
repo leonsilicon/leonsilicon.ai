@@ -38,8 +38,8 @@ export default defineConfig({
       "apps/hermes-plugin-*/policy.cjs",
       "**/bridge.cjs",
       "**/@fixtures/**",
-      // beeperd's tool contracts and test data are generated from the TypeScript they were ported
-      // from, and compared with it byte for byte.
+      // beeperd's tool contracts and test data were recorded from the TypeScript it replaced, and
+      // its tests compare against them byte for byte.
       "apps/beeperd/**/testdata/**",
       "apps/beeperd/**/tools.json",
       // What pywrangler puts beside a Python Worker: its packages, its environment and its lock.
