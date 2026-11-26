@@ -16,7 +16,7 @@ import {
   type LinearProjectText,
   type SlackCall,
 } from "@-/ai.leonsilicon.services.slack22linear";
-import type { FeedMessage } from "#events";
+import { readMuseRun, type FeedMessage } from "#events";
 
 const NO_MATCH = "no_match";
 const MIN_CONFIDENCE = 0.9;
@@ -221,6 +221,7 @@ export class Autotrigger {
       if (!delivery) throw new Error("Muse schedule has no Slack permalink");
       return delivery;
     }
+    if (source.name === "feed-muse" && readMuseRun(source.text)) return null;
     const current = { from: "", owner: false, text: source.text, type: "TEXT" };
     if (
       ruleVerdict({
@@ -235,7 +236,7 @@ export class Autotrigger {
     );
     const watchers = watcherSide
       ? (await watcherSide.linear.projectsInStatus(teamKey, watcherSide.status))
-          .filter((project) => !project.gone && !museSchedules(project).length)
+          .filter((project) => !project.gone && !museSchedules(project).includes("*"))
           .slice(0, MAX_WATCHERS)
       : [];
     if (!issues.length && !watchers.length) return null;

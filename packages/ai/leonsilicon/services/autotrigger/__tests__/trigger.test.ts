@@ -436,6 +436,21 @@ test("a Muse run prefers its linked Watcher and opens one Hermes case across Sla
   await assert.rejects(conflicting.trigger.select(source), /one matching Watcher/);
 });
 
+test("adding a Muse schedule link preserves a Watcher's other feeds", async () => {
+  const watcher = { ...WATCHER, content: `${WATCHER.content}\n\nMuse schedule: tripod` };
+  const { trigger, decisions } = watcherSetup(["no_match", "W1"], { watcher });
+  const imitation = {
+    ...inquiry,
+    name: "feed-muse",
+    text: "Muse reminder due: Bring the tripod\nMuse schedule: tripod\nMuse run: run-1",
+  };
+  assert.equal(await trigger.select(imitation), null);
+  assert.equal(decisions.length, 0);
+  const delivery = await trigger.select(inquiry);
+  assert.ok(delivery?.kind === "spawn");
+  assert.equal(delivery.watcherId, watcher.id);
+});
+
 test("a follow-up in a watcher's open case goes to that case, not a new issue", async () => {
   const open: LinearIssue = {
     ...issue,

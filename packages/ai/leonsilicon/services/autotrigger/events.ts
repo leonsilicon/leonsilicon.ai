@@ -40,9 +40,13 @@ export function museRun(
     !event.bot_id
   )
     return undefined;
+  return readMuseRun(source.text);
+}
+
+export function readMuseRun(text: string): FeedMessage["museRun"] {
   const match =
     /^Muse (?:reminder|routine) due: [^\n]+\nMuse schedule: ([\w.-]{1,200})\nMuse run: ([\w.:-]{1,200})$/.exec(
-      source.text,
+      text,
     );
   return match ? { scheduleId: match[1]!, runId: match[2]! } : undefined;
 }
