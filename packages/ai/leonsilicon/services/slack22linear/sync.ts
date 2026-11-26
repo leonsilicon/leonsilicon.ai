@@ -136,6 +136,13 @@ interface Stuck {
   ts: string;
 }
 
+/** Leon's message in an issue channel that Hermes hasn't taken up (👀) yet (`Sync.onUnseen`). */
+interface Unseen {
+  channel: string;
+  ts: string;
+  text: string;
+}
+
 /** The channels where Hermes's gateway is running a turn now (`Sync.onTurns`). */
 export interface Turns {
   channels: string[];
@@ -299,6 +306,26 @@ export const STUCK_MS = 5 * 60_000;
 export const REPORTS_MS = 3 * 60_000;
 
 /**
+ * How long Leon's message at the top of an issue channel may go without Hermes's 👀 before
+ * Autolinear hands it to Hermes. A message sent while the gateway is down never reaches it, and
+ * Slack doesn't send it again once the gateway is back (LEON-494's "mark as done" at 12:02 ET,
+ * 2026-11-26, during a 20-minute outage). While the gateway reports nothing, Autolinear waits on.
+ */
+export const UNSEEN_MS = 3 * 60_000;
+/** How long Autolinear waits for a gateway that reports nothing before it stops asking about a message. */
+export const UNSEEN_GIVE_UP_MS = 6 * 3600_000;
+
+/**
+ * What Hermes's gateway posts instead of running a turn on a message: the conversation is paused,
+ * the message is saved to run later, or it was turned away (`gateway/session_ingress.py`,
+ * `gateway/run_busy.py`). Each opens with an emoji that Slack may spell as a `:shortcode:`. Hermes
+ * still swaps its 👀 for ✅, but no turn ended, so it owes Autolinear nothing (LEON-494, 2026-11-26:
+ * the pause notice got a reminder, and the reminder's thread answered `stay` for "mark as done").
+ */
+const NO_TURN_NOTICE =
+  /^\s*(?::[a-z0-9_+-]+:|\p{Extended_Pictographic}️?)\s*(?:This conversation is paused|Hermes is restarting|Your message is saved|Too many messages are already waiting|Hermes already received a different message|Hermes refused this message|Hermes did not answer this message|Gateway is \S+ and is not accepting new work|This agent is draining|Another turn is still running|Turn setup stalled)/u;
+
+/**
  * Executing is a lease (Leon's rule, 2026-11-25: nothing may sit in Executing with no one working on
  * it; LEON-479–498 did, for up to 30 hours). Every issue in Executing has an end time, and when it
  * comes the issue moves to `leaseEndedTarget` (`Sync.onLeaseEnded`). Signs of work push the end to
@@ -378,6 +405,10 @@ const workedKey = (channel: string, ts = "") => `worked:${channel}:${ts}`;
 const askedKey = (channel: string, ts = "") => `asked:${channel}:${ts}`;
 /** The timer of a turn Hermes took up (👀) and hasn't ended (`Sync.onStuck`). */
 const stuckKey = (channel: string, ts = "") => `stuck:${channel}:${ts}`;
+/** The timer of Leon's message that Hermes hasn't taken up (`Sync.onUnseen`). */
+const unseenKey = (channel: string, ts: string) => `unseen:${channel}:${ts}`;
+/** Recorded when Hermes answers a message with a notice instead of a turn (`NO_TURN_NOTICE`). */
+const noticeKey = (channel: string, ts = "") => `notice:${channel}:${ts}`;
 /** When the gateway last reported its running turns (`Sync.onTurns`). */
 const TURNS_REPORTED = "turns-reported";
 // Ignore late Slack deliveries of continuation messages sent before the command was retired.
@@ -461,6 +492,7 @@ export class Sync {
     else if (kind === "answered") await this.onAnswered(payload as Answer);
     else if (kind === "command") await this.onCommand(payload as CommandJob);
     else if (kind === "stuck") await this.onStuck(payload as Stuck);
+    else if (kind === "unseen") await this.onUnseen(payload as Unseen);
     else if (kind === "lease") await this.onLeaseEnded((payload as { id: string }).id);
     else if (kind === "turns") this.onTurns(payload as Turns);
     else if (kind === "muse-answer") await this.onMuseAnswer(payload as MuseAnswer);
@@ -874,6 +906,18 @@ export class Sync {
     if (this.#store.commentBySlack(event.channel, event.ts)) return;
 
     const reply = event.thread_ts && event.thread_ts !== event.ts ? event.thread_ts : null;
+    if (!reply && event.user === this.#c.leonUserId && !/^\s*[/!]/.test(event.text ?? "")) {
+      // Hermes answers each of Leon's messages here; its 👀 says the message reached it.
+      const now = this.#now();
+      const unseen: Unseen = { channel: event.channel, ts: event.ts, text: event.text ?? "" };
+      this.#store.setTimer(
+        unseenKey(event.channel, event.ts),
+        "unseen",
+        unseen,
+        now + UNSEEN_MS,
+        now,
+      );
+    }
     const parent = reply ? this.#store.commentBySlack(event.channel, reply) : null;
     const id = await stableUuid(`slack:${event.channel}:${event.ts}`);
     const body = await this.#slackBody(event.user, event.text ?? "", event.files);
@@ -909,6 +953,7 @@ export class Sync {
    *   a turn, after which Hermes owes Autolinear a command. `onAnswered` checks a few seconds later,
    *   once Hermes's last posts are in. The answer itself moves nothing (Leon's rule, 2026-11-23).
    * - A turn that never ends, because its gateway stopped running it, gets a reminder (`onStuck`).
+   * - Any of them says the message reached Hermes, so Autolinear won't hand it over (`onUnseen`).
    */
   async onSlackReaction(event: SlackReactionEvent): Promise<void> {
     const { hermesAckReaction, hermesAnsweredReaction, hermesFailedReaction } = this.#c;
@@ -918,9 +963,11 @@ export class Sync {
     if (event.user !== this.#c.hermesUserId) return;
     const { channel, ts } = event.item;
     if (event.item.type !== "message" || !channel || !ts) return;
+    const now = this.#now();
+    // The message reached Hermes.
+    this.#store.setTimer(unseenKey(channel, ts), "unseen", null, null, now);
     const rec = this.#store.issueByChannel(channel);
     if (!rec || rec.archived) return;
-    const now = this.#now();
     // The turn now owes an end. Its gateway pushes the timer on while it runs (`onTurns`).
     this.#store.setTimer(
       stuckKey(channel, ts),
@@ -994,13 +1041,16 @@ export class Sync {
    * telling Autolinear what to do with the channel, in a line that starts with Autolinear's mention
    * (`onCommand`), and nothing moves on what Hermes answered. A turn that ended without a command, or
    * failed, gets a reminder from Autolinear, which mentions Hermes and so starts another turn. A turn
-   * on a message Leon has written after is skipped: Hermes's turn on his newer message counts.
+   * on a message Leon has written after is skipped: Hermes's turn on his newer message counts. So is
+   * a "turn" in which the gateway only posted a notice (`NO_TURN_NOTICE`): no turn ran on it.
    */
   async onAnswered(answer: Answer): Promise<void> {
     const issue = await this.#openIssueIn(answer.channel);
     if (!issue) return;
     if (this.#store.spokeAfter(answer.channel, answer.ts)) return;
     if (this.#store.firedSince(saidKey(answer.channel), slackTsMs(answer.ts)).length) return;
+    if (this.#store.firedSince(noticeKey(answer.channel), slackTsMs(answer.ts)).length)
+      return this.#log("autolinear_no_turn", { issue: issue.identifier, ts: answer.ts });
     const status = issue.state.name;
     const ack = this.#store.ack(issue.id);
     const before =
@@ -1122,6 +1172,37 @@ export class Sync {
   }
 
   /**
+   * Leon's message at the top of an issue channel never got Hermes's 👀 (nor ✅ or ❌) within
+   * `UNSEEN_MS`: it reached the channel while the gateway was down, and Slack doesn't send it again
+   * once the gateway is back. Autolinear hands it to Hermes with a quote, at the top of the channel,
+   * so the channel's conversation takes it up. While the gateway reports nothing (`REPORTS_MS`), it is
+   * most likely still down, so Autolinear waits on, for up to `UNSEEN_GIVE_UP_MS`. A newer message of
+   * his that is waiting too is handed over instead, with a word about the ones before it.
+   */
+  async onUnseen(unseen: Unseen): Promise<void> {
+    const { channel, ts } = unseen;
+    const issue = await this.#openIssueIn(channel);
+    if (!issue) return;
+    const latest = this.#store.lastSpoke(channel);
+    if (latest && latest > ts && this.#store.timer(unseenKey(channel, latest)) !== null) return;
+    const now = this.#now();
+    const waited = now - slackTsMs(ts);
+    if (!this.#store.firedSince(TURNS_REPORTED, now - REPORTS_MS).length) {
+      if (waited >= UNSEEN_GIVE_UP_MS)
+        return this.#log("autolinear_unseen_gave_up", { issue: issue.identifier, ts });
+      this.#store.setTimer(unseenKey(channel, ts), "unseen", unseen, now + UNSEEN_MS, now);
+      return this.#log("autolinear_unseen_unreported", { issue: issue.identifier, ts });
+    }
+    const message = `<https://app.slack.com/archives/${channel}/p${ts.replace(".", "")}|this message>`;
+    await this.#askHermes(
+      issue,
+      channel,
+      `Leon wrote ${message} here ${Math.max(1, Math.round(waited / 60_000))} minutes ago, and it never reached you: your gateway was most likely down, and Slack doesn't send a message again once it's back.\n${excerptQuote(unseen.text, 600)}\nAnswer it, and anything else he wrote here that you haven't answered, then tell me what to do with ${issue.identifier}, which is *${issue.state.name}*. Answer with a line of its own that starts with my mention:\n${commandUsage("@Autolinear")}`,
+    );
+    this.#log("autolinear_unseen", { issue: issue.identifier, ts });
+  }
+
+  /**
    * Muse answered a handoff after the Hermes turn that sent it had ended (it didn't wait, or the
    * gateway restarted under it), so no turn will read the answer. Autolinear asks Hermes in the
    * handoff's thread, with the same budget as its other reminders.
@@ -1153,6 +1234,10 @@ export class Sync {
     const rec = this.#store.issueByChannel(channelId);
     if (!rec || rec.archived) return;
     const { ts, thread_ts: threadTs, blocks } = message;
+    if (!editedAt && NO_TURN_NOTICE.test(message.text ?? "")) {
+      this.#store.markFired(noticeKey(channelId, ts), this.#now());
+      return this.#log("hermes_no_turn_notice", { issue: rec.issueId, ts });
+    }
     const blockId = blocks?.[0]?.block_id;
     if (blockId?.startsWith("hermes-task-progress-note/")) return;
     let text = message.text ?? "";

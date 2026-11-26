@@ -28,6 +28,8 @@ import {
   readTurns,
   STUCK_MS,
   Sync,
+  UNSEEN_GIVE_UP_MS,
+  UNSEEN_MS,
   type Adoption,
   type CommandJob,
 } from "#sync";
@@ -2231,6 +2233,117 @@ test("a failed turn gets a reminder too, and nothing moves", async () => {
         `<@${HERMES}> Your turn here failed, so I still don't know what to do with LEON-427`,
       ),
   );
+});
+
+test("a message Hermes only answered with a gateway notice owes no command", async () => {
+  // LEON-494, 2026-11-26: Hermes's conversation was paused after a restart, so "mark as done" got
+  // the pause notice and ✅ but no turn; Autolinear's reminder then got `stay` from a fresh thread.
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Awaiting Leon");
+  const message = await leonWrites(t, channel.id, "mark as done");
+  await hermesReacts(t, channel.id, message, "eyes");
+  t.clock.now += 1000;
+  await hermesPosts(
+    t,
+    channel.id,
+    ":double_vertical_bar: This conversation is paused: a previous turn did not finish when Hermes restarted, and only you know whether to send it again.",
+  );
+  await hermesReacts(t, channel.id, message);
+  assert.equal(autolinearPosts(t).length, 0, "no turn ran, so none is owed a reminder");
+  assert.ok(t.logs.some(([event]) => event === "autolinear_no_turn"));
+  assert.equal(issue.state.name, "Executing");
+
+  // A real turn after it still owes a command.
+  t.clock.now += 60_000;
+  const again = await leonWrites(t, channel.id, "mark as done");
+  await hermesReacts(t, channel.id, again, "eyes");
+  t.clock.now += 2000;
+  await hermesPosts(t, channel.id, "Marked it done.");
+  await hermesReacts(t, channel.id, again);
+  assert.equal(autolinearPosts(t).length, 1);
+  assert.ok(autolinearPosts(t)[0]!.text.startsWith(`<@${HERMES}> Your turn here is over`));
+});
+
+test("Leon's message that never reached Hermes is handed to it once the gateway reports again", async () => {
+  // LEON-494, 2026-11-26: "mark as done" at 12:02 ET came while the gateway was down for 20
+  // minutes; Slack never sent it again, so nothing answered it.
+  const t = setup();
+  const { channel } = await issueChannel(t, "Awaiting Leon");
+  await t.sync.run("turns", { channels: [] });
+  const message = await leonWrites(t, channel.id, "mark as done");
+  const posts = t.slack.posts.length;
+
+  // The gateway is down: no reports, so Autolinear waits instead of asking no one.
+  for (let minute = 0; minute < 20; minute++) {
+    t.clock.now += 60_000;
+    await t.drain();
+  }
+  assert.equal(autolinearPosts(t, posts).length, 0);
+  assert.ok(t.logs.some(([event]) => event === "autolinear_unseen_unreported"));
+
+  // It's back and reporting: the message is handed over, at the top of the channel, once.
+  for (let minute = 0; minute < UNSEEN_MS / 60_000 + 1; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [] });
+    await t.drain();
+  }
+  const [handoff, ...more] = autolinearPosts(t, posts);
+  assert.equal(more.length, 0);
+  assert.equal(handoff!.thread_ts, undefined, "at the top of the channel");
+  assert.ok(
+    handoff!.text.startsWith(
+      `<@${HERMES}> Leon wrote <https://app.slack.com/archives/${channel.id}/p${message.replace(".", "")}|this message> here 21 minutes ago, and it never reached you:`,
+    ),
+    handoff!.text,
+  );
+  assert.ok(handoff!.text.includes("\n> mark as done\n"));
+  assert.ok(handoff!.text.includes("which is *Awaiting Leon*"));
+  t.clock.now += UNSEEN_GIVE_UP_MS;
+  await t.drain();
+  assert.equal(autolinearPosts(t, posts).length, 1);
+});
+
+test("a message Hermes took up, a thread reply and a command aren't handed over", async () => {
+  const t = setup();
+  const { channel } = await issueChannel(t);
+  await t.sync.run("turns", { channels: [] });
+  const seen = await leonWrites(t, channel.id, "log my lunch");
+  await hermesReacts(t, channel.id, seen, "eyes");
+  t.clock.now += 1000;
+  await t.sync.run("slack", {
+    type: "message",
+    channel: channel.id,
+    user: LEON,
+    text: "and dinner",
+    ts: tsAt(t.clock.now),
+    thread_ts: seen,
+  });
+  t.clock.now += 1000;
+  await leonWrites(t, channel.id, "!stop");
+  for (let minute = 0; minute < 10; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [channel.id] });
+    await t.drain();
+  }
+  assert.equal(autolinearPosts(t).filter((p) => p.text.includes("never reached you")).length, 0);
+});
+
+test("of two messages that never reached Hermes, the newer is handed over", async () => {
+  const t = setup();
+  const { channel } = await issueChannel(t);
+  await t.sync.run("turns", { channels: [] });
+  await leonWrites(t, channel.id, "mark as done");
+  t.clock.now += 60_000;
+  const newer = await leonWrites(t, channel.id, "mark as done please");
+  for (let minute = 0; minute < 6; minute++) {
+    t.clock.now += 60_000;
+    await t.sync.run("turns", { channels: [] });
+    await t.drain();
+  }
+  const handoffs = autolinearPosts(t).filter((p) => p.text.includes("never reached you"));
+  assert.equal(handoffs.length, 1);
+  assert.ok(handoffs[0]!.text.includes(`p${newer.replace(".", "")}|this message>`));
+  assert.ok(handoffs[0]!.text.includes("anything else he wrote here"));
 });
 
 test("a turn Leon wrote after is skipped: the turn on his newer message counts", async () => {
