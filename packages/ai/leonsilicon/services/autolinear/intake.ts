@@ -51,7 +51,7 @@ export type IntakeResult =
       /** Milliseconds from the start until each step was done. */
       ms: Record<string, number>;
     }
-  | { ok: false; skipped: "not_leon" | "issue_channel" };
+  | { ok: false; skipped: "not_leon" | "issue_channel" | "not_project_channel" };
 
 /** How far an intake got. Kept, so a retry carries on instead of starting over. */
 export interface Progress {
@@ -130,6 +130,10 @@ export class Intake {
     if (msg.user !== c.leonUserId) return { ok: false, skipped: "not_leon" };
     if (new RegExp(`^(?:a thread in )?#${c.channelPrefix}-\\d+(?:-|$)`).test(msg.where))
       return { ok: false, skipped: "issue_channel" };
+    // Leon 2026-11-26: only his DM with Hermes and project channels start issues. A reply in a
+    // task channel whose name Hermes couldn't read arrives as "a channel" and stays there.
+    if (!/^(?:a thread in )?(?:a DM with Hermes|#project-)/.test(msg.where))
+      return { ok: false, skipped: "not_project_channel" };
 
     const p = await this.#d.progress.get();
     const save = () => this.#d.progress.put(p);

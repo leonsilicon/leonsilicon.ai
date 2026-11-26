@@ -315,7 +315,7 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
       text: "sure, ask <@U0SYED00001>",
       blocks: undefined,
       files: [{ name: "a.png", title: "receipt.png", permalink: "https://files.slack.com/F1" }],
-      where: "a thread in #feed-gmail",
+      where: "a thread in #project-2026-11-26",
     }),
   );
   assert.ok(result.ok);
@@ -323,11 +323,14 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
   const permalink = `${WORKSPACE}/archives/${DM}/p1794000000000005?thread_ts=1794000000.000004&cid=${DM}`;
   assert.equal(
     t.created[0]!.description,
-    `**Leon in Slack** ([a thread in #feed-gmail](${permalink})):\n\nsure, ask @Syed\n\n` +
+    `**Leon in Slack** ([a thread in #project-2026-11-26](${permalink})):\n\nsure, ask @Syed\n\n` +
       "📎 [receipt.png](https://files.slack.com/F1)",
   );
   assert.equal(t.adopted[0]!.sourceThreadTs, "1794000000.000004");
-  assert.equal(t.adopted[0]!.lead, `From Leon's reply in <${permalink}|a thread in #feed-gmail>.`);
+  assert.equal(
+    t.adopted[0]!.lead,
+    `From Leon's reply in <${permalink}|a thread in #project-2026-11-26>.`,
+  );
   assert.equal(t.slack.edits[0]!.text, `<#${result.channel.id}>`);
   assert.deepEqual(t.slack.lookups[0], {
     channel: DM,
@@ -426,6 +429,13 @@ test("someone else's message, or one in an issue channel, is left alone", async 
     assert.deepEqual(await t.intake.run(message({ where })), {
       ok: false,
       skipped: "issue_channel",
+    });
+  // Only Leon's DM with Hermes and project channels start issues; "a channel" is one whose name
+  // Hermes couldn't read, such as a task channel during Slack timeouts (2026-11-26).
+  for (const where of ["a channel", "#general", "a thread in #feed-gmail", "a group DM"])
+    assert.deepEqual(await t.intake.run(message({ where })), {
+      ok: false,
+      skipped: "not_project_channel",
     });
   assert.deepEqual(t.log, []);
 });

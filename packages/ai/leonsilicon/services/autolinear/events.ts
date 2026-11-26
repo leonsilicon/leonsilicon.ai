@@ -55,8 +55,8 @@ export function fastPathKind(
 
 /**
  * The intake for an event's message, or null when Hermes's own call should decide instead: the
- * cheap checks above, then the lookups. A DM must be the one with Hermes; a channel must not be an
- * issue channel (`leon-<number>…`), where Hermes answers in place.
+ * cheap checks above, then the lookups. A DM must be the one with Hermes; a channel must be a project
+ * channel (`project-…`). Anywhere else, task channels included, Hermes answers in place.
  */
 export async function messageFromEvent(
   event: SlackMessageEvent | undefined,
@@ -72,7 +72,8 @@ export async function messageFromEvent(
     place = "a DM with Hermes";
   } else {
     const name = await lookups.channelName(channel);
-    if (!name || new RegExp(`^${config.channelPrefix}-\\d+(?:-|$)`).test(name)) return null;
+    // Leon 2026-11-26: of channels, only project channels start issues.
+    if (!name?.startsWith("project-")) return null;
     place = `#${name}`;
   }
   const reply = Boolean(event.thread_ts && event.thread_ts !== event.ts);

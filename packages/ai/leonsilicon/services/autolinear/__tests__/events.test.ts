@@ -13,6 +13,7 @@ const config = loadConfig({
 });
 const names: Record<string, string> = {
   C0GENERAL01: "general",
+  C0PROJECT01: "project-2026-11-26",
   C0ISSUE0001: "leon-12-fix-the-printer",
   C0SKIPPED01: "quiet",
 };
@@ -51,7 +52,7 @@ test("Leon's message in his DM with Hermes, or in a public channel, starts at on
   });
   const reply = await messageFromEvent(
     event({
-      channel: "C0GENERAL01",
+      channel: "C0PROJECT01",
       channel_type: "channel",
       thread_ts: "1793999999.000001",
       subtype: "file_share",
@@ -68,7 +69,7 @@ test("Leon's message in his DM with Hermes, or in a public channel, starts at on
     config,
     lookups,
   );
-  assert.equal(reply?.where, "a thread in #general");
+  assert.equal(reply?.where, "a thread in #project-2026-11-26");
   assert.equal(reply?.threadTs, "1793999999.000001");
   assert.deepEqual(reply?.files, [
     { id: "F1", name: "a.png", title: "receipt.png", permalink: "https://files/F1" },
@@ -98,7 +99,7 @@ test("anything Hermes might not answer waits for Hermes's own call, mostly witho
 
   // These need a lookup to rule out: another DM, an issue channel, a channel Slack won't name.
   assert.equal(await messageFromEvent(event({ channel: "D0OTHERDM01" }), config, lookups), null);
-  for (const channel of ["C0ISSUE0001", "C0UNKNOWN01"])
+  for (const channel of ["C0ISSUE0001", "C0GENERAL01", "C0UNKNOWN01"])
     assert.equal(
       await messageFromEvent(event({ channel, channel_type: "channel" }), config, lookups),
       null,
