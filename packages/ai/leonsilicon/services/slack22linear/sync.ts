@@ -55,23 +55,24 @@ export interface SlackFile {
   permalink?: string;
 }
 
-export interface SlackMessageEvent {
-  type: string;
-  channel: string;
+interface SlackMessageContent {
   ts: string;
-  user?: string;
   text?: string;
   thread_ts?: string;
+  blocks?: { block_id?: string }[];
+}
+
+export interface SlackMessageEvent extends SlackMessageContent {
+  type: string;
+  channel: string;
+  user?: string;
   subtype?: string;
   bot_id?: string;
   client_msg_id?: string;
   files?: SlackFile[];
   /** The edited message, on `message_changed`. */
-  message?: {
-    ts: string;
+  message?: SlackMessageContent & {
     user?: string;
-    text?: string;
-    thread_ts?: string;
     bot_id?: string;
     files?: SlackFile[];
     edited?: { ts?: string };
@@ -849,13 +850,7 @@ export class Sync {
       const edited = event.message;
       // Hermes can stream a reply by editing it, so its command can first show up in an edit.
       if (edited?.user === this.#c.hermesUserId)
-        return this.#onHermesMessage(
-          event.channel,
-          edited.ts,
-          edited.text ?? "",
-          edited.thread_ts,
-          edited.edited?.ts ?? event.ts,
-        );
+        return this.#onHermesMessage(event.channel, edited, edited.edited?.ts ?? event.ts);
       if (!edited || edited.bot_id || !edited.user) return;
       const known = this.#store.commentBySlack(event.channel, edited.ts);
       if (known?.origin === "slack")
@@ -869,8 +864,7 @@ export class Sync {
     if (event.subtype && event.subtype !== "file_share" && event.subtype !== "thread_broadcast")
       return;
     // Hermes's posts aren't mirrored, but one can carry a command for Autolinear.
-    if (event.user === this.#c.hermesUserId)
-      return this.#onHermesMessage(event.channel, event.ts, event.text ?? "", event.thread_ts);
+    if (event.user === this.#c.hermesUserId) return this.#onHermesMessage(event.channel, event);
     if (event.bot_id) return;
     // Hermes posting as Leon through slack-as-leon, to wake other bots; not Leon's own words.
     if (event.client_msg_id?.startsWith(CLIENT_MSG_ID_PREFIX)) return;
@@ -1153,20 +1147,28 @@ export class Sync {
    */
   async #onHermesMessage(
     channelId: string,
-    ts: string,
-    text: string,
-    threadTs?: string,
+    message: SlackMessageContent,
     editedAt?: string,
   ): Promise<void> {
     const rec = this.#store.issueByChannel(channelId);
     if (!rec || rec.archived) return;
+    const { ts, thread_ts: threadTs, blocks } = message;
+    const blockId = blocks?.[0]?.block_id;
+    if (blockId?.startsWith("hermes-task-progress-note/")) return;
+    let text = message.text ?? "";
     let commandTs = ts;
-    if (/^\*Task progress\*(?:\s|$)/.test(text) && (!threadTs || threadTs === ts)) {
+    const card = blockId?.startsWith("hermes-task-progress/");
+    const legacyCard = !card && /^\*Task progress\*(?:\s|$)/.test(text);
+    if ((!threadTs || threadTs === ts) && (card || legacyCard)) {
       const revision = editedAt ?? ts;
       if (!/^[0-9]+\.[0-9]{6}$/.test(revision)) return;
       const heading = "\n\n*Update from Hermes*\n";
-      const start = text.indexOf(heading);
-      text = start === -1 ? "" : text.slice(start + heading.length);
+      const body = `\n\n${text}`;
+      const start =
+        legacyCard || blockId?.startsWith("hermes-task-progress/answer/")
+          ? body.indexOf(heading)
+          : -1;
+      text = start === -1 ? "" : body.slice(start + heading.length);
       const digest = text ? await stableUuid(text) : "";
       if (!this.#store.progressAnswerChanged(channelId, ts, revision, digest)) return;
       commandTs = `${ts}:${revision}`;
