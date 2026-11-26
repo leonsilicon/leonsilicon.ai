@@ -47,6 +47,7 @@ import {
   type SendKind,
   type SendRecord,
 } from "#ledger";
+import { Coalesced } from "#coalesce";
 import { MatrixFetch, type SendGuard } from "#fetch";
 import { MessageJournal } from "#journal";
 import type { InboxPaths } from "#paths";
@@ -100,6 +101,11 @@ export const LIMITS = {
   maxUploadBytes: 50 * 1024 * 1024,
   roundTripVerifyBytes: 16 * 1024 * 1024,
   directoryMaxAgeMs: 6 * 60 * 60_000,
+  /**
+   * A refresh an extension asks for (the Slack feeds, the Grok relay, the Linear publisher: each about
+   * once a minute) is answered by any refresh that started this recently.
+   */
+  extensionDirectoryMaxAgeMs: 60_000,
   bridgeStatusWaitMs: 8_000,
   syncStaleMs: 5 * 60_000,
 } as const;
@@ -195,7 +201,10 @@ export class Inbox {
   readonly #read = new Mutex();
   readonly #send = new Mutex();
   readonly #download = new Mutex();
-  readonly #directoryRefresh = new Mutex();
+  readonly #directoryRefresh = new Coalesced(
+    () => this.#refreshDirectoryNow(),
+    () => this.#now(),
+  );
   readonly #decryptErrors = new Map<string, string>();
   readonly #bridgeStatus = new Map<string, BridgeStatus>();
   readonly #profiles = new Map<string, { name: string | null; at: number }>();
@@ -373,6 +382,7 @@ export class Inbox {
     this.#db = null;
     this.#pickleDb = null;
     this.#directory = null;
+    this.#directoryRefresh.reset();
     this.#ledger = null;
     this.#journal = null;
     this.#state = "stopped";
@@ -862,24 +872,32 @@ export class Inbox {
 
   // ── Conversations ────────────────────────────────────────────────────────────────────────────────
 
-  async refreshDirectory(): Promise<{ rooms: number; refreshed_at: string; ms: number }> {
-    return this.#directoryRefresh.run(async () => {
-      const { account, directory } = this.#ready();
-      const started = this.#now();
-      // A sync without `since` is a stateless snapshot: it doesn't acknowledge to-device messages or
-      // move Pickle's cursor, so it can't take room keys away from the owner's own sync.
-      const response = await this.#matrix("/_matrix/client/v3/sync", {
-        query: { filter: JSON.stringify(DIRECTORY_FILTER), timeout: "0", set_presence: "offline" },
-        timeoutMs: 180_000,
-      });
-      if (response.status !== 200)
-        throw new InboxError("unavailable", `directory sync failed: HTTP ${response.status}`);
-      const records = roomsFromSync(response.body as SyncBody, account.userId, this.#now());
-      directory.replaceAll(records, this.#now());
-      const ms = this.#now() - started;
-      this.#log("info", "directory refreshed", { rooms: records.length, ms });
-      return { rooms: records.length, refreshed_at: new Date(this.#now()).toISOString(), ms };
+  /**
+   * Rebuilds the directory from the server, sharing a refresh that is already running. With
+   * `maxAgeMs`, a refresh that started that recently is reused instead.
+   */
+  refreshDirectory(
+    options: { maxAgeMs?: number } = {},
+  ): Promise<{ rooms: number; refreshed_at: string; ms: number }> {
+    return this.#directoryRefresh.get(options.maxAgeMs ?? 0);
+  }
+
+  async #refreshDirectoryNow(): Promise<{ rooms: number; refreshed_at: string; ms: number }> {
+    const { account, directory } = this.#ready();
+    const started = this.#now();
+    // A sync without `since` is a stateless snapshot: it doesn't acknowledge to-device messages or
+    // move Pickle's cursor, so it can't take room keys away from the owner's own sync.
+    const response = await this.#matrix("/_matrix/client/v3/sync", {
+      query: { filter: JSON.stringify(DIRECTORY_FILTER), timeout: "0", set_presence: "offline" },
+      timeoutMs: 180_000,
     });
+    if (response.status !== 200)
+      throw new InboxError("unavailable", `directory sync failed: HTTP ${response.status}`);
+    const records = roomsFromSync(response.body as SyncBody, account.userId, this.#now());
+    directory.replaceAll(records, this.#now());
+    const ms = this.#now() - started;
+    this.#log("info", "directory refreshed", { rooms: records.length, ms });
+    return { rooms: records.length, refreshed_at: new Date(this.#now()).toISOString(), ms };
   }
 
   #conversation(record: RoomRecord): Record<string, unknown> {
@@ -911,9 +929,14 @@ export class Inbox {
     };
   }
 
-  async listConversations(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async listConversations(
+    args: Record<string, unknown>,
+    options: { refreshMaxAgeMs?: number } = {},
+  ): Promise<Record<string, unknown>> {
     const { directory } = this.#ready();
-    if (args.refresh === true || directory.count() === 0) await this.refreshDirectory();
+    if (directory.count() === 0) await this.refreshDirectory();
+    else if (args.refresh === true)
+      await this.refreshDirectory({ maxAgeMs: options.refreshMaxAgeMs ?? 0 });
     const limit = Math.min(Math.max(Number(args.limit ?? 20) || 20, 1), 100);
     const offset = Math.max(Number(args.offset ?? 0) || 0, 0);
     const query = typeof args.query === "string" ? args.query.trim() : "";

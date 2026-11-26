@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { ensureDaemon } from "#client";
+import { Coalesced } from "#coalesce";
 import { RoomDirectory, normalizeNetwork, roomsFromSync } from "#directory";
 import { accountPage, refusedUploadReason, safeFilename } from "#format";
 import { keysQueryKey, MatrixFetch, requestKind, slimSyncFilter } from "#fetch";
 import { GAP_MS, MessageJournal, RETENTION_MS } from "#journal";
 import { SendLedger, idempotencyKey, payloadHash, txnIdFor } from "#ledger";
 import { OwnerLock } from "#lock";
+import { ensureDirectories, inboxPaths } from "#paths";
 import {
   loadPickleKey,
   looksLikeRecoveryKey,
@@ -533,4 +536,95 @@ test("journal: positions only grow, edits keep their place, waits wake on the ri
   journal.prune(T0 + RETENTION_MS + 1);
   assert.equal(journal.stats().entries, 0);
   assert.ok(journal.head() >= 8, "positions are never reused");
+});
+
+test("coalesced refresh: one run at a time, shared; recent results reused only when allowed", async () => {
+  let now = 1_000;
+  let runs = 0;
+  const pending: Array<(value: number) => void> = [];
+  const gate = new Coalesced<number>(
+    () =>
+      new Promise<number>((resolve) => {
+        runs += 1;
+        pending.push(resolve);
+      }),
+    () => now,
+  );
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  const first = gate.get();
+  const joined = gate.get();
+  assert.equal(runs, 1, "asked in the same moment: one run");
+  now += 5;
+  const later = [gate.get(), gate.get()];
+  const recent = gate.get(60_000);
+  assert.equal(runs, 1, "a request that needs a newer run waits for the current one");
+  pending.shift()!(1);
+  assert.equal(await first, 1);
+  assert.equal(await joined, 1);
+  assert.equal(await recent, 1, "a recent-enough request joins the running one");
+  await settle();
+  assert.equal(runs, 2, "the requests made during the first run share one next run");
+  pending.shift()!(2);
+  assert.deepEqual(await Promise.all(later), [2, 2]);
+
+  now += 59_000;
+  assert.equal(await gate.get(60_000), 2, "reused while under a minute old");
+  assert.equal(runs, 2);
+  now += 2_000;
+  const stale = gate.get(60_000);
+  assert.equal(runs, 3, "an older result is refreshed");
+  pending.shift()!(3);
+  assert.equal(await stale, 3);
+
+  const failing = new Coalesced<number>(async () => {
+    throw new Error("matrix down");
+  });
+  await assert.rejects(failing.get(), /matrix down/);
+  await assert.rejects(failing.get(60_000), /matrix down/, "a failure is never reused");
+  gate.reset();
+  const afterReset = gate.get(60_000);
+  assert.equal(runs, 4, "reset forgets the last result");
+  pending.shift()!(4);
+  await afterReset;
+});
+
+test("ensureDaemon: waits for a live owner instead of starting another; starts one when none runs", async () => {
+  const home = mkdtempSync(join(tmpdir(), "bi-client-"));
+  const paths = inboxPaths({ HOME: home, HERMES_HOME: home, BEEPER_INBOX_HOME: home });
+  ensureDirectories(paths);
+  const marker = join(home, "spawned");
+  const launcher = {
+    command: [
+      process.execPath,
+      "-e",
+      `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "x")`,
+    ],
+    env: { PATH: process.env.PATH },
+  };
+
+  // An owner that is alive but not answering, as on 2026-11-26 when Matrix was slow.
+  const owner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "daemon"], {
+    stdio: "ignore",
+  });
+  try {
+    writeFileSync(paths.daemonInfo, JSON.stringify({ pid: owner.pid }));
+    await assert.rejects(
+      ensureDaemon(paths, launcher, 1_000),
+      (error: Error & { code?: string }) => {
+        assert.equal(error.code, "daemon_busy");
+        assert.match(error.message, new RegExp(`pid ${owner.pid}`));
+        return true;
+      },
+    );
+    assert.equal(existsSync(marker), false, "no second daemon while the owner lives");
+  } finally {
+    owner.kill("SIGKILL");
+    await new Promise((resolve) => owner.once("exit", resolve));
+  }
+
+  await assert.rejects(ensureDaemon(paths, launcher, 1_000), { code: "daemon_unreachable" });
+  for (let i = 0; i < 50 && !existsSync(marker); i++)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(existsSync(marker), true, "with the owner gone, a daemon is started");
 });

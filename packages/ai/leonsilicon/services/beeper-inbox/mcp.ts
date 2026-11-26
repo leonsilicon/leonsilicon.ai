@@ -42,11 +42,23 @@ export async function runMcpServer(
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
-      await ensureDaemon(paths, launcher);
       const call = { name: request.params.name, arguments: request.params.arguments ?? {} };
-      const result = (await (extension
-        ? callIpc(paths.socket, "extension", { extension: extension.name, ...call }, 175_000)
-        : callIpc(paths.socket, "tool", call, 175_000))) as Record<string, unknown>;
+      const send = async () =>
+        (await (extension
+          ? callIpc(paths.socket, "extension", { extension: extension.name, ...call }, 175_000)
+          : callIpc(paths.socket, "tool", call, 175_000))) as Record<string, unknown>;
+      let result: Record<string, unknown>;
+      try {
+        // Straight to the daemon: a busy one answers within the call's own timeout. A ping first
+        // failed calls whenever the daemon was a few seconds slow (2026-11-26).
+        result = await send();
+      } catch (error) {
+        // Nothing listening (no daemon yet, or it exited), so the call never arrived: start one
+        // and send it again.
+        if (!(error instanceof IpcError) || error.code !== "daemon_unreachable") throw error;
+        await ensureDaemon(paths, launcher);
+        result = await send();
+      }
       return {
         // An extension reports a refused call as `ok: false` (slack22grokbot's budget, for example).
         ...(result.ok === false ? { isError: true } : {}),

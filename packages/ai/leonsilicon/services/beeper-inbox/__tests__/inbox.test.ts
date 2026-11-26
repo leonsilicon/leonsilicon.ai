@@ -49,6 +49,8 @@ class FakeHomeserver {
   loseNextSendResponses = 0;
   includeGrokRoom = false;
   includeProjectRoom = false;
+  /** Directory snapshots served (each `/sync`). */
+  syncs = 0;
   media = new Map<string, Uint8Array>();
 
   constructor() {
@@ -99,6 +101,7 @@ class FakeHomeserver {
       return ok({ algorithm: "m.megolm.v1.aes-sha2" });
     if (path.includes("/profile/")) return ok({ displayname: "Sam" });
     if (path.endsWith("/sync")) {
+      this.syncs += 1;
       return ok({
         rooms: {
           join: {
@@ -997,6 +1000,46 @@ test("only the slack22grokbot extension can send to Grok rooms", async () => {
     assert.equal(server.sendPuts.length, 1);
     const status = (await callIpc(paths.socket, "status")) as { extensions: object };
     assert.deepEqual(status.extensions, { slack22grokbot: { running: true } });
+  } finally {
+    await daemon.shutdown();
+  }
+});
+
+test("directory: extensions share a recent refresh; Hermes's own refresh reads the server", async () => {
+  const { env, paths, server, pickle } = setup();
+  const daemon = await startDaemon({
+    env,
+    pickle,
+    baseFetch: server.fetch,
+    embedded: true,
+    bridgeStatusWaitMs: 20,
+    extensions: [
+      {
+        name: "feed",
+        server: { name: "test-feed", version: "1", instructions: "", tools: [] },
+        start: (context) => ({
+          callTool: () => context.tool("list_conversations", { refresh: true, limit: 1 }),
+        }),
+      },
+    ],
+  });
+  assert.ok(daemon);
+  try {
+    await daemon.ready;
+    await daemon.inbox.refreshDirectory();
+    const after = server.syncs;
+    const fromFeed = () =>
+      callIpc(paths.socket, "extension", { extension: "feed", name: "list", arguments: {} });
+    await Promise.all([fromFeed(), fromFeed(), fromFeed()]);
+    assert.equal(server.syncs, after, "the feed's refreshes reuse the one that just ran");
+    await tool(paths.socket, "list_conversations", { refresh: true });
+    assert.equal(server.syncs, after + 1, "an explicit refresh from Hermes reads the server");
+    await Promise.all([
+      daemon.inbox.refreshDirectory(),
+      daemon.inbox.refreshDirectory(),
+      daemon.inbox.refreshDirectory(),
+    ]);
+    assert.ok(server.syncs <= after + 3, "requests made together share refreshes");
   } finally {
     await daemon.shutdown();
   }

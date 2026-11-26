@@ -236,7 +236,10 @@ export const TOOLS = [
 export type ToolName = (typeof TOOLS)[number]["name"];
 
 export interface InboxTools {
-  listConversations(args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  listConversations(
+    args: Record<string, unknown>,
+    options?: { refreshMaxAgeMs?: number },
+  ): Promise<Record<string, unknown>>;
   getConversation(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   listMessages(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   getMessage(args: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -259,8 +262,14 @@ export async function runTool(
   inbox: InboxTools,
   name: string,
   args: unknown,
-  fromSlack22GrokBot = false,
+  caller: {
+    /** Only the in-process Grok relay may deliver a handoff to a Grok room. */
+    fromSlack22GrokBot?: boolean;
+    /** `list_conversations` with `refresh` reuses a directory refresh that started this recently. */
+    directoryMaxAgeMs?: number;
+  } = {},
 ): Promise<Record<string, unknown>> {
+  const { fromSlack22GrokBot = false, directoryMaxAgeMs = 0 } = caller;
   const allowed = ALLOWED.get(name);
   if (!allowed) throw new InboxError("unknown_tool", `unknown tool ${name}`);
   const input = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
@@ -269,7 +278,7 @@ export async function runTool(
     throw new InboxError("bad_argument", `unknown argument(s) for ${name}: ${unknown.join(", ")}`);
   switch (name as ToolName) {
     case "list_conversations":
-      return inbox.listConversations(input);
+      return inbox.listConversations(input, { refreshMaxAgeMs: directoryMaxAgeMs });
     case "get_conversation":
       return inbox.getConversation(input);
     case "list_messages":

@@ -8,6 +8,7 @@
     "#linear-issue-metadata": "./linear-issue-metadata.ts",
     "#cli": "./cli.ts",
     "#client": "./client.ts",
+    "#coalesce": "./coalesce.ts",
     "#daemon": "./daemon.ts",
     "#directory": "./directory.ts",
     "#extension": "./extension.ts",

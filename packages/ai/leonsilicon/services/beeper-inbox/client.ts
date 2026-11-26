@@ -4,9 +4,9 @@ import { callIpc, IpcError } from "#ipc";
 import type { InboxPaths } from "#paths";
 
 /**
- * How clients (the MCP adapter, the CLI) reach the daemon, starting it if nothing answers. Any number of
- * clients may race here: each may spawn a daemon, the owner lock lets exactly one keep running, and
- * the rest exit at once with EXIT_ALREADY_OWNED.
+ * How clients (the MCP adapter, the CLI) reach the daemon, starting it if nothing answers and no live
+ * owner is named in daemon.json. Any number of clients may race here: each may spawn a daemon, the
+ * owner lock lets exactly one keep running, and the rest exit at once with EXIT_ALREADY_OWNED.
  */
 
 export interface DaemonLauncher {
@@ -16,6 +16,9 @@ export interface DaemonLauncher {
 }
 
 let inflight: Promise<void> | null = null;
+
+/** How long to give a daemon that was just started before starting another. */
+const RESPAWN_MS = 10_000;
 
 export function ensureDaemon(
   paths: InboxPaths,
@@ -41,19 +44,33 @@ async function start(paths: InboxPaths, launcher: DaemonLauncher, waitMs: number
   if (await answers(paths, 5_000)) return;
   const [command, ...args] = launcher.command;
   if (!command) throw new IpcError("daemon_unreachable", "no daemon command");
-  // detached: setsid(), its own session and process group, outside the MCP server's group that
-  // Hermes reaps when it exits. Output goes to the daemon's own log file.
-  const child = spawn(command, args, {
-    detached: true,
-    stdio: "ignore",
-    env: daemonEnv(launcher.env ?? process.env),
-  });
-  child.unref();
   const deadline = Date.now() + waitMs;
-  while (Date.now() < deadline) {
+  let spawnedAt = Number.NEGATIVE_INFINITY;
+  let owner = daemonPid(paths);
+  for (;;) {
+    // A live owner that is slow to answer (busy with Matrix, say) is waited for, not replaced: a
+    // second daemon can't take the store from it and exits at once.
+    if (owner === null && Date.now() - spawnedAt >= RESPAWN_MS) {
+      spawnedAt = Date.now();
+      // detached: setsid(), its own session and process group, outside the MCP server's group that
+      // Hermes reaps when it exits. Output goes to the daemon's own log file.
+      const child = spawn(command, args, {
+        detached: true,
+        stdio: "ignore",
+        env: daemonEnv(launcher.env ?? process.env),
+      });
+      child.unref();
+    }
+    if (Date.now() >= deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
-    if (await answers(paths, 2_000)) return;
+    if (await answers(paths, owner === null ? 2_000 : 5_000)) return;
+    owner = daemonPid(paths);
   }
+  if (owner !== null)
+    throw new IpcError(
+      "daemon_busy",
+      `the beeper-inbox daemon (pid ${owner}) is running but hasn't answered for ${waitMs / 1000}s, usually because Matrix is slow; try again in a minute (see ${paths.logFile})`,
+    );
   throw new IpcError(
     "daemon_unreachable",
     `the beeper-inbox daemon didn't start within ${waitMs / 1000}s; see ${paths.logFile}`,

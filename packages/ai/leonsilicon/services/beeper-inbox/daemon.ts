@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs
 import type net from "node:net";
 import { join } from "node:path";
 import type { DaemonExtension, RunningExtension } from "#extension";
-import { Inbox, VERSION } from "#inbox";
+import { Inbox, LIMITS, VERSION } from "#inbox";
 import { serveIpc } from "#ipc";
 import { OwnerLock } from "#lock";
 import { ensureDirectories, inboxPaths } from "#paths";
@@ -128,8 +128,12 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<RunningD
           log: fileLogger(paths.logFile, extension.name),
           tool: async (name, args) => {
             await waitReady();
-            // Only the in-process relay has permission to deliver the handoff to Grok.
-            return runTool(inbox, name, args, extension.name === "slack22grokbot");
+            // Only the in-process relay has permission to deliver the handoff to Grok. Extensions'
+            // periodic directory refreshes share one a minute instead of each running its own.
+            return runTool(inbox, name, args, {
+              fromSlack22GrokBot: extension.name === "slack22grokbot",
+              directoryMaxAgeMs: LIMITS.extensionDirectoryMaxAgeMs,
+            });
           },
           rooms: async (roomIds) => {
             await waitReady();
