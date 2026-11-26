@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.grok-box-browser
+# grok-box-browser
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that gives each Linear task its own Chrome in Leon's Grok Bot cloud computer, signed in with the logins Grok Bot's browser has, and makes it the browser behind Hermes's browser tools. Hermes drives it page by page over Chrome's DevTools protocol, with no Grok Bot run per action.
 
@@ -15,7 +17,7 @@ browser tools ─▶ provider grok-box ─▶ 127.0.0.1:19400 ─ tailscale nc �
 - **One Chrome per task.** A turn in an AutoLinear issue channel (`leon-532-…`) gets the Chrome for `LEON-532`. Elsewhere a turn gets one per Slack conversation, then one per Hermes task. The plugin reads the channel from Hermes's gateway session.
 - **Signed in from the start.** Grok Bot keeps the cookies its browser loads into every new Chrome in `/home/box/sand-data/chrome-cookie-seed.json`. The broker copies them into a task's new profile once, with `Storage.setCookies`. Logins made later in a task's Chrome stay in that task's profile and never touch Grok Bot's file. Grok Bot's own browsers are unaffected.
 - **Lifetime.** A Chrome closes after 30 idle minutes and reopens on the same profile when the task needs it again. Every hour the plugin asks Linear which tasks are done or canceled and retires them. A retired profile is deleted 7 days later, and any profile unused for 30 days goes too. At most 6 Chromes run at once; when all are busy, the one idle longest makes room, and if none is idle the request is refused.
-- **Reaching the box.** Hermes Cloud has no tailnet route of its own, so a loopback forwarder carries each connection with `tailscale nc` over the userspace Tailscale the [Orca device](../orcahermes-device/README.md) already runs. The broker listens on loopback in the box, and `tailscale serve` publishes its port to the tailnet. Chrome's DevTools port only accepts a loopback Host, which both ends keep.
+- **Reaching the box.** Hermes Cloud has no tailnet route of its own, so a loopback forwarder carries each connection with `tailscale nc` over the userspace Tailscale the [Orca device](../../orcahermes-device/README.md) already runs. The broker listens on loopback in the box, and `tailscale serve` publishes its port to the tailnet. Chrome's DevTools port only accepts a loopback Host, which both ends keep.
 - **The broker** ([`box/broker.mjs`](box/broker.mjs), Node 22+ or Bun, no dependencies) starts Xvfb and Chrome per task on ports 9401 and up, outside the 9222 + display range Grok Bot's own Chromes use, and proxies DevTools HTTP and WebSocket traffic under a random per-session path (`/s/<secret>/…`), rewriting Chrome's discovery answers to point back through it.
 
 ## Security
@@ -47,11 +49,11 @@ Then create a one-time, pre-approved auth key tagged `tag:grok-box`.
 
 ### The Grok box
 
-Ask a Grok bot to run, in its own terminal, with `<commit>` the mirror commit and the two checksums from `shasum -a 256 box/*`:
+Ask a Grok bot to run, in its own terminal, with `<commit>` the leon mirror commit and the two checksums from `shasum -a 256 box/*`:
 
 ```sh
 mkdir -p /workspace/hermes-browsers/box && cd /workspace/hermes-browsers/box
-base=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-grok-box-browser/<commit>/box
+base=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-leon/<commit>/grok_box_browser/box
 curl -fsSLO "$base/up.sh" && curl -fsSLO "$base/broker.mjs"
 printf '%s  up.sh\n%s  broker.mjs\n' <up.sh sha256> <broker.mjs sha256> | sha256sum -c -
 (umask 077; printf %s '<token>' > ../token; printf %s '<tskey-auth-…>' > ../tailscale-authkey)
@@ -62,7 +64,7 @@ bash up.sh
 
 **When Grok Bot pauses the box**, which it does whenever no bot is running, even while Hermes uses a Chrome there, the plugin wakes it through grokbot-admin's `/sandbox/ensure` (Cursor's `EnsureSandBox`, about half a second; every process survives the pause). It wakes it before each browser session, at most once a minute, and every 3 minutes while a browser carries traffic. When the broker doesn't answer, it wakes the box, waits up to 45 seconds, and tries again before asking for a repair.
 
-**After the box restarts** (it does so without notice), [slack22grokbot](../../packages/ai/leonsilicon/services/slack22grokbot/README.md#grok-box-upkeep) sets it up again: it puts the setup before the next message Hermes sends any Grok bot, or, when Hermes's browser finds the box down, sends it to `Grok Bot` on its own within a minute. If two repairs in a row fail, Hermes is told to ask Leon; then run the setup above by hand.
+**After the box restarts** (it does so without notice), [slack22grokbot](../../../packages/ai/leonsilicon/services/slack22grokbot/README.md#grok-box-upkeep) sets it up again: it puts the setup before the next message Hermes sends any Grok bot, or, when Hermes's browser finds the box down, sends it to `Grok Bot` on its own within a minute. If two repairs in a row fail, Hermes is told to ask Leon; then run the setup above by hand.
 
 ### Hermes
 
@@ -82,7 +84,7 @@ Set in the Hermes profile's environment (Hermes Cloud's Keys page):
 | `GROK_BOX_WAKE_TOKEN`                                            | grokbot-admin's bearer token, for waking the box. Unset, the plugin reads `GROK_BOT_ROSTER_MCP_TOKEN` from slack22grokbot's `slack22grokbot.env` on the same host |
 | `GROK_BOX_WAKE_URL`                                              | Default `https://grokbot-admin.leonsilicon.ai/sandbox/ensure`                                                                                                     |
 
-Install the plugin from its mirror, set `browser.cloud_provider: grok-box` in `config.yaml`, and restart the gateway when it's idle. The log shows `grok-box-browser: provider grok-box registered`. [autodeploy](../hermes-plugin-autodeploy/README.md) keeps it at the mirror's `main` from then on.
+It comes with the [leon plugin](../README.md#install). Set `browser.cloud_provider: grok-box` in `config.yaml` and restart the gateway when it's idle. The log shows `grok-box-browser: provider grok-box registered`.
 
 ## Broker API
 
@@ -100,10 +102,6 @@ Settings are environment variables: `GBB_HOME`, `GBB_PORT`, `GBB_MAX_BROWSERS`, 
 
 ## Test
 
-```sh
-vp -C apps/hermes-plugin-grok-box-browser pack
-node --test apps/hermes-plugin-grok-box-browser/__tests__/broker.test.mjs
-uv run --no-project --python 3.14 --with pygls==2.1.1 --with pytest python -m pytest --rootdir=. --import-mode=importlib apps/hermes-plugin-grok-box-browser/__tests__
-```
+The tests are `__tests__/grok_box_broker.test.mjs` and `__tests__/test_grok_box_browser.py` in the [leon plugin](../README.md#test), and both run in CI.
 
 The broker tests use a stand-in Chrome. To try the broker against a real one on a Mac, run it with `GBB_HEADLESS=1` and `GBB_CHROME` pointing at Chrome's binary.

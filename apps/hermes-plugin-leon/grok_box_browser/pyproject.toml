@@ -1,5 +1,0 @@
-[project]
-name = "hermes-plugin-grok-box-browser"
-version = "1.2.0"
-requires-python = ">=3.11"
-dependencies = ["pygls==2.1.1"]

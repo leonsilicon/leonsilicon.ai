@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.dropbox-task-memory
+# dropbox-task-memory
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin for Hermes's per-issue task notes at Dropbox `/Agents/Memory/<linear-slug>.md`. With it, Hermes reads, saves and moves those notes without asking Leon to confirm every write. Anything else in Dropbox still needs his confirmation.
 
@@ -39,7 +41,7 @@ The write and move tool descriptions carry the authorization: Leon's dated stand
 
 1. Get a refresh token for the plugin's own grant. Use a PKCE authorization on a Dropbox app with Full Dropbox access and public-client (PKCE) support. Captain Claude reuses Leon's "Hermes Captain Claude MCP" app (`z5alyoo8rmc0id7`), but this is a separate grant from the MCP server's. Request only the three scopes above and `token_access_type=offline`, and omit `redirect_uri` so Dropbox shows the code. Exchange the code with the verifier at `https://api.dropboxapi.com/oauth2/token`. You can do the exchange in the dashboard page, so the token never leaves it.
 2. Put `DROPBOX_TASK_MEMORY_REFRESH_TOKEN` and `DROPBOX_TASK_MEMORY_APP_KEY` in `$HERMES_HOME/.env` (`PUT /api/env` on Hermes Cloud).
-3. Install the Git mirror with `hermes plugins install leonsiliconAI/hermes-plugin-dropbox-task-memory --enable --yes-deps`. See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install.
+3. Install the [leon plugin](../README.md#install), which includes it.
 4. Restart the gateway. The log shows `dropbox-task-memory: dropbox_task_memory_read, ... registered for /Agents/Memory`.
 5. Tell Hermes to use it. On Captain Claude, the `branch-task-memory` skill and one line in `memories/MEMORY.md` say to save notes with these tools without asking, and to keep using the Dropbox MCP, with confirmation, for anything else.
 
@@ -47,8 +49,4 @@ To revoke it, remove the token from `.env` and the tools disappear (`check_fn`).
 
 ## Test
 
-The plugin imports nothing from Hermes. The tests run against an in-memory fake of the Dropbox API:
-
-```sh
-uvx --with pytest pytest -q -p no:cacheprovider __tests__
-```
+The feature imports nothing from Hermes. Its tests, `__tests__/test_dropbox_task_memory.py` in the [leon plugin](../README.md#test), run against an in-memory fake of the Dropbox API and run in CI.

@@ -22,7 +22,7 @@ from __future__ import annotations
 import functools
 import logging
 
-from ._bridge import call
+from .._bridge import call
 
 
 logger = logging.getLogger(__name__)

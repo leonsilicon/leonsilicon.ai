@@ -1,5 +1,5 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-// policy.ts
+// slack_own_thread_reply/policy.ts
 function error(message) {
 	return {
 		success: false,

@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.slack-own-thread-reply
+# slack-own-thread-reply
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that lets Hermes reply in Slack threads it started itself, including from cron jobs. Its main use is following up with another agent, such as ChatGPT's Silicon Dot, on a handoff Hermes posted in #agents.
 
@@ -26,23 +28,12 @@ This doesn't let Hermes post anywhere it couldn't before. A gateway turn's `send
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-own-thread-reply --enable --yes-deps
-```
-
-See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-own-thread-reply: slack_reply_own_thread registered`. Plugin toolsets are on for every platform unless `known_plugin_toolsets` names them, so cron jobs with no `enabled_toolsets` of their own get the tool too.
+It comes with the [leon plugin](../README.md#install). After a restart the gateway log shows `slack-own-thread-reply: slack_reply_own_thread registered`. Plugin toolsets are on for every platform unless `known_plugin_toolsets` names them, so cron jobs with no `enabled_toolsets` of their own get the tool too.
 
 Then tell Hermes when to use it. The `coding-task-routing` skill on Captain Claude says to use it for follow-ups in its own handoff threads, instead of `hermes send`.
 
 ## Test
 
-The tests use Hermes's real relay egress guard and `send_message` tool, so they need a Hermes checkout and its environment:
-
-```sh
-git -C ~/.hermes/hermes-agent worktree add --detach /tmp/hermes-v0.23.0 v0.23.0
-cd /tmp/hermes-v0.23.0 && UV_PROJECT_ENVIRONMENT=/tmp/hermes-venv uv sync --frozen --extra slack
-VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
-cd - && HERMES_HOME=$(mktemp -d) PYTHONPATH=/tmp/hermes-v0.23.0 /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider __tests__
-```
+The tests use Hermes's real relay egress guard and `send_message` tool, so they need a Hermes checkout and its environment. They are `__tests__/test_slack_own_thread_reply.py` in the [leon plugin](../README.md#test), which has the command.
 
 Two of the tests pin the upstream behaviour the plugin works around: the guard refuses the thread with no gateway runner and allows it with a live one.

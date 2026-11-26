@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.slack-as-leon-guard
+# slack-as-leon-guard
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that stops Hermes from answering the Slack messages it posted as Leon through the [slack-as-leon](https://github.com/leonsilicon/leonsilicon.ai/blob/main/packages/ai/leonsilicon/services/slack-as-leon/README.md) MCP server.
 
@@ -18,25 +20,14 @@ Replies mirrored by `slack22grokbot` carry the third UUID group `4b22`. Hermes a
 
 Grok bots and Codex sessions post reports and questions through the same server. Their markers use `b075` and `c0de`, respectively. Hermes receives those events with a note identifying the author of the report.
 
-Hermes reads and answers agent reports in the shared handoff thread, including in `#leon-` issue channels. The [Hermes progress tracker](../hermes-plugin-hermes22muse/README.md#shared-task-thread-and-progress) posts the separate editable update in the issue channel and refreshes the latest agent excerpts when a report is edited.
+Hermes reads and answers agent reports in the shared handoff thread, including in `#leon-` issue channels. The [Hermes progress tracker](../hermes22muse/README.md#shared-task-thread-and-progress) posts the separate editable update in the issue channel and refreshes the latest agent excerpts when a report is edited.
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-as-leon-guard --enable --yes-deps
-```
-
-See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon`.
+It comes with the [leon plugin](../README.md#install). After a restart the gateway log shows `slack-as-leon-guard: Hermes ignores the Slack messages it posts as Leon`.
 
 ## Test
 
-The tests drive the real Slack adapter, so they need a Hermes checkout (Captain Claude runs v0.23.0):
-
-```sh
-git -C ~/.hermes/hermes-agent worktree add --detach /tmp/hermes-v0.23.0 v0.23.0
-cd /tmp/hermes-v0.23.0 && UV_PROJECT_ENVIRONMENT=/tmp/hermes-venv uv sync --frozen --extra slack
-VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
-cd - && HERMES_HOME=$(mktemp -d) PYTHONPATH=/tmp/hermes-v0.23.0 /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider __tests__
-```
+The tests drive the real Slack adapter, so they need a Hermes checkout (Captain Claude runs v0.23.0). They are `__tests__/test_slack_as_leon_guard.py` in the [leon plugin](../README.md#test), which has the command.
 
 One test pins the upstream behavior (stock Hermes answers a marked post), and one checks the marker against the service's `CLIENT_MSG_ID_PREFIX`.

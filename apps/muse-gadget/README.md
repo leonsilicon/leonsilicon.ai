@@ -1,6 +1,6 @@
 # @-apps/muse-gadget
 
-Runs Hermes Cloud's (Captain Claude's) [Muse Gadget](https://github.com/facebookincubator/muse-gadget-sdk/tree/fbfe3b0f717f7f468d0a94aa370ea0ca1a94ebfe/linux) and the private [muse-mcp](https://github.com/niclydon/muse-mcp/tree/43299b2f4270e8994eff3978a72d1345abf93e4d) server that [hermes22muse](../hermes-plugin-hermes22muse/README.md) talks to. Muse lists the Gadget under **Settings → Devices → Gadgets** as **Hermes Cloud**. It has no host commands.
+Runs Hermes Cloud's (Captain Claude's) [Muse Gadget](https://github.com/facebookincubator/muse-gadget-sdk/tree/fbfe3b0f717f7f468d0a94aa370ea0ca1a94ebfe/linux) and the private [muse-mcp](https://github.com/niclydon/muse-mcp/tree/43299b2f4270e8994eff3978a72d1345abf93e4d) server that [hermes22muse](../hermes-plugin-leon/hermes22muse/README.md) talks to. Muse lists the Gadget under **Settings → Devices → Gadgets** as **Hermes Cloud**. It has no host commands.
 
 ## Pieces
 

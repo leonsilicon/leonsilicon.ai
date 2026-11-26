@@ -22,7 +22,11 @@ export default defineConfig({
   },
   lint: {
     ...flatcap.configs.oxlint,
-    ignorePatterns: ["apps/hermes-plugin-*/policy.cjs", "**/bridge.cjs"],
+    ignorePatterns: [
+      "apps/hermes-plugin-*/policy.cjs",
+      "apps/hermes-plugin-*/*/policy.cjs",
+      "**/bridge.cjs",
+    ],
     options: { typeAware: true, typeCheck: true },
     overrides: [
       {
@@ -36,6 +40,7 @@ export default defineConfig({
     ignorePatterns: [
       "patches.gen/**",
       "apps/hermes-plugin-*/policy.cjs",
+      "apps/hermes-plugin-*/*/policy.cjs",
       "**/bridge.cjs",
       "**/@fixtures/**",
       // beeperd's tool contracts and test data were recorded from the TypeScript it replaced, and
@@ -63,7 +68,7 @@ export default defineConfig({
           `${ai}/configs/silicon-dot/agents-vault/__tests__/*.test.ts`,
           `${ai}/configs/silicon-dot/hermes-thread/__tests__/*.test.ts`,
           `${ai}/configs/todoist-automations/__tests__/*.test.ts`,
-          "apps/hermes-plugin-grok-box-browser/__tests__/*.test.mjs",
+          "apps/hermes-plugin-leon/__tests__/*.test.mjs",
           ...[
             "autolinear",
             "autotrigger",

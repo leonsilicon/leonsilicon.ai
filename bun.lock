@@ -67,79 +67,9 @@
         "vite-plus": "1.5.0",
       },
     },
-    "apps/hermes-plugin-autolinear": {
-      "name": "@-/com.leonsilicon.hermes.plugins.autolinear",
+    "apps/hermes-plugin-leon": {
+      "name": "@-/com.leonsilicon.hermes.plugins.leon",
       "version": "1.0.0",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-dropbox-task-memory": {
-      "name": "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory",
-      "version": "1.0.1",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-grok-box-browser": {
-      "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
-      "version": "1.2.0",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-hermes22muse": {
-      "name": "@-/com.leonsilicon.hermes.plugins.hermes22muse",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack-always-react": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-always-react",
-      "version": "1.0.1",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack-as-leon-guard": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack-auto-join": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-auto-join",
-      "version": "1.0.1",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack-flat-replies": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-flat-replies",
-      "version": "1.0.1",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack-own-thread-reply": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
-        "vite-plus": "1.5.0",
-      },
-    },
-    "apps/hermes-plugin-slack22orca": {
-      "name": "@-/com.leonsilicon.hermes.plugins.slack22orca",
       "devDependencies": {
         "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
@@ -513,25 +443,7 @@
 
     "@-/com.leonsilicon.hermes.plugins.autodeploy": ["@-/com.leonsilicon.hermes.plugins.autodeploy@workspace:apps/hermes-plugin-autodeploy"],
 
-    "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:apps/hermes-plugin-autolinear"],
-
-    "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory": ["@-/com.leonsilicon.hermes.plugins.dropbox-task-memory@workspace:apps/hermes-plugin-dropbox-task-memory"],
-
-    "@-/com.leonsilicon.hermes.plugins.grok-box-browser": ["@-/com.leonsilicon.hermes.plugins.grok-box-browser@workspace:apps/hermes-plugin-grok-box-browser"],
-
-    "@-/com.leonsilicon.hermes.plugins.hermes22muse": ["@-/com.leonsilicon.hermes.plugins.hermes22muse@workspace:apps/hermes-plugin-hermes22muse"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack-always-react": ["@-/com.leonsilicon.hermes.plugins.slack-always-react@workspace:apps/hermes-plugin-slack-always-react"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard": ["@-/com.leonsilicon.hermes.plugins.slack-as-leon-guard@workspace:apps/hermes-plugin-slack-as-leon-guard"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack-auto-join": ["@-/com.leonsilicon.hermes.plugins.slack-auto-join@workspace:apps/hermes-plugin-slack-auto-join"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack-flat-replies": ["@-/com.leonsilicon.hermes.plugins.slack-flat-replies@workspace:apps/hermes-plugin-slack-flat-replies"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply": ["@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply@workspace:apps/hermes-plugin-slack-own-thread-reply"],
-
-    "@-/com.leonsilicon.hermes.plugins.slack22orca": ["@-/com.leonsilicon.hermes.plugins.slack22orca@workspace:apps/hermes-plugin-slack22orca"],
+    "@-/com.leonsilicon.hermes.plugins.leon": ["@-/com.leonsilicon.hermes.plugins.leon@workspace:apps/hermes-plugin-leon"],
 
     "@-/com.npmjs.citty": ["@-/com.npmjs.citty@workspace:packages/com/npmjs/citty"],
 

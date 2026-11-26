@@ -1,0 +1,22 @@
+{
+  "name": "@-/com.leonsilicon.hermes.plugins.leon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hermes plugin `leon`: every part of Leon's Hermes setup except autodeploy, in one install.",
+  "type": "module",
+  "imports": {
+    "#features/*": "./*/feature.ts",
+    "#plugin": "./plugin.ts",
+    "#slack": "@-/ai.leonsilicon.configs.hermes-mirrors/slack"
+  },
+  "exports": {
+    ".": "./+.ts"
+  },
+  "scripts": {
+    "build": "vp pack"
+  },
+  "devDependencies": {
+    "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
+    "vite-plus": "1.5.0"
+  }
+}

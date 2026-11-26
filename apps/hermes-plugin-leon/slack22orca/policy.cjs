@@ -3,7 +3,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 function slackPermalink(channel, ts) {
 	return "https://app.slack.com/archives/" + channel + "/p" + ts.replaceAll(".", "");
 }
-// policy.ts
+// slack22orca/policy.ts
 function repository(repos, name) {
 	const results = repos.filter((repo) => repo.kind === "git" && (repo.displayName === name || repo.gitRemoteIdentity?.canonicalKey === name));
 	return results.length === 1 ? { id: results[0].id } : { error: results.length ? "repository ambiguous" : "repository missing" };

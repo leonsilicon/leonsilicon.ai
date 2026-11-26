@@ -17,7 +17,7 @@ function issueChannel(name, prefix) {
 	if (!name.startsWith(prefix + "-")) return false;
 	return /^\p{Decimal_Number}+(?:-|$)/u.test(name.slice(prefix.length + 1));
 }
-// policy.ts
+// hermes22muse/policy.ts
 const finished = /* @__PURE__ */ new Set([
 	"completed",
 	"failed",

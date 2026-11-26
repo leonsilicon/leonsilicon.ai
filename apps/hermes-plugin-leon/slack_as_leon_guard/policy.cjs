@@ -12,7 +12,7 @@ function clientMessageId(event) {
 function agentGroup(id) {
 	if (typeof id === "string") return Object.values(groups).find((group) => id.startsWith("de1e6a7e-" + group + "-"));
 }
-// policy.ts
+// slack_as_leon_guard/policy.ts
 const agents = {
 	[groups.grok]: "a Grok bot",
 	[groups.codex]: "a Codex session that Silicon Dot started"

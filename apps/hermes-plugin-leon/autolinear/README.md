@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.autolinear
+# autolinear
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that gives each of Leon's Slack messages its own Linear issue and channel the moment it arrives, through [autolinear](https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/autolinear/README.md), where Hermes handles the request.
 
@@ -11,8 +13,8 @@ Every message Leon sends to Hermes in his DM or a project channel (`project-…`
 1. Leon writes to Hermes in his DM or a project channel (`#project-…`), at the top or in a thread.
 2. Once the message reaches Hermes and passes dedup and the bot check, the plugin calls `POST /intake` in the background. AutoLinear creates the issue, opens its `leon-<n>-<first words>` channel, and posts a copy of the message there as Leon. Once Slack confirms the copy, AutoLinear replaces the original message with the channel link.
 3. Hermes adds 👀 to acknowledge the request. It keeps the message, Slack thread context and file links when AutoLinear moves the request. In an existing issue channel, the handoff uses Leon's conversation there.
-4. Hermes handles the request in its own model turn. [slack-flat-replies](../hermes-plugin-slack-flat-replies/README.md) keeps top-level requests and threaded requests in their respective conversations.
-5. slack22linear sees 👀 in the issue channel and moves the issue to Executing. Hermes uses the [Autolinear status commands](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-commands) as it works. It can handle routine reports from delegated agents silently and sends a command when a report calls for a status change.
+4. Hermes handles the request in its own model turn. [slack-flat-replies](../slack_flat_replies/README.md) keeps top-level requests and threaded requests in their respective conversations.
+5. slack22linear sees 👀 in the issue channel and moves the issue to Executing. Hermes uses the [Autolinear status commands](../../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-commands) as it works. It can handle routine reports from delegated agents silently and sends a command when a report calls for a status change.
 
 ## Which messages
 
@@ -26,7 +28,7 @@ A thread reply's thread goes along: Hermes keeps the thread history it read, and
 
 When AutoLinear declines intake, fails or takes longer than 25 seconds, Hermes handles the request in its original conversation. Intake retries once for a network error or 5xx and deduplicates requests by Slack message.
 
-The copy carries slack-as-leon's `client_msg_id` marker, so [slack-as-leon-guard](https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/hermes-plugin-slack-as-leon-guard/README.md) drops its live event, and Hermes doesn't answer the message twice. Keep that plugin enabled; this one logs a warning when it isn't. The copy's ts is also claimed, so its unfurl edits start no turn. autolinear's edit of Leon's message starts none either: Hermes claimed that message's ts before its turn was built.
+The copy carries slack-as-leon's `client_msg_id` marker, so [slack-as-leon-guard](https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/hermes-plugin-leon/slack_as_leon_guard/README.md) drops its live event, and Hermes doesn't answer the message twice. Keep that plugin enabled; this one logs a warning when it isn't. The copy's ts is also claimed, so its unfurl edits start no turn. autolinear's edit of Leon's message starts none either: Hermes claimed that message's ts before its turn was built.
 
 ## Settings
 
@@ -43,25 +45,12 @@ In `$HERMES_HOME/.env` (the dashboard's Keys page), from the `#hermes` items of 
 
 They're read on every message, so removing the token turns the plugin off once Hermes's env reloads.
 
-When [hermes22muse](../hermes-plugin-hermes22muse/README.md) is active, replies in a thread that relays a Muse handoff stay in that thread. Keep the separate AutoLinear Slack app’s message event subscriptions paused so the gateway decides which messages to copy.
+When [hermes22muse](../hermes22muse/README.md) is active, replies in a thread that relays a Muse handoff stay in that thread. Keep the separate AutoLinear Slack app’s message event subscriptions paused so the gateway decides which messages to copy.
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-autolinear --enable --yes-deps
-```
-
-See [migration steps](../../DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway and look for `autolinear: issue intake for Leon's Slack messages`. Apply the [agent routing policy](../hermes-plugin-hermes22muse/README.md#agent-routing) in the Hermes Cloud profile. The same status rules apply to normal turns and issue sweeps. A sweep originating in Linear can use a Linear comment with Leon's mention to trigger a turn.
+It comes with the [leon plugin](../README.md#install). After a restart the gateway log shows `autolinear: issue intake for Leon's Slack messages`. Apply the [agent routing policy](../hermes22muse/README.md#agent-routing) in the Hermes Cloud profile. The same status rules apply to normal turns and issue sweeps. A sweep originating in Linear can use a Linear comment with Leon's mention to trigger a turn.
 
 ## Test
 
-The tests drive the real Slack adapter, so they need a Hermes checkout's environment. Hermes Cloud ran v0.23.2 when this was written:
-
-```sh
-git -C ~/.hermes/hermes-agent worktree add --detach /tmp/hermes-v0.23.2 v0.23.2
-cd /tmp/hermes-v0.23.2 && UV_PROJECT_ENVIRONMENT=/tmp/hermes-venv uv sync --frozen --extra slack
-VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
-cd - && HERMES_HOME=$(mktemp -d) PYTHONPATH=/tmp/hermes-v0.23.2 /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider --import-mode=importlib __tests__
-```
-
-The tests drive the real Slack adapter and verify issue intake, reply routing, deduplication, and the status prompt.
+The tests are `__tests__/test_autolinear.py` in the [leon plugin](../README.md#test), and need a Hermes checkout's environment. They drive the real Slack adapter and verify issue intake, reply routing, deduplication, and the status prompt.

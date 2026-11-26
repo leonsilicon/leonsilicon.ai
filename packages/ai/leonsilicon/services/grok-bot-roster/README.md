@@ -29,7 +29,7 @@ It is in Leon's account-wide MCP config, which every bot uses, as `grokbot-admin
 
 ## Waking the cloud computer
 
-`POST /sandbox/ensure` with the same bearer token calls `GrokBotService/EnsureSandBox`, as the desktop app does, and answers only `{ runState }`. Grok Bot pauses Leon's cloud computer when no bot is running; [grok-box-browser](../../../../../apps/hermes-plugin-grok-box-browser/README.md) calls this so Hermes's Chrome in that machine answers. The descriptor's gateway, VNC and port tokens stay in the Worker.
+`POST /sandbox/ensure` with the same bearer token calls `GrokBotService/EnsureSandBox`, as the desktop app does, and answers only `{ runState }`. Grok Bot pauses Leon's cloud computer when no bot is running; [grok-box-browser](../../../../../apps/hermes-plugin-leon/grok_box_browser/README.md) calls this so Hermes's Chrome in that machine answers. The descriptor's gateway, VNC and port tokens stay in the Worker.
 
 ## API
 

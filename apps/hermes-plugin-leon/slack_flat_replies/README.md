@@ -1,10 +1,12 @@
-# @-/com.leonsilicon.hermes.plugins.slack-flat-replies
+# slack-flat-replies
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin: when a person writes a top-level message in a Slack channel, Hermes answers at the top of the channel, not in a thread. It answers in a thread only when the message was written in that thread.
 
 ## Why
 
-Leon's rule (2026-11-21): "always respond in a channel instead of as a thread unless I respond in that thread", as if Slack's "Also send to channel" were ticked. Stock Hermes (`reply_in_thread`, on by default) opens a thread under every top-level channel message, so in a new [autolinear](https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/hermes-plugin-autolinear/README.md) issue channel the answer hid in a thread under Leon's message.
+Leon's rule (2026-11-21): "always respond in a channel instead of as a thread unless I respond in that thread", as if Slack's "Also send to channel" were ticked. Stock Hermes (`reply_in_thread`, on by default) opens a thread under every top-level channel message, so in a new [autolinear](https://github.com/leonsilicon/leonsilicon.ai/blob/main/apps/hermes-plugin-leon/autolinear/README.md) issue channel the answer hid in a thread under Leon's message.
 
 ## What it does
 
@@ -18,21 +20,10 @@ autolinear's plugin calls `_session_thread_ts` for the copy of Leon's message it
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-flat-replies --enable --yes-deps
-```
-
-See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. The plugin takes effect on the live adapter without a restart. The gateway log shows `slack-flat-replies: Hermes answers top-level channel messages in the channel, threads in their thread`.
+It comes with the [leon plugin](../README.md#install). The gateway log shows `slack-flat-replies: Hermes answers top-level channel messages in the channel, threads in their thread`.
 
 ## Test
 
-The tests drive the real Slack adapter and the gateway's own reply-anchor and thread-metadata helpers, so they need a Hermes checkout's environment (Hermes Cloud ran v0.23.2 when this was written):
-
-```sh
-git -C ~/.hermes/hermes-agent worktree add --detach /tmp/hermes-v0.23.2 v0.23.2
-cd /tmp/hermes-v0.23.2 && UV_PROJECT_ENVIRONMENT=/tmp/hermes-venv uv sync --frozen --extra slack
-VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
-cd - && HERMES_HOME=$(mktemp -d) PYTHONPATH=/tmp/hermes-v0.23.2 /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider __tests__
-```
+The tests drive the real Slack adapter and the gateway's own reply-anchor and thread-metadata helpers, so they need a Hermes checkout's environment (Hermes Cloud ran v0.23.2 when this was written). They are `__tests__/test_slack_flat_replies.py` in the [leon plugin](../README.md#test), which has the command.
 
 One test pins the stock behaviour (a thread under every top-level message); another wires it with the autolinear plugin in both orders.

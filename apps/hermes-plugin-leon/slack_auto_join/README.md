@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.slack-auto-join
+# slack-auto-join
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that keeps Hermes in every Slack channel, by default and without anyone inviting it.
 
@@ -18,19 +20,8 @@ Subscribe the app to the `channel_created` and `channel_unarchive` bot events (b
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-auto-join --enable --yes-deps
-```
-
-See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-auto-join: keeping Hermes in every Slack channel` and a `joined #…` line per channel.
+It comes with the [leon plugin](../README.md#install). After a restart the gateway log shows `slack-auto-join: keeping Hermes in every Slack channel` and a `joined #…` line per channel.
 
 ## Test
 
-The tests drive Hermes's real Slack adapter and Bolt app, so they need a Hermes checkout's environment plus `pytest` and `pytest-asyncio`:
-
-```sh
-git -C ~/.hermes/hermes-agent worktree add --detach /tmp/hermes-v0.23.0 v0.23.0
-cd /tmp/hermes-v0.23.0 && UV_PROJECT_ENVIRONMENT=/tmp/hermes-venv uv sync --frozen --extra slack
-VIRTUAL_ENV=/tmp/hermes-venv uv pip install pytest pytest-asyncio
-cd - && HERMES_HOME=$(mktemp -d) /tmp/hermes-venv/bin/python -m pytest -q -p no:cacheprovider __tests__
-```
+The tests drive Hermes's real Slack adapter and Bolt app, so they need a Hermes checkout's environment plus `pytest` and `pytest-asyncio`. They are `__tests__/test_slack_auto_join.py` in the [leon plugin](../README.md#test), which has the command.

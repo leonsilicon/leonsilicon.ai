@@ -19,7 +19,7 @@ import time
 import urllib.error
 import urllib.request
 
-from ._bridge import call
+from .._bridge import call
 
 LOG = logging.getLogger(__name__)
 PROVIDER_NAME = "grok-box"

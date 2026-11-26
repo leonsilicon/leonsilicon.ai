@@ -10,7 +10,7 @@ function issueChannel(name, prefix) {
 	if (!name.startsWith(prefix + "-")) return false;
 	return /^\p{Decimal_Number}+(?:-|$)/u.test(name.slice(prefix.length + 1));
 }
-// policy.ts
+// autolinear/policy.ts
 /**
 * Where Leon's messages become new issues: his DM with Hermes and project channels (`project-…`).
 * Anywhere else, task channels included, Hermes answers in place. A channel whose name couldn't be

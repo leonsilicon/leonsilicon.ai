@@ -1,5 +1,5 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-// policy.ts
+// grok_box_browser/policy.ts
 const ISSUE_CHANNEL = /^leon-(\d+)(?:-|$)/;
 /**
 * The browser a Hermes turn gets: one per Linear issue, by its AutoLinear channel (`leon-532-…` →

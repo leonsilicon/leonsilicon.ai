@@ -1,5 +1,5 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-// policy.ts
+// slack_auto_join/policy.ts
 function channelAction(channel, fromUser, knownPrivate) {
 	if (!channel.id || channel.is_archived || knownPrivate) return "skip";
 	if (fromUser) return "invite";

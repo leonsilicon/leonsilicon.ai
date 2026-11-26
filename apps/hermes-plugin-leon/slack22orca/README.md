@@ -1,5 +1,7 @@
 # slack22orca
 
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
+
 Hermes hands a Slack task to Codex in a new Orca worktree. Orca’s commentary and final reply appear as Hermes bot messages in the same Slack thread while Codex works.
 
 ## Use
@@ -20,13 +22,9 @@ Use `target: desktop` for deferred checks that require local hardware. Include t
 
 ## Install on Hermes Cloud
 
-Install this plugin and use AutoLinear 1.4.4 or newer if AutoLinear is enabled.
+It comes with the [leon plugin](../README.md#install), which includes autolinear.
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack22orca --enable --yes-deps
-```
-
-The gateway must have its existing Slack app and `chat:write`. Set `SLACK22ORCA_USER_ID` to the Slack user allowed to delegate. An existing `AUTOLINEAR_USER_ID` supplies the default. Restart the Hermes gateway after installation. Its log should show `slack22orca: Slack thread relay registered`. Verify with a short `!orca cloud` task.
+The gateway must have its existing Slack app and `chat:write`. Set `SLACK22ORCA_USER_ID` to the Slack user allowed to delegate. An existing `AUTOLINEAR_USER_ID` supplies the default. After a restart its log shows `slack22orca: Slack thread relay registered`. Verify with a short `!orca cloud` task.
 
 The defaults match Captain Cloud. Set these in the Hermes profile environment when its paths or saved environment names differ.
 
@@ -47,4 +45,4 @@ The Slack message ID deduplicates requests. The relay records the chosen host be
 
 The relay reads Orca’s user-visible assistant text and preserves its order. Orca’s CLI exposes the latest 100 transcript entries, including tool events, and limits very large entries. If an outage or burst causes the readable window to lose its overlap, the relay reports the gap in the thread and continues. Orca displays images as text placeholders through this API. The worker stops after Orca reports the delegated turn complete.
 
-Run the regression suite from this directory with `python3 -m unittest discover -s __tests__`.
+Its regression suite is `__tests__/test_slack22orca.py` in the [leon plugin](../README.md#test), and runs in CI.

@@ -27,7 +27,7 @@ jobs:
       - run: vpr -w vet:beeperd
       - run: vpr -w test:beeperd
       - run: vpr -w build:hermes-plugins
-      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' packages/ai/leonsilicon/configs/hermes-mirrors/bridge.cjs
+      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' 'apps/hermes-plugin-*/*/policy.cjs' packages/ai/leonsilicon/configs/hermes-mirrors/bridge.cjs
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Test Hermes plugins
         run: |
@@ -35,10 +35,11 @@ jobs:
             --rootdir=. --import-mode=importlib \
             packages/ai/leonsilicon/configs/hermes-mirrors/__tests__ \
             apps/hermes-plugin-autodeploy/__tests__ \
-            apps/hermes-plugin-dropbox-task-memory/__tests__ \
-            apps/hermes-plugin-grok-box-browser/__tests__ \
-            apps/hermes-plugin-slack22orca/__tests__ \
-            apps/hermes-plugin-hermes22muse/__tests__ \
+            apps/hermes-plugin-leon/__tests__/test_leon.py \
+            apps/hermes-plugin-leon/__tests__/test_dropbox_task_memory.py \
+            apps/hermes-plugin-leon/__tests__/test_grok_box_browser.py \
+            apps/hermes-plugin-leon/__tests__/test_slack22orca.py \
+            apps/hermes-plugin-leon/__tests__/test_hermes22muse.py \
             apps/muse-gadget/__tests__
       - run: vp build
 

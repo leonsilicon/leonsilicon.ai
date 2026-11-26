@@ -1,4 +1,6 @@
-# @-/com.leonsilicon.hermes.plugins.slack-always-react
+# slack-always-react
+
+Part of the [leon plugin](../README.md), and a Hermes plugin of its own until 2026-11-26.
 
 Hermes plugin that gives every Slack message Hermes processes the 👀 → ✅/❌ reaction lifecycle.
 
@@ -10,20 +12,8 @@ A Grok bot's post in a task thread (slack-as-leon's marker with second group `b0
 
 ## Install
 
-```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-always-react --enable --yes-deps
-```
-
-See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway.
+It comes with the [leon plugin](../README.md#install).
 
 ## Test
 
-The tests run the real Slack adapter from a Hermes checkout. They need `pytest` and `pytest-asyncio` alongside Hermes's own environment:
-
-```sh
-uv venv /tmp/sar --python ~/.hermes/tools/python-*/bin/python3
-VIRTUAL_ENV=/tmp/sar uv pip install pytest pytest-asyncio
-# Put the checkout and its venv site-packages on the path:
-printf '%s\n' ~/.hermes/hermes-agent <hermes venv site-packages> > /tmp/sar/lib/python3.14/site-packages/hermes.pth
-HERMES_HOME=$(mktemp -d) /tmp/sar/bin/python -m pytest -q __tests__
-```
+The tests, `__tests__/test_slack_always_react.py` in the [leon plugin](../README.md#test), run the real Slack adapter from a Hermes checkout.

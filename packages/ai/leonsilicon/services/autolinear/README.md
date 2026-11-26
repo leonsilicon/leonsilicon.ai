@@ -1,6 +1,6 @@
 # @-/ai.leonsilicon.services.autolinear
 
-Makes one of Leon's Slack messages a Linear issue with its own Slack channel, as fast as Slack and Linear allow. Leon's rule (2026-11-21): every message he sends in Slack gets an issue in Awaiting Init and a channel at once, his message is edited to link the channel, and Hermes answers him there. Hermes's [autolinear plugin](../../../../../apps/hermes-plugin-autolinear/README.md) calls it; it runs as a Cloudflare Worker, deployed from [`apps/autolinear`](../../../../../apps/autolinear/README.md).
+Makes one of Leon's Slack messages a Linear issue with its own Slack channel, as fast as Slack and Linear allow. Leon's rule (2026-11-21): every message he sends in Slack gets an issue in Awaiting Init and a channel at once, his message is edited to link the channel, and Hermes answers him there. Hermes's [autolinear plugin](../../../../../apps/hermes-plugin-leon/autolinear/README.md) calls it; it runs as a Cloudflare Worker, deployed from [`apps/autolinear`](../../../../../apps/autolinear/README.md).
 
 ## What it does
 

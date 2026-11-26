@@ -28,7 +28,7 @@ import functools
 import logging
 import os
 
-from ._bridge import call
+from .._bridge import call
 
 
 logger = logging.getLogger(__name__)

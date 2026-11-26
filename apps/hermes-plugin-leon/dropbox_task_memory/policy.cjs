@@ -1,5 +1,5 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-// policy.ts
+// dropbox_task_memory/policy.ts
 const root = "/Agents/Memory";
 const versions = "Earlier versions stay in Dropbox's version history: ";
 function notePath(slug) {

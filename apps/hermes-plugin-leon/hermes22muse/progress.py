@@ -9,7 +9,7 @@ import time
 import uuid
 from weakref import WeakValueDictionary
 
-from ._bridge import call
+from .._bridge import call
 
 LOG = logging.getLogger(__name__)
 

@@ -100,7 +100,7 @@ test("a change deploys exactly the Workers whose build it reaches", () => {
   // Things that don't run on Cloudflare: the mini, Hermes, docs and tests.
   assert.deepEqual(affected("apps/beeperd/main.go"), []);
   assert.deepEqual(affected("apps/beeperd/internal/inbox/inbox.go"), []);
-  assert.deepEqual(affected("apps/hermes-plugin-slack-as-leon-guard/__init__.py"), []);
+  assert.deepEqual(affected("apps/hermes-plugin-leon/slack_as_leon_guard/__init__.py"), []);
   assert.deepEqual(affected("README.md", "apps/slack-as-leon/README.md"), []);
   assert.deepEqual(
     affected("packages/ai/leonsilicon/services/slack-as-leon/__tests__/service.test.ts"),
