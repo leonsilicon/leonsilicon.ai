@@ -2,6 +2,7 @@ import {
   Autotrigger,
   feedEvent,
   feedMessage,
+  museRun,
   type Delivery,
   type FeedMessage,
 } from "@-/ai.leonsilicon.services.autotrigger";
@@ -212,7 +213,9 @@ export default {
             : undefined;
         await Promise.all([
           sync,
-          feed && env.OPENAI_API_KEY ? enqueueTrigger(env, event) : undefined,
+          feed && (env.OPENAI_API_KEY || (event.bot_id && event.user === config.hermesUserId))
+            ? enqueueTrigger(env, event)
+            : undefined,
         ]);
       }
       return json({ ok: true });
@@ -339,8 +342,8 @@ export class SyncObject {
     if (url.pathname === "/status") return json(this.#store.stats());
     // Internal only, through the binding from AutoLinear or the signed Slack events handler.
     if (request.method === "POST" && url.pathname === "/autotrigger") {
-      if (!this.#env.OPENAI_API_KEY) return json({ queued: false });
-      const event = feedEvent((await request.json()) as Record<string, unknown>);
+      const raw = (await request.json()) as Record<string, unknown>;
+      const event = feedEvent(raw);
       if (!event || this.#store.issueByChannel(event.channel)) return json({ queued: false });
       const reader = this.#session() ?? botClient(this.#env.LINEAR_SYNC_SLACK_BOT_TOKEN);
       const source = await feedMessage(event, reader, this.#feedChannels, [
@@ -348,8 +351,14 @@ export class SyncObject {
         this.#env.FEED_SPAM_CHANNEL,
       ]);
       if (!source) return json({ queued: false });
+      const run = museRun(source, raw, this.#env.SLACK_HERMES_USER_ID);
+      if (!run && !this.#env.OPENAI_API_KEY) return json({ queued: false });
+      if (run) source.museRun = run;
       const binding = this.#env.AUTOTRIGGER;
-      return binding.get(binding.idFromName(`${source.channel}:${source.ts}`)).fetch(
+      const key = run
+        ? `muse:${source.channel}:${run.scheduleId}:${run.runId}`
+        : `${source.channel}:${source.ts}`;
+      return binding.get(binding.idFromName(key)).fetch(
         new Request("https://autotrigger/enqueue", {
           method: "POST",
           body: JSON.stringify(source),
@@ -525,11 +534,11 @@ export class AutotriggerObject {
 
   async #run(job: Exclude<TriggerJob, "done">): Promise<void> {
     const env = this.#env;
-    if (!env.OPENAI_API_KEY) return;
+    if (!env.OPENAI_API_KEY && !job.source.museRun) return;
     const config = loadConfig(env as Record<string, string | undefined>);
     const linear = new LinearClient(env.LINEAR_API_KEY);
     const trigger = new Autotrigger({
-      apiKey: env.OPENAI_API_KEY,
+      apiKey: env.OPENAI_API_KEY ?? "",
       linear,
       // Leon's Watcher projects: each new case they're for becomes an issue in them.
       watchers: {

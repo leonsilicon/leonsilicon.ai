@@ -118,6 +118,15 @@ function choiceFrom(decision: Awaited<ReturnType<DecisionsClient["decisions"]["c
 const watcherText = (watcher: Pick<LinearProjectText, "summary" | "content">) =>
   [watcher.summary.trim(), watcher.content.trim()].filter(Boolean).join("\n\n");
 
+function museSchedules(watcher: LinearProjectText): string[] {
+  return Array.from(
+    watcher.content.matchAll(
+      /^[ \t]*(?:\*\*)?Muse schedule:(?:\*\*)?[ \t]*`?((?:[\w.-]|\\[_-]){1,200}|\*)`?[ \t]*$/gim,
+    ),
+    (match) => match[1]!.replace(/\\/g, ""),
+  );
+}
+
 /**
  * A title for a watcher's new issue: the message's subject (a line that is all bold, as an email
  * copied to `#feed-gmail` has), else its first line, as plain words.
@@ -153,7 +162,9 @@ export function caseDescription(
         ? `${instructions.slice(0, INSTRUCTION_CHARS)}…\n\n(The rest is in the watcher's project.)`
         : instructions || "(The watcher's project has no description yet.)"
     }`,
-    "Handle this case here. The watcher stays open for the next one.",
+    source.museRun
+      ? "Hermes, handle this due run here. Muse has already supplied the trigger. Keep the existing schedule and close this case when the work is done."
+      : "Handle this case here. The watcher stays open for the next one.",
   ].join("\n\n");
 }
 
@@ -191,6 +202,25 @@ export class Autotrigger {
 
   async select(source: FeedMessage): Promise<Delivery | null> {
     const { apiKey, linear, session, teamKey, state, bot } = this.#options;
+    const watcherSide = this.#options.watchers;
+    if (source.museRun && watcherSide) {
+      const { scheduleId, runId } = source.museRun;
+      const watchers = await watcherSide.linear.projectsInStatus(teamKey, watcherSide.status);
+      const linked = watchers.filter(
+        (watcher) => !watcher.gone && museSchedules(watcher).includes(scheduleId),
+      );
+      const matches = linked.length
+        ? linked
+        : watchers.filter((watcher) => !watcher.gone && museSchedules(watcher).includes("*"));
+      if (matches.length !== 1) throw new Error("Muse schedule needs one matching Watcher");
+      const delivery = await this.#newCase(
+        source,
+        matches[0]!,
+        `muse:${source.channel}:${scheduleId}:${runId}`,
+      );
+      if (!delivery) throw new Error("Muse schedule has no Slack permalink");
+      return delivery;
+    }
     const current = { from: "", owner: false, text: source.text, type: "TEXT" };
     if (
       ruleVerdict({
@@ -203,10 +233,9 @@ export class Autotrigger {
     const issues = (await linear.issuesInState(teamKey, state)).filter((issue) =>
       this.#waiting(issue),
     );
-    const watcherSide = this.#options.watchers;
     const watchers = watcherSide
       ? (await watcherSide.linear.projectsInStatus(teamKey, watcherSide.status))
-          .filter((project) => !project.gone)
+          .filter((project) => !project.gone && !museSchedules(project).length)
           .slice(0, MAX_WATCHERS)
       : [];
     if (!issues.length && !watchers.length) return null;
@@ -366,11 +395,19 @@ export class Autotrigger {
     if (followed) return this.#notify(source, followed, followed.projectId!);
     const watcher = keys.get(choice.value);
     if (!watcher) throw new Error("Autotrigger received an unknown watcher");
+    return this.#newCase(source, watcher, `${source.channel}:${source.ts}`);
+  }
+
+  async #newCase(
+    source: FeedMessage,
+    watcher: LinearProjectText,
+    key: string,
+  ): Promise<WatcherSpawn | null> {
     const permalink = await this.#permalink(source);
     if (!permalink) return null;
     return {
       kind: "spawn",
-      issueId: await stableUuid(`watcher:${watcher.id}:${source.channel}:${source.ts}`),
+      issueId: await stableUuid(source.museRun ? key : `watcher:${watcher.id}:${key}`),
       watcherId: watcher.id,
       title: caseTitle(source.text, `New case for ${watcher.name}`),
       description: caseDescription(watcher, source, permalink),

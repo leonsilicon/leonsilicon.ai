@@ -93,7 +93,7 @@ export function isRoutine(schedule: MuseSchedule): boolean {
 
 /** A routine's name for its project: Muse's title, else its ID in words. */
 export function routineName(schedule: MuseSchedule): string {
-  const title = schedule.title?.trim();
+  const title = schedule.title?.trim().replace(/^Hermes handoff: /, "");
   if (title) return title.slice(0, 80);
   const words = schedule.id.replace(/[-_]+/g, " ").trim();
   return (words.charAt(0).toUpperCase() + words.slice(1)).slice(0, 80) || schedule.id;
@@ -115,7 +115,7 @@ export function routineProjectText(schedule: MuseSchedule): { summary: string; c
     summary: `Muse routine · ${cadenceLabel(schedule)}`.slice(0, 255),
     content: [
       `Muse routine: \`${schedule.id}\``,
-      `One of Leon's routines: Muse runs it on its own schedule, \`${cadenceLabel(schedule)}\`.${
+      `One of Leon's routines, scheduled in Muse for \`${cadenceLabel(schedule)}\`. Each due run goes through #feed-muse to Hermes.${
         file ? ` Its definition is \`${file}\` in Muse's workspace.` : ""
       }`,
       "Change, pause or stop it in Muse (through Hermes), never only here. While it runs, this project stays in Routine and work about the routine goes in it.",

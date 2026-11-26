@@ -13,6 +13,8 @@ Since 2026-11-25 (Leon's rule) a standing watch is a project in the **Watcher** 
 
 An Awaiting Trigger issue that matches comes first, and an ambiguous answer posts nothing. The new issue's ID comes from the watcher and the message, so a retry can't open a second one. A watcher that left the Watcher status before the issue was opened gets none.
 
+Muse reminders and routines use a direct route. A top-level schedule run posted by the configured Hermes Slack bot in `#feed-muse` opens a case in the Watcher whose body contains a `Muse schedule: <id>` line. A single Watcher with `Muse schedule: *` handles runs without a specific match. Each run opens a fresh Awaiting Hermes case, with the same issue ID across Slack retries. These Watchers take their input from Hermes's scheduled-run feed posts. See [Reminders and routines](../../../../../apps/hermes-plugin-leon/hermes22muse/README.md#reminders-and-routines).
+
 ## Runtime
 
 [AutoLinear](../../../../../apps/autolinear/README.md)'s Slack user event subscription covers public feeds Leon has joined. [slack22linear](../../../../../apps/slack22linear/README.md)'s bot event subscription also covers public and private feeds the bot has joined. Autotrigger keeps one delivery per Slack channel and timestamp, even if both subscriptions see it. Slack Connect channels and the configured spam and flagged channels are excluded.

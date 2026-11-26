@@ -22,6 +22,29 @@ export interface FeedEvent {
 
 export interface FeedMessage extends FeedEvent {
   name: string;
+  museRun?: { scheduleId: string; runId: string };
+}
+
+/** Only Hermes's own top-level posts in #feed-muse carry scheduled runs. */
+export function museRun(
+  source: FeedMessage,
+  event: Record<string, unknown>,
+  hermesUserId: unknown,
+): FeedMessage["museRun"] {
+  if (
+    source.name !== "feed-muse" ||
+    source.threadTs ||
+    !hermesUserId ||
+    event.user !== hermesUserId ||
+    typeof event.bot_id !== "string" ||
+    !event.bot_id
+  )
+    return undefined;
+  const match =
+    /^Muse (?:reminder|routine) due: [^\n]+\nMuse schedule: ([\w.-]{1,200})\nMuse run: ([\w.:-]{1,200})$/.exec(
+      source.text,
+    );
+  return match ? { scheduleId: match[1]!, runId: match[2]! } : undefined;
 }
 
 /** Slack bots post most feeds. Only accept new channel messages, including actual thread replies. */

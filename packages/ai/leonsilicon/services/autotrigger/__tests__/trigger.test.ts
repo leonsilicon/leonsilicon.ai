@@ -13,6 +13,7 @@ import {
   caseTitle,
   feedEvent,
   feedMessage,
+  museRun,
   type FeedMessage,
 } from "@-/ai.leonsilicon.services.autotrigger";
 
@@ -248,7 +249,11 @@ const inquiry: FeedMessage = {
 
 function watcherSetup(
   answers: string[],
-  options: { cases?: LinearIssue[]; watcher?: LinearProjectText | null } = {},
+  options: {
+    cases?: LinearIssue[];
+    watcher?: LinearProjectText | null;
+    otherWatchers?: LinearProjectText[];
+  } = {},
 ) {
   const decisions: Record<string, unknown>[] = [];
   const created: NewIssue[] = [];
@@ -312,7 +317,7 @@ function watcherSetup(
         projectsInStatus: async (team, status) => {
           assert.equal(team, "LEON");
           assert.equal(status, "Watcher");
-          return watcher ? [watcher] : [];
+          return [...(watcher ? [watcher] : []), ...(options.otherWatchers ?? [])];
         },
         openIssuesInProjects: async (ids) => {
           assert.deepEqual(ids, [WATCHER.id]);
@@ -371,6 +376,64 @@ test("an Awaiting Trigger issue that matches wins over the watchers", async () =
   const delivery = await trigger.select(inquiry);
   assert.equal(decisions.length, 1);
   assert.equal(delivery, null); // LEON-1 has no channel in this setup
+});
+
+test("only a top-level #feed-muse run from Hermes can select a scheduled Watcher", () => {
+  const source = {
+    ...inquiry,
+    name: "feed-muse",
+    text: "Muse reminder due: Bring the tripod\nMuse schedule: tripod\nMuse run: run-1",
+  };
+  const bot = { user: HERMES, bot_id: "B01234567" };
+  assert.deepEqual(museRun(source, bot, HERMES), { scheduleId: "tripod", runId: "run-1" });
+  assert.equal(museRun(source, { user: HERMES }, HERMES), undefined);
+  assert.equal(museRun(source, { ...bot, user: "U98765432" }, HERMES), undefined);
+  assert.equal(museRun({ ...source, threadTs: ROOT_TS }, bot, HERMES), undefined);
+  assert.equal(museRun({ ...source, name: "feed-gmail" }, bot, HERMES), undefined);
+});
+
+test("a Muse run prefers its linked Watcher and opens one Hermes case across Slack retries", async () => {
+  const linked = {
+    ...WATCHER,
+    content: "Muse schedule: `tripod`\n\nRemind Leon to bring the tripod.",
+  };
+  const fallback = { ...WATCHER, id: "fallback", content: "Muse schedule: *" };
+  const { trigger, decisions, created } = watcherSetup([], {
+    watcher: linked,
+    otherWatchers: [fallback],
+  });
+  const source: FeedMessage = {
+    ...inquiry,
+    name: "feed-muse",
+    text: "Muse reminder due: Bring the tripod\nMuse schedule: tripod\nMuse run: run-1",
+    museRun: { scheduleId: "tripod", runId: "run-1" },
+  };
+  const delivery = await trigger.select(source);
+  assert.ok(delivery && delivery.kind === "spawn");
+  assert.equal(delivery.watcherId, linked.id);
+  assert.match(delivery.description, /Remind Leon to bring the tripod/);
+  assert.match(delivery.description, /#feed-muse/);
+  const retry = await trigger.select({ ...source, ts: "1795521001.000002" });
+  assert.ok(retry && retry.kind === "spawn");
+  assert.equal(retry.issueId, delivery.issueId);
+  await trigger.deliver(source, delivery, false);
+  await trigger.deliver(source, retry, true);
+  assert.equal(created.length, 1);
+  assert.equal(created[0]!.stateId, "state-hermes");
+  assert.equal(decisions.length, 0);
+
+  const unmatched = await trigger.select({
+    ...source,
+    museRun: { scheduleId: "other", runId: "run-2" },
+  });
+  assert.ok(unmatched?.kind === "spawn");
+  assert.equal(unmatched.watcherId, fallback.id);
+
+  const conflicting = watcherSetup([], {
+    watcher: linked,
+    otherWatchers: [{ ...linked, id: "dupe" }, fallback],
+  });
+  await assert.rejects(conflicting.trigger.select(source), /one matching Watcher/);
 });
 
 test("a follow-up in a watcher's open case goes to that case, not a new issue", async () => {

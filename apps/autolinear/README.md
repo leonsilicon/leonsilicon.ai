@@ -17,7 +17,7 @@ hermes22muse relay (running turns, every minute) ──── POST /turns ──
 hermes22muse relay (a Muse answer nobody read) ────── POST /muse-answer ▶ Worker ─▶ slack22linear's SyncObject /enqueue (job `muse-answer`)
 ```
 
-Since 2026-11-25 it also carries Leon's routines from Muse to Linear: the [hermes22muse](../hermes-plugin-leon/hermes22muse/README.md#routines) relay on Hermes Cloud posts Muse's scheduled tasks to `/routines` with the same bearer token as `/intake`, and slack22linear keeps a Routine project for each ([Routine and Watcher projects](../../packages/ai/leonsilicon/services/slack22linear/README.md#routine-and-watcher-projects)).
+Since 2026-11-25 it also carries Leon's routines from Muse to Linear: the [hermes22muse](../hermes-plugin-leon/hermes22muse/README.md#reminders-and-routines) relay on Hermes Cloud posts Muse's scheduled tasks to `/routines` with the same bearer token as `/intake`, and slack22linear keeps a Routine project for each ([Routine and Watcher projects](../../packages/ai/leonsilicon/services/slack22linear/README.md#routine-and-watcher-projects)).
 
 Since 2026-11-25 the relay also helps Autolinear tell when Hermes has dropped a turn (LEON-509: a gateway restart dropped the turn waiting for Muse's answer, and the issue sat in Executing for an hour). It posts the issue channels with a running turn to `/turns`, and a Muse answer that no running turn will read to `/muse-answer`. slack22linear reminds Hermes about each ([What it does](../../packages/ai/leonsilicon/services/slack22linear/README.md#what-it-does)).
 
