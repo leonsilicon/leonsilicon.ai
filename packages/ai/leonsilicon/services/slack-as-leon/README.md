@@ -29,6 +29,7 @@ Since 2026-11-21 (v2.2.0, Codex since v2.3.0) Leon's Grok Bot bots, and the Code
 - **Contained.** Only replies in channel threads: no DMs, no top-level posts, no mentions of people, bots or channels, and no broadcasts. A bot reads only the threads of its own posts.
 - **Counted apart.** `SLACK_AS_LEON_GROK_MAX_PER_HOUR` and `SLACK_AS_LEON_CODEX_MAX_PER_HOUR` (120 each) an hour, in KV keys `grok:`/`codex:<ms>:<ts>`, so a busy task can't use up Hermes's 30.
 - **Read back by Hermes**, an agent's post shows `from: "grok_bot"` or `"codex"`; read by the agent, Hermes's posts as Leon show `from: "hermes"`.
+- **No gateway notices.** What Hermes's gateway posts about itself (the "⚡ Interrupting current task. I'll respond to your message shortly." ack when a message reaches a busy session, the queued, steered and redirected acks, drain notices, the working heartbeat) is skipped in every read and never counts as an answer, so it reaches neither the [Grok relay](../slack22grokbot/README.md#slack-handoff) nor a Codex session (v2.4.1, Leon's rule, 2026-11-25). Relayed as Hermes's reply, it made a Grok bot stop and wait for Hermes, spending a run to say so.
 
 ## Limits
 

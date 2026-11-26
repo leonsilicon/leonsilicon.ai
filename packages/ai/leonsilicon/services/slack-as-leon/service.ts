@@ -129,6 +129,23 @@ interface RawMessage {
   files?: { name?: string; title?: string; permalink?: string }[];
 }
 
+/**
+ * What Hermes's gateway posts about itself rather than to anyone: the acknowledgement when a message
+ * reaches a busy session ("⚡ Interrupting current task. I'll respond to your message shortly.", or
+ * queued, steered, redirected, draining) and its working heartbeat, each opening with an emoji that
+ * Slack may spell as a `:shortcode:`. Handed to a Grok bot or a Codex session as Hermes's reply,
+ * one makes the agent stop and wait for Hermes, and spend a run saying so (Leon, 2026-11-25:
+ * "don't do this").
+ */
+const GATEWAY_NOTICE =
+  /^\s*(?::[a-z0-9_+-]+:|\p{Extended_Pictographic}\uFE0F?)\s*(?:Interrupting current task|Queued for the next turn|Steered into current run|Redirected current run|Subagent working|Compressing context|Gateway (?:restarting|shutting down|is )|Working —|Agent is running|Another turn is still running|Turn setup stalled|Still starting this turn|This agent is draining)/u;
+
+/** A bot's post that is one of Hermes's gateway notices, never an answer. */
+const isGatewayNotice = (raw: RawMessage): boolean =>
+  Boolean(raw.bot_id || raw.subtype === "bot_message") &&
+  !raw.files?.length &&
+  GATEWAY_NOTICE.test(raw.text ?? "");
+
 const CONVERSATION_ID = /^[CGD][A-Z0-9]{6,}$/;
 const USER_ID = /^[UW][A-Z0-9]{6,}$/;
 const TS = /^\d{9,11}\.\d{6}$/;
@@ -368,7 +385,7 @@ export class SlackAsLeon {
       if (!message.ts || message.thread_ts !== args.threadTs || !later(message.ts, args.after))
         continue;
       if (later(message.ts, cursor)) cursor = message.ts;
-      if (agentOf(message.client_msg_id) === "grok") continue;
+      if (agentOf(message.client_msg_id) === "grok" || isGatewayNotice(message)) continue;
       if (
         message.subtype &&
         !["bot_message", "thread_broadcast", "file_share"].includes(message.subtype)
@@ -557,6 +574,7 @@ export class SlackAsLeon {
     for (const { raw, topLevel } of found.values()) {
       if (raw.subtype && !["bot_message", "thread_broadcast", "file_share"].includes(raw.subtype))
         continue;
+      if (isGatewayNotice(raw)) continue;
       out.push(await this.#shape(raw, leon, topLevel, poster));
     }
     return out.sort((a, b) => (later(a.ts, b.ts) ? 1 : -1));

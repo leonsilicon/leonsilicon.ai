@@ -3,7 +3,7 @@ import type { Agent, Poster } from "#marker";
 import { Refused, type SlackAsLeon } from "#service";
 import { SlackError } from "#slack";
 
-export const VERSION = "2.4.0";
+export const VERSION = "2.4.1";
 
 export const instructions = `This server is a double puppet of Leon's real Slack account: it posts in Leon's Slack workspace (leonsilicon, LLC) as Leon himself, through his own Slack session, held by a Cloudflare Worker. The messages carry no app or bot marker, so other bots treat them exactly as if Leon had typed them. That is the point: Leon's Grok Bot bots in Slack (Task Bot, Google Bot, UofT Bot, GitHub Bot, X Bot, Pine Bot, …) ignore anything a bot posts, including your own Hermes posts and Composio posts in his name, and answer only Leon.
 

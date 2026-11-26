@@ -271,6 +271,45 @@ test("slack22grokbot validates roots, deduplicates a lost post and skips its own
   assert.equal(page.cursor, "1794500000.999999");
 });
 
+test("Hermes's gateway notices never reach a Grok bot or a Codex session as a reply", async () => {
+  const { service, messages } = setup();
+  const root = "1794500000.000000";
+  messages.get(TODO)!.push({ ts: root, user: LEON, text: "Task" });
+  const thread = { channel: TODO, threadTs: root };
+  const hermes = { user: "U0HERMES001", bot_id: "B0HERMES01", bot_profile: { name: "Hermes" } };
+  const notices = [
+    ":zap: Interrupting current task. I'll respond to your message shortly.",
+    "⚡ Interrupting current task (3 min elapsed). I'll respond to your message shortly.",
+    ":hourglass_flowing_sand: Queued for the next turn. I'll respond once the current task finishes.",
+    "⏩ Steered into current run. Your message arrives after the next tool call.",
+    "↪️ Redirected current run. I'll adjust using your correction.",
+  ];
+  notices.forEach((text, index) =>
+    messages.get(TODO)!.push({ ts: `1794500001.00000${index}`, thread_ts: root, ...hermes, text }),
+  );
+  messages.get(TODO)!.push({
+    ts: "1794500002.000000",
+    thread_ts: root,
+    ...hermes,
+    text: "Interrupting current task is fine; check iCloud Photos next.",
+  });
+  messages.get(TODO)!.push({
+    ts: "1794500003.000000",
+    thread_ts: root,
+    user: LEON,
+    text: ":zap: Interrupting current task, Leon typed this",
+  });
+  const page = await service.grokThread({ ...thread, after: root });
+  assert.deepEqual(
+    page.replies.map(({ text }) => text),
+    [
+      "Interrupting current task is fine; check iCloud Photos next.",
+      ":zap: Interrupting current task, Leon typed this",
+    ],
+  );
+  assert.equal(page.cursor, "1794500003.000000");
+});
+
 test("a message to people returns at once, and replies in a thread keep their thread", async () => {
   const { service, calls } = setup();
   const result = await service.send({
