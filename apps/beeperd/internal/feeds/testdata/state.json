@@ -1,0 +1,89 @@
+{
+  "since": 1795294800000,
+  "cursor": 4,
+  "pending": {
+    "$first": {
+      "message": {
+        "seq": 1,
+        "rev": 1,
+        "roomId": "!whatsapp:example.test",
+        "eventId": "$first",
+        "sender": "@alice:example.test",
+        "isMe": false,
+        "type": "m.text",
+        "text": "first: waits for Slack — \"quoted\" 你好 🍜",
+        "html": null,
+        "ts": 1795294800000,
+        "receivedAt": 1795294800000,
+        "edited": false,
+        "redacted": false,
+        "replyTo": null,
+        "attachments": 0
+      },
+      "queuedAt": 1795294801000,
+      "attempts": 1,
+      "retryAt": 1795294831000,
+      "verdict": {
+        "route": "safe",
+        "reason": "ok",
+        "by": "model",
+        "wake": false,
+        "pUnsafe": 0,
+        "pWake": 0.25
+      }
+    },
+    "$second": {
+      "message": {
+        "seq": 3,
+        "rev": 3,
+        "roomId": "!whatsapp:example.test",
+        "eventId": "$second",
+        "sender": "@alice:example.test",
+        "isMe": false,
+        "type": "m.text",
+        "text": "spam: second in line",
+        "html": null,
+        "ts": 1795294800000,
+        "receivedAt": 1795294800000,
+        "edited": false,
+        "redacted": false,
+        "replyTo": null,
+        "attachments": 0
+      },
+      "queuedAt": 1795294801000,
+      "attempts": 1,
+      "retryAt": 1795294831000,
+      "verdict": {
+        "route": "spam",
+        "reason": "promotion",
+        "by": "model",
+        "wake": false,
+        "pUnsafe": 0.05
+      }
+    },
+    "$unknown": {
+      "message": {
+        "seq": 4,
+        "rev": 4,
+        "roomId": "!new:example.test",
+        "eventId": "$unknown",
+        "sender": "@alice:example.test",
+        "isMe": false,
+        "type": "m.text",
+        "text": "third: its room isn't in the directory yet",
+        "html": null,
+        "ts": 1795294800000,
+        "receivedAt": 1795294800000,
+        "edited": false,
+        "redacted": false,
+        "replyTo": "$first",
+        "attachments": 1
+      },
+      "queuedAt": 1795294801000,
+      "attempts": 1,
+      "retryAt": 1795294831000
+    }
+  },
+  "posted": 1,
+  "expired": 0
+}

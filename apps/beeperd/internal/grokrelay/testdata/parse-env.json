@@ -1,0 +1,254 @@
+[
+  {
+    "input": "A=1\nB=2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A = 1 \n  B=  two words  \n",
+    "output": {
+      "A": "1",
+      "B": "two words"
+    }
+  },
+  {
+    "input": "# comment\nA=1 # trailing\nB=a#b\n",
+    "output": {
+      "A": "1",
+      "B": "a"
+    }
+  },
+  {
+    "input": "export A=1\nexport   B=2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=\"quoted value\"\nB='single # not comment'\nC=`back tick`\n",
+    "output": {
+      "A": "quoted value",
+      "B": "single # not comment",
+      "C": "back tick"
+    }
+  },
+  {
+    "input": "A=\"line1\\nline2\"\nB='raw\\nraw'\n",
+    "output": {
+      "A": "line1\nline2",
+      "B": "raw\\nraw"
+    }
+  },
+  {
+    "input": "A=\"multi\nline\"\nB=2\n",
+    "output": {
+      "A": "multi\nline",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=\nB=2",
+    "output": {
+      "A": "",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=",
+    "output": {
+      "A": ""
+    }
+  },
+  {
+    "input": "A",
+    "output": {}
+  },
+  {
+    "input": "A=1\r\nB=2\r\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A= \"spaced quote\" \nB=2\n",
+    "output": {
+      "A": "spaced quote",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=\"unterminated\nB=2\n",
+    "output": {
+      "A": "\"unterminated",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=\"x\" trailing\nB=2\n",
+    "output": {
+      "A": "x",
+      "B": "2"
+    }
+  },
+  {
+    "input": "\n\n  A=1\n\n\nB=2\n\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=1\n=novalue\nB=2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=a=b=c\n",
+    "output": {
+      "A": "a=b=c"
+    }
+  },
+  {
+    "input": "A='it''s'\nB=2\n",
+    "output": {
+      "A": "it",
+      "B": "2"
+    }
+  },
+  {
+    "input": "\tA=1\t\nB=\t2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=1\n# only comment",
+    "output": {
+      "A": "1"
+    }
+  },
+  {
+    "input": "A=\"\"\nB=''\nC=x",
+    "output": {
+      "A": "",
+      "B": "",
+      "C": "x"
+    }
+  },
+  {
+    "input": "A = \"q\" # c\nB= 'q2'#c\n",
+    "output": {
+      "A": "q",
+      "B": "q2"
+    }
+  },
+  {
+    "input": "A=1\nA=2\n",
+    "output": {
+      "A": "2"
+    }
+  },
+  {
+    "input": "A=#all comment\nB=2\n",
+    "output": {
+      "A": "",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=1\n  # indented comment\nB=2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "export=5\nA=1\n",
+    "output": {
+      "A": "1",
+      "export": "5"
+    }
+  },
+  {
+    "input": "A=x \"y\" z\n",
+    "output": {
+      "A": "x \"y\" z"
+    }
+  },
+  {
+    "input": "A=1\nnovalue\nB=2\n",
+    "output": {
+      "A": "1",
+      "B": "2"
+    }
+  },
+  {
+    "input": "A=\"x\"B=2\nC=3\n",
+    "output": {
+      "A": "x",
+      "C": "3"
+    }
+  },
+  {
+    "input": "A=\"x\"\n # c=1\n",
+    "output": {
+      "# c": "1",
+      "A": "x"
+    }
+  },
+  {
+    "input": "A=x\n # c=1\n",
+    "output": {
+      "A": "x"
+    }
+  },
+  {
+    "input": "A= \nB=2\n",
+    "output": {
+      "A": "B=2"
+    }
+  },
+  {
+    "input": "=\nB=1",
+    "output": {
+      "": "",
+      "B": "1"
+    }
+  },
+  {
+    "input": "export A=\nB=1",
+    "output": {
+      "B": "1",
+      "export A": ""
+    }
+  },
+  {
+    "input": "export A=",
+    "output": {
+      "export A": ""
+    }
+  },
+  {
+    "input": "A=\"a\\nb\\\\nc\"",
+    "output": {
+      "A": "a\nb\\\nc"
+    }
+  },
+  {
+    "input": "SLACK_AS_LEON_PUBLIC_ORIGIN=https://slack.example\nSLACK_AS_LEON_MCP_TOKEN=\"s3cret=\"\n# admin\nGROK_BOT_ROSTER_PUBLIC_ORIGIN='https://admin.example'  # the Worker\nGROK_BOT_ROSTER_MCP_TOKEN=abc def\nSLACK_HERMES_USER_ID=U0HERMES\n",
+    "output": {
+      "GROK_BOT_ROSTER_MCP_TOKEN": "abc def",
+      "GROK_BOT_ROSTER_PUBLIC_ORIGIN": "https://admin.example",
+      "SLACK_AS_LEON_MCP_TOKEN": "s3cret=",
+      "SLACK_AS_LEON_PUBLIC_ORIGIN": "https://slack.example",
+      "SLACK_HERMES_USER_ID": "U0HERMES"
+    }
+  }
+]

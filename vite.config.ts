@@ -38,6 +38,10 @@ export default defineConfig({
       "apps/hermes-plugin-*/policy.cjs",
       "**/bridge.cjs",
       "**/@fixtures/**",
+      // beeperd's tool contracts and test data are generated from the TypeScript they were ported
+      // from, and compared with it byte for byte.
+      "apps/beeperd/**/testdata/**",
+      "apps/beeperd/**/tools.json",
       // What pywrangler puts beside a Python Worker: its packages, its environment and its lock.
       "**/python_modules/**",
       "**/.venv-workers/**",
@@ -85,6 +89,20 @@ export default defineConfig({
       "build:beeper-inbox": {
         cache: false,
         command: "node apps/beeper-inbox/_build-beeper-inbox.ts",
+      },
+      // beeperd is Go: its tests need a C compiler (SQLite), and goolm keeps Olm in pure Go.
+      "test:beeperd": {
+        cache: false,
+        command: "go -C apps/beeperd test -tags=goolm ./...",
+      },
+      "vet:beeperd": {
+        cache: false,
+        command: "go -C apps/beeperd vet -tags=goolm ./...",
+      },
+      // dist/beeperd.tgz for Hermes Cloud: one static linux/amd64 binary.
+      "build:beeperd": {
+        cache: false,
+        command: "node apps/beeperd/_build-beeperd.ts",
       },
       // Reapplies the Unsnooze connection-loss fix to the global install (or the path after --).
       "patch:unsnooze": {

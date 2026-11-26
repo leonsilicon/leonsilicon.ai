@@ -1,0 +1,8 @@
+{
+  "name": "@-apps/beeperd",
+  "private": true,
+  "bin": {
+    "_build-beeperd": "./_build-beeperd.ts"
+  },
+  "type": "module"
+}

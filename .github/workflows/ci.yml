@@ -20,6 +20,12 @@ jobs:
       - run: vp check
       - run: vpr -w typecheck
       - run: vpr -w test
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: apps/beeperd/go.mod
+          cache-dependency-path: apps/beeperd/go.sum
+      - run: vpr -w vet:beeperd
+      - run: vpr -w test:beeperd
       - run: vpr -w build:hermes-plugins
       - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' packages/ai/leonsilicon/configs/hermes-mirrors/bridge.cjs
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0

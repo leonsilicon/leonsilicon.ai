@@ -1,0 +1,600 @@
+{
+  "compose": [
+    {
+      "items": [],
+      "text": ""
+    },
+    {
+      "items": [
+        {
+          "text": "  please do X \n",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "please do X\n\n---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    },
+    {
+      "items": [
+        {
+          "text": "one",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        },
+        {
+          "text": "two",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "a few more things, in order:\n\n1. one\n\n2. two\n\n---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    },
+    {
+      "items": [
+        {
+          "text": "one",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        },
+        {
+          "text": "two",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS002",
+            "threadTs": "1795280001.000001"
+          }
+        },
+        {
+          "text": "three",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "a few more things, in order:\n\n1. one\n\n2. two\n\n3. three\n\n---\nSlack thread for items 1, 3: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat.\n\n---\nSlack thread for item 2: slack:C0TASKS002/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS002/1795280001.000001\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS002/1795280001.000001 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    },
+    {
+      "items": [
+        {
+          "text": "follow up",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          },
+          "followUp": true
+        }
+      ],
+      "text": "follow up\n\n---\nFollow-up for slack:C0TASKS001/1795280000.123456. Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result."
+    },
+    {
+      "items": [
+        {
+          "text": "first",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          },
+          "followUp": true
+        },
+        {
+          "text": "second",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          },
+          "followUp": true
+        }
+      ],
+      "text": "a few more things, in order:\n\n1. first\n\n2. second\n\n---\nFollow-up for slack:C0TASKS001/1795280000.123456. Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result."
+    },
+    {
+      "items": [
+        {
+          "text": "first",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          },
+          "followUp": true
+        },
+        {
+          "text": "second",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "a few more things, in order:\n\n1. first\n\n2. second\n\n---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    },
+    {
+      "items": [
+        {
+          "text": "first",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          },
+          "followUp": true
+        },
+        {
+          "text": "second",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS002",
+            "threadTs": "1795280001.000001"
+          }
+        },
+        {
+          "text": "   ",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "a few more things, in order:\n\n1. first\n\n2. second\n\n---\nFollow-up for slack:C0TASKS001/1795280000.123456. Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result.\n\n---\nSlack thread for item 2: slack:C0TASKS002/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS002/1795280001.000001\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS002/1795280001.000001 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    },
+    {
+      "items": [
+        {
+          "text": "emoji 🙂 and “quotes”…",
+          "at": "2026-11-21T18:00:00.000Z",
+          "thread": {
+            "channel": "C0TASKS001",
+            "threadTs": "1795280000.123456"
+          }
+        }
+      ],
+      "text": "emoji 🙂 and “quotes”…\n\n---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+    }
+  ],
+  "box": {
+    "release": {
+      "commit": "7508f60af76104d31450f3b599138d0581ea8179",
+      "up": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "broker": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "setup": "bash -euo pipefail <<'SETUP'\nmkdir -p /workspace/hermes-browsers/box && cd /workspace/hermes-browsers/box\nbase=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-leon/7508f60af76104d31450f3b599138d0581ea8179/grok_box_browser/box\ncurl -fsSLO \"$base/up.sh\"; curl -fsSLO \"$base/broker.mjs\"\nprintf '%s  up.sh\\n%s  broker.mjs\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb | sha256sum -c -\numask 077; printf %s 'tok-123' > ../token\nbash up.sh\nSETUP",
+    "setupWithKey": "bash -euo pipefail <<'SETUP'\nmkdir -p /workspace/hermes-browsers/box && cd /workspace/hermes-browsers/box\nbase=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-leon/7508f60af76104d31450f3b599138d0581ea8179/grok_box_browser/box\ncurl -fsSLO \"$base/up.sh\"; curl -fsSLO \"$base/broker.mjs\"\nprintf '%s  up.sh\\n%s  broker.mjs\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb | sha256sum -c -\numask 077; printf %s 'tok-123' > ../token; printf %s 'tskey-auth-abc' > ../tailscale-authkey\nbash up.sh\nSETUP",
+    "upkeep": "[Before anything else, yourself] Hermes's browser service in this cloud computer is down. Run this in your own terminal first and include its last line in your reply. Don't print the token or key files.\n```bash\nbash -euo pipefail <<'SETUP'\nmkdir -p /workspace/hermes-browsers/box && cd /workspace/hermes-browsers/box\nbase=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-leon/7508f60af76104d31450f3b599138d0581ea8179/grok_box_browser/box\ncurl -fsSLO \"$base/up.sh\"; curl -fsSLO \"$base/broker.mjs\"\nprintf '%s  up.sh\\n%s  broker.mjs\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb | sha256sum -c -\numask 077; printf %s 'tok-123' > ../token\nbash up.sh\nSETUP\n```",
+    "repair": "Run this in your own cloud computer's terminal and reply with only its last five lines. It restarts my browser service in /workspace/hermes-browsers. Don't print the token or key files.\n```bash\nbash -euo pipefail <<'SETUP'\nmkdir -p /workspace/hermes-browsers/box && cd /workspace/hermes-browsers/box\nbase=https://raw.githubusercontent.com/leonsiliconAI/hermes-plugin-leon/7508f60af76104d31450f3b599138d0581ea8179/grok_box_browser/box\ncurl -fsSLO \"$base/up.sh\"; curl -fsSLO \"$base/broker.mjs\"\nprintf '%s  up.sh\\n%s  broker.mjs\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb | sha256sum -c -\numask 077; printf %s 'tok-123' > ../token; printf %s 'tskey-auth-abc' > ../tailscale-authkey\nbash up.sh\nSETUP\n```"
+  },
+  "budget": {
+    "status": {
+      "used": 25,
+      "limit": 25,
+      "remaining": 0,
+      "urgentOver": 0,
+      "resetsInMinutes": 60
+    },
+    "message": "Hourly budget reached: 25 of 25 relayed Grok bot messages in the last hour (frees up in about 60 min). Grok usage is limited, so Leon wants to be asked before more go out. Ask Leon in Slack (his DM or the task thread) whether to keep going, and quote what you still need to send to Task Bot: \"do x yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\". Do not retry until he answers. If he says yes, call grok_bot_send again with leon_approved_more set to his exact words; that allows 25 more this hour."
+  },
+  "guard": "Linear and Todoist go through your own linear/todoist MCP tools (Leon's rule, 2026-11-07), not this bot. Only message it for something those tools can't do, and say what in needs_bot_because.",
+  "extend": "leon_approved_more must quote Leon's own words approving more messages",
+  "busy": [
+    {
+      "messages": [],
+      "now": 1794078000000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "no message from Leon in this chat yet"
+      }
+    },
+    {
+      "messages": [],
+      "now": 1794078000000,
+      "windowed": true,
+      "result": {
+        "busy": false,
+        "reason": "nothing from Leon in this chat lately, and the bot is quiet"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$100",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000100:$event",
+          "text": "hello"
+        }
+      ],
+      "now": 1794078005000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "no message from Leon in this chat yet"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$101",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000101:$event",
+          "text": "Here is the full answer with everything you asked for, finished and verified."
+        }
+      ],
+      "now": 1794078030400,
+      "windowed": true,
+      "result": {
+        "busy": true,
+        "reason": "the bot posted 30s ago and may still be sending"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$102",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000102:$event",
+          "text": "Here is the full answer with everything you asked for, finished and verified."
+        }
+      ],
+      "now": 1794078090000,
+      "windowed": true,
+      "result": {
+        "busy": false,
+        "reason": "nothing from Leon in this chat lately, and the bot is quiet"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$103",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000103:$event",
+          "text": "done"
+        },
+        {
+          "id": "$104",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:10.000Z",
+          "sortKey": "1794078000104:$event",
+          "text": "do the thing"
+        }
+      ],
+      "now": 1794078070499,
+      "windowed": false,
+      "result": {
+        "busy": true,
+        "reason": "no reply yet to the last message, sent 60s ago"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$105",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000105:$event",
+          "text": "done"
+        },
+        {
+          "id": "$106",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:10.000Z",
+          "sortKey": "1794078000106:$event",
+          "text": "do the thing"
+        }
+      ],
+      "now": 1794078670000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "the last message got no reply in 660s; treating the bot as idle"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$107",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000107:$event",
+          "text": "do it"
+        },
+        {
+          "id": "$108",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:30.000Z",
+          "sortKey": "1794078000108:$event",
+          "text": "Here is the full answer with everything you asked for, finished and verified."
+        }
+      ],
+      "now": 1794078060500,
+      "windowed": false,
+      "result": {
+        "busy": true,
+        "reason": "the bot posted 31s ago and may still be sending"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$109",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000109:$event",
+          "text": "do it"
+        },
+        {
+          "id": "$110",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:30.000Z",
+          "sortKey": "1794078000110:$event",
+          "text": "Here is the full answer with everything you asked for, finished and verified."
+        }
+      ],
+      "now": 1794078095000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "the bot finished replying 65s ago"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$111",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000111:$event",
+          "text": "check"
+        },
+        {
+          "id": "$112",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:05.000Z",
+          "sortKey": "1794078000112:$event",
+          "text": "Checking your inbox now."
+        }
+      ],
+      "now": 1794078125000,
+      "windowed": false,
+      "result": {
+        "busy": true,
+        "reason": "the bot has only acknowledged so far (120s ago) and is probably still working"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$113",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000113:$event",
+          "text": "check"
+        },
+        {
+          "id": "$114",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:00:05.000Z",
+          "sortKey": "1794078000114:$event",
+          "text": "Checking your inbox now."
+        }
+      ],
+      "now": 1794078315000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "the bot finished replying 310s ago"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$115",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:00.000Z",
+          "sortKey": "1794078000115:$event",
+          "text": "go"
+        },
+        {
+          "id": "$116",
+          "chatID": "!c",
+          "isSender": false,
+          "timestamp": "2026-11-07T19:19:00.000Z",
+          "sortKey": "1794078000116:$event",
+          "text": "On it"
+        }
+      ],
+      "now": 1794079260000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "the bot finished replying 120s ago"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$117",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "2026-11-07T19:00:05.000Z",
+          "sortKey": "1794078000117:$event",
+          "text": "from the future"
+        }
+      ],
+      "now": 1794078004600,
+      "windowed": false,
+      "result": {
+        "busy": true,
+        "reason": "no reply yet to the last message, sent 0s ago"
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "$118",
+          "chatID": "!c",
+          "isSender": true,
+          "timestamp": "never",
+          "sortKey": "1794078000118:$event",
+          "text": "bad time"
+        }
+      ],
+      "now": 1794078000000,
+      "windowed": false,
+      "result": {
+        "busy": false,
+        "reason": "the last message got no reply in NaNs; treating the bot as idle"
+      }
+    }
+  ],
+  "acks": [
+    {
+      "text": "On it.",
+      "ack": true
+    },
+    {
+      "text": "I’ll check that now.",
+      "ack": true
+    },
+    {
+      "text": "I'm pulling the issues now.",
+      "ack": true
+    },
+    {
+      "text": "Let me look.",
+      "ack": true
+    },
+    {
+      "text": "Got it, working on it.",
+      "ack": true
+    },
+    {
+      "text": "**Checking** now",
+      "ack": true
+    },
+    {
+      "text": "Done. LEON-6 is now marked Done.",
+      "ack": false
+    },
+    {
+      "text": "Checking xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "ack": false
+    },
+    {
+      "text": "  > _sure_ thing",
+      "ack": true
+    },
+    {
+      "text": "Surely not",
+      "ack": true
+    },
+    {
+      "text": "i am reading",
+      "ack": false
+    },
+    {
+      "text": "I AM CHECKING",
+      "ack": true
+    }
+  ],
+  "plain": [
+    {
+      "html": "<p>See <a href=\"https://x.test/a\">the page</a></p><ul><li>one</li><li>two &amp; 3</li></ul>",
+      "text": "See the page (https://x.test/a)\n- one\n- two & 3"
+    },
+    {
+      "html": "<a href=\"https://x.test/a\"><b>https://x.test/a</b></a><br/>next<BR >line&nbsp;&lt;tag&gt; &quot;q&quot; &#39;s&#39; &amp;lt;",
+      "text": "https://x.test/a\nnext\nline <tag> \"q\" 's' &lt;"
+    },
+    {
+      "html": "<h1>Title</h1>\n\n\n\n<pre>code</pre><blockquote>said</blockquote>\n \n- loose",
+      "text": "Title\n\ncode\nsaid\n- loose"
+    },
+    {
+      "html": "<A\nHREF=\"u\">multi\nline</A> plain <a class=\"x\" href=\"v\" id=\"y\">v</a>",
+      "text": "multi\nline (u) plain v"
+    }
+  ],
+  "sortKeys": [
+    {
+      "ts": 999,
+      "id": "$z",
+      "key": "0000000000999:$z"
+    },
+    {
+      "ts": 1795000002000,
+      "id": "$new",
+      "key": "1795000002000:$new"
+    },
+    {
+      "ts": 0,
+      "id": "$zero",
+      "key": "0000000000000:$zero"
+    },
+    {
+      "ts": 17950000020001,
+      "id": "$long",
+      "key": "17950000020001:$long"
+    }
+  ],
+  "iso": [
+    {
+      "ms": 0,
+      "iso": "1970-01-01T00:00:00.000Z",
+      "slackTs": "0.000000"
+    },
+    {
+      "ms": 1795280001000,
+      "iso": "2026-11-21T16:53:21.000Z",
+      "slackTs": "1795280001.000000"
+    },
+    {
+      "ms": 1795280001001,
+      "iso": "2026-11-21T16:53:21.001Z",
+      "slackTs": "1795280001.001000"
+    },
+    {
+      "ms": 1700000000999,
+      "iso": "2023-11-14T22:13:20.999Z",
+      "slackTs": "1700000000.999000"
+    }
+  ]
+}

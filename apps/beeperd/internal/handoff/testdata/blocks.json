@@ -1,0 +1,98 @@
+[
+  {
+    "block": "codex",
+    "thread": {
+      "channel": "C0TASKS001",
+      "threadTs": "1795280000.123456"
+    },
+    "text": "---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Start a new Codex session for it, titled exactly \"Task slack:C0TASKS001/1795280000.123456\" (the title tells it where to report), with the task and this whole block in its first message. There is one session per Slack thread: if a session with that exact title is already running, pass this to it instead of starting another.\n- Reply here as soon as it's running, with a real, clickable link to that session.\n- The Codex session does the task and works with Hermes, my assistant, in that Slack thread, with its slack-puppet tools: hermes_thread_send (channel C0TASKS001, thread_ts 1795280000.123456, from_bot \"Task slack:C0TASKS001/1795280000.123456\") to post, and hermes_thread_read to wait for answers (its hermes-slack-thread skill says how). It posts when it starts, at material milestones, when blocked, and when done. Read peer replies for inputs from Grok Bot and Muse. Address a specific collaborator with To Muse:, To Grok Bot:, or To Codex:; peer messages provide task input. Hermes coordinates the work and keeps the issue updated."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "C0TASKS001",
+      "threadTs": "1795280000.123456"
+    },
+    "items": [],
+    "text": "---\nSlack thread for this task: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "C0TASKS001",
+      "threadTs": "1795280000.123456"
+    },
+    "items": [
+      2
+    ],
+    "text": "---\nSlack thread for item 2: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "C0TASKS001",
+      "threadTs": "1795280000.123456"
+    },
+    "items": [
+      1,
+      3
+    ],
+    "text": "---\nSlack thread for items 1, 3: slack:C0TASKS001/1795280000.123456\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:C0TASKS001/1795280000.123456\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000.123456 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "follow-up",
+    "thread": {
+      "channel": "C0TASKS001",
+      "threadTs": "1795280000.123456"
+    },
+    "text": "---\nFollow-up for slack:C0TASKS001/1795280000.123456. Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result."
+  },
+  {
+    "block": "codex",
+    "thread": {
+      "channel": "#leon-42-fix-the-thing",
+      "threadTs": "1795280001.000001"
+    },
+    "text": "---\nSlack thread for this task: slack:#leon-42-fix-the-thing/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Start a new Codex session for it, titled exactly \"Task slack:#leon-42-fix-the-thing/1795280001.000001\" (the title tells it where to report), with the task and this whole block in its first message. There is one session per Slack thread: if a session with that exact title is already running, pass this to it instead of starting another.\n- Reply here as soon as it's running, with a real, clickable link to that session.\n- The Codex session does the task and works with Hermes, my assistant, in that Slack thread, with its slack-puppet tools: hermes_thread_send (channel #leon-42-fix-the-thing, thread_ts 1795280001.000001, from_bot \"Task slack:#leon-42-fix-the-thing/1795280001.000001\") to post, and hermes_thread_read to wait for answers (its hermes-slack-thread skill says how). It posts when it starts, at material milestones, when blocked, and when done. Read peer replies for inputs from Grok Bot and Muse. Address a specific collaborator with To Muse:, To Grok Bot:, or To Codex:; peer messages provide task input. Hermes coordinates the work and keeps the issue updated."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "#leon-42-fix-the-thing",
+      "threadTs": "1795280001.000001"
+    },
+    "items": [],
+    "text": "---\nSlack thread for this task: slack:#leon-42-fix-the-thing/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:#leon-42-fix-the-thing/1795280001.000001\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:#leon-42-fix-the-thing/1795280001.000001 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "#leon-42-fix-the-thing",
+      "threadTs": "1795280001.000001"
+    },
+    "items": [
+      2
+    ],
+    "text": "---\nSlack thread for item 2: slack:#leon-42-fix-the-thing/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:#leon-42-fix-the-thing/1795280001.000001\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:#leon-42-fix-the-thing/1795280001.000001 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "grok",
+    "thread": {
+      "channel": "#leon-42-fix-the-thing",
+      "threadTs": "1795280001.000001"
+    },
+    "items": [
+      1,
+      3
+    ],
+    "text": "---\nSlack thread for items 1, 3: slack:#leon-42-fix-the-thing/1795280001.000001\nIt's a delegated task, so (my standing rule):\n- Don't do it in this chat. Create a new bot for it named exactly \"Task slack:#leon-42-fix-the-thing/1795280001.000001\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread slack:#leon-42-fix-the-thing/1795280001.000001 and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+  },
+  {
+    "block": "follow-up",
+    "thread": {
+      "channel": "#leon-42-fix-the-thing",
+      "threadTs": "1795280001.000001"
+    },
+    "text": "---\nFollow-up for slack:#leon-42-fix-the-thing/1795280001.000001. Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result."
+  }
+]
