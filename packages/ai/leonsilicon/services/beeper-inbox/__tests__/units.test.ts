@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ensureDaemon } from "#client";
 import { Coalesced } from "#coalesce";
+import { TracedStore } from "#store-trace";
 import { RoomDirectory, normalizeNetwork, roomsFromSync } from "#directory";
 import { accountPage, refusedUploadReason, safeFilename } from "#format";
 import { keysQueryKey, MatrixFetch, requestKind, slimSyncFilter } from "#fetch";
@@ -627,4 +628,30 @@ test("ensureDaemon: waits for a live owner instead of starting another; starts o
   for (let i = 0; i < 50 && !existsSync(marker); i++)
     await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(existsSync(marker), true, "with the owner gone, a daemon is started");
+});
+
+test("traced store: a long run of store calls lets the event loop in", async () => {
+  // A synchronous store, like Pickle's SQLite one: every promise resolves at once.
+  const busy = (ms: number) => {
+    const end = performance.now() + ms;
+    while (performance.now() < end);
+  };
+  const inner = {
+    get: async () => (busy(2), new Uint8Array(1)),
+    set: async () => busy(2),
+    delete: async () => busy(2),
+    list: async () => (busy(2), [] as string[]),
+  };
+  const run = async (store: { set(key: string, value: Uint8Array): Promise<void> }) => {
+    let loopRan = false;
+    setImmediate(() => (loopRan = true));
+    for (let i = 0; i < 100; i++) await store.set(`k${i}`, new Uint8Array(1));
+    return loopRan;
+  };
+  assert.equal(await run(inner), false, "unwrapped, 200 ms of store work starves the loop");
+  assert.equal(await run(new TracedStore(inner)), true, "wrapped, the loop runs in between");
+  const store = new TracedStore(inner);
+  assert.deepEqual(await store.get("k"), new Uint8Array(1), "values pass through unchanged");
+  assert.deepEqual(await store.list("p"), []);
+  await store.delete("k");
 });
