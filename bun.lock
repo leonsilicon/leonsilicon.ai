@@ -97,7 +97,7 @@
     },
     "apps/hermes-plugin-grok-box-browser": {
       "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "devDependencies": {
         "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",

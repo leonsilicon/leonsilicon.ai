@@ -51,6 +51,11 @@ function fakeBackend(
       return Response.json({ code: "unauthenticated", message: "no" }, { status: 401 });
     const method = url.pathname.split("/").pop();
     if (method === "ListGrokBotAgents") return Response.json({ agents: bots });
+    if (method === "EnsureSandBox")
+      return Response.json({
+        runState: "SAND_BOX_RUN_STATE_RUNNING",
+        gatewayToken: "gateway-secret",
+      });
     if (method === "DeleteGrokBotAgent") {
       const index = bots.findIndex((b) => b.id === body.id);
       if (index < 0)
@@ -240,4 +245,28 @@ test("the MCP endpoint needs the token, lists tools and explains a refusal", asy
   );
   const health = await handler(new Request("https://grokbot-admin.leonsilicon.ai/healthz"));
   assert.equal(health.status, 200);
+});
+
+test("/sandbox/ensure wakes the cloud computer and answers only its run state", async () => {
+  const { roster, api, backend } = setup([bot("1", "Grok Bot")]);
+  const handler = createHandler(
+    { token: "t".repeat(40), publicOrigin: "https://grokbot-admin.leonsilicon.ai" },
+    roster,
+    api,
+  );
+  const ensure = (auth = `Bearer ${"t".repeat(40)}`, method = "POST") =>
+    handler(
+      new Request("https://grokbot-admin.leonsilicon.ai/sandbox/ensure", {
+        method,
+        headers: { authorization: auth },
+      }),
+    );
+  assert.equal((await ensure("Bearer nope")).status, 401);
+  assert.equal((await ensure(undefined, "GET")).status, 405);
+  const answer = await ensure();
+  assert.equal(answer.status, 200);
+  const text = await answer.text();
+  assert.deepEqual(JSON.parse(text), { runState: "SAND_BOX_RUN_STATE_RUNNING" });
+  assert.ok(!text.includes("gateway-secret"));
+  assert.ok(backend.calls.some((call) => call.path.endsWith("/EnsureSandBox")));
 });

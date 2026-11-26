@@ -181,6 +181,78 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual([entry.name for entry in registered], ["grok-box"])
 
 
+class FakeWaker:
+    def __init__(self, state="SAND_BOX_RUN_STATE_RUNNING"):
+        self.state = state
+        self.calls = []
+
+    def wake(self, force=False):
+        self.calls.append(force)
+        return self.state
+
+
+class WakeTests(unittest.TestCase):
+    def test_a_paused_box_is_woken_and_the_request_retried(self):
+        browser, opener = provider([urllib.error.URLError("refused"), {"ok": True},
+                                    {"task": "leon-1", "ws": "/s/abc/devtools/browser/x", "seeded": 0}])
+        waker = FakeWaker()
+        browser.broker.waker = waker
+        browser.broker.sleep = lambda seconds: None
+        with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):
+            info = browser.create_session("t")
+        self.assertEqual(info["cdp_url"], "ws://127.0.0.1:19400/s/abc/devtools/browser/x")
+        self.assertEqual(waker.calls, [False, True])  # once before the session, forced after the failure
+        self.assertEqual([request[1].rsplit("/", 2)[-1] for request in opener.requests][-2:], ["health", "sessions"])
+
+    def test_a_box_that_stays_down_after_the_wake_asks_for_a_repair(self):
+        shared = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, shared)
+        browser, _ = provider([urllib.error.URLError("refused")] + [urllib.error.URLError("down")] * 4,
+                              GROK_BOX_SHARED_DIR=shared)
+        browser.broker.waker = FakeWaker()
+        browser.broker.sleep = lambda seconds: None
+        browser.broker.WAKE_WAIT = 9
+        with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):
+            with self.assertRaises(RuntimeError) as raised:
+                browser.create_session("t")
+        self.assertIn("A repair has been requested", str(raised.exception))
+        self.assertTrue(os.path.exists(os.path.join(shared, "repair-request.json")))
+
+    def test_the_waker_calls_grokbot_admin_at_most_once_a_minute_unless_forced(self):
+        with patch.dict(os.environ, {"GROK_BOX_WAKE_TOKEN": "wake", "GROK_BOX_WAKE_URL": "https://admin.example/sandbox/ensure"}):
+            config = plugin.Config()
+        now = [1000.0]
+        opener = FakeOpener([{"runState": "SAND_BOX_RUN_STATE_RUNNING"}] * 3 + [urllib.error.URLError("gone")])
+        waker = plugin.Waker(config, opener=opener, clock=lambda: now[0])
+        self.assertEqual(waker.wake(), "SAND_BOX_RUN_STATE_RUNNING")
+        method, url, headers, _ = opener.requests[0]
+        self.assertEqual((method, url, headers["Authorization"]), ("POST", "https://admin.example/sandbox/ensure", "Bearer wake"))
+        self.assertIsNone(waker.wake())
+        self.assertEqual(waker.wake(force=True), "SAND_BOX_RUN_STATE_RUNNING")
+        now[0] += 61
+        self.assertEqual(waker.wake(), "SAND_BOX_RUN_STATE_RUNNING")
+        self.assertIsNone(waker.wake(force=True))  # a failed call never raises
+        with patch.dict(os.environ, {"GROK_BOX_WAKE_TOKEN": "", "GROK_BOX_WAKE_TOKEN_FILE": "/nonexistent"}):
+            self.assertIsNone(plugin.Waker(plugin.Config()).wake(force=True))
+        # Without its own key, the plugin uses the token slack22grokbot holds for grokbot-admin.
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        settings = os.path.join(folder, "slack22grokbot.env")
+        with open(settings, "w") as handle:
+            handle.write('SLACK_HERMES_USER_ID=U1\nGROK_BOT_ROSTER_MCP_TOKEN="roster-token"\n')
+        with patch.dict(os.environ, {"GROK_BOX_WAKE_TOKEN": "", "GROK_BOX_WAKE_TOKEN_FILE": settings}):
+            self.assertEqual(plugin.Config().wake_token, "roster-token")
+
+    def test_the_keepalive_only_wakes_while_a_browser_is_in_use(self):
+        waker = FakeWaker()
+        forwarder = types.SimpleNamespace(last_activity=0.0)
+        self.assertIsNone(plugin.keepalive_once(forwarder, waker, 1000.0))
+        forwarder.last_activity = 900.0
+        self.assertEqual(plugin.keepalive_once(forwarder, waker, 1000.0), "SAND_BOX_RUN_STATE_RUNNING")
+        self.assertEqual(waker.calls, [True])
+        self.assertIsNone(plugin.keepalive_once(forwarder, waker, 1300.0))
+
+
 class ForwarderTests(unittest.TestCase):
     def test_connections_are_carried_by_the_dial_command(self):
         echo = socket.socket()

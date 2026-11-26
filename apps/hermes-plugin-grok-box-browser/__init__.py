@@ -30,6 +30,19 @@ def _env(name, default=""):
     return (os.getenv(name) or default).strip()
 
 
+def _env_file_value(path, name):
+    """One value from a dotenv file, or "" when the file or the key is missing."""
+    try:
+        with open(path) as handle:
+            for line in handle:
+                key, sep, value = line.strip().partition("=")
+                if sep and key.strip() == name:
+                    return value.strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
+
+
 def _hermes_home():
     return _env("HERMES_HOME", "/opt/data")
 
@@ -46,9 +59,21 @@ class Config:
         self.linear_key = _env("LINEAR_API_KEY")
         # Shared with slack22grokbot's keeper: repair-request.json from here, repair-status.json back.
         self.shared = _env("GROK_BOX_SHARED_DIR", f"{home}/grok-box-browser")
+        # grokbot-admin's /sandbox/ensure: wakes the Grok Bot cloud computer when Grok Bot paused it.
+        self.wake_url = _env("GROK_BOX_WAKE_URL", "https://grokbot-admin.leonsilicon.ai/sandbox/ensure")
+        # grokbot-admin's own bearer token, which slack22grokbot already holds on this host.
+        self.wake_token = _env("GROK_BOX_WAKE_TOKEN") or _env_file_value(
+            _env("GROK_BOX_WAKE_TOKEN_FILE", f"{home}/beeper-inbox/slack22grokbot/slack22grokbot.env"),
+            "GROK_BOT_ROSTER_MCP_TOKEN")
 
     def dial(self):
         return [self.tailscale, f"--socket={self.socket}", "nc", self.host, str(self.port)]
+
+
+class BoxUnreachable(Exception):
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
 
 
 class Forwarder:
@@ -66,6 +91,8 @@ class Forwarder:
         self._lock = threading.Lock()
         self._listener = None
         self.shared = False
+        # When this forwarder last carried a connection or data: a browser is in use.
+        self.last_activity = 0.0
 
     def ensure(self):
         with self._lock:
@@ -100,6 +127,7 @@ class Forwarder:
                 connection, _ = listener.accept()
             except OSError:
                 return
+            self.last_activity = time.monotonic()
             threading.Thread(target=self._carry, args=(connection,), daemon=True).start()
 
     def _carry(self, connection):
@@ -118,6 +146,7 @@ class Forwarder:
                     if not data:
                         break
                     child.stdin.write(data)
+                    self.last_activity = time.monotonic()
             except OSError:
                 pass
             finally:
@@ -133,6 +162,7 @@ class Forwarder:
                 if not data:
                     break
                 connection.sendall(data)
+                self.last_activity = time.monotonic()
         except OSError:
             pass
         finally:
@@ -143,15 +173,80 @@ class Forwarder:
                 pass
 
 
+class Waker:
+    """Wakes the Grok Bot cloud computer through grokbot-admin's `/sandbox/ensure`.
+
+    Grok Bot pauses that machine when no bot is running, even while Hermes uses a Chrome there
+    (2026-11-26: paused about 30 s after a task's Chrome started, back in half a second on
+    EnsureSandBox, every process intact). Never raises."""
+
+    MIN_INTERVAL = 60
+
+    def __init__(self, config, opener=urllib.request.urlopen, clock=time.monotonic):
+        self.config = config
+        self.opener = opener
+        self.clock = clock
+        self._last = None
+
+    def configured(self):
+        return bool(self.config.wake_url and self.config.wake_token)
+
+    def wake(self, force=False):
+        """The run state Cursor reports, or None when not configured, rate-limited or failed."""
+        if not self.configured() or (not force and self._last is not None
+                                     and self.clock() - self._last < self.MIN_INTERVAL):
+            return None
+        self._last = self.clock()
+        request = urllib.request.Request(self.config.wake_url, data=b"{}", method="POST", headers={
+            "Authorization": f"Bearer {self.config.wake_token}", "Content-Type": "application/json"})
+        try:
+            with self.opener(request, timeout=20) as response:
+                return json.loads(response.read() or b"{}").get("runState")
+        except (urllib.error.URLError, OSError, ValueError):
+            LOG.warning("grok-box-browser: couldn't wake the Grok box", exc_info=True)
+            return None
+
+
 class Broker:
     """The broker's API through the forwarder."""
 
-    def __init__(self, config, forwarder, opener=urllib.request.urlopen):
+    # After a wake, how long to wait for the broker before asking for a repair.
+    WAKE_WAIT = 45
+
+    def __init__(self, config, forwarder, opener=urllib.request.urlopen, waker=None, sleep=time.sleep):
         self.config = config
         self.forwarder = forwarder
         self.opener = opener
+        self.waker = waker
+        self.sleep = sleep
+
+    def healthy(self):
+        try:
+            with self.opener(urllib.request.Request(f"http://127.0.0.1:{self.config.local_port}/health"),
+                             timeout=5) as response:
+                return bool(json.loads(response.read() or b"{}").get("ok"))
+        except (urllib.error.URLError, OSError, ValueError):
+            return False
 
     def request(self, method, path, body=None, timeout=60):
+        try:
+            return self._request(method, path, body, timeout)
+        except BoxUnreachable as exc:
+            # Usually a pause: wake the box, wait for the broker, and try once more.
+            if self.waker is not None and self.waker.wake(force=True) is not None:
+                waited = 0
+                while waited < self.WAKE_WAIT:
+                    if self.healthy():
+                        try:
+                            return self._request(method, path, body, timeout)
+                        except BoxUnreachable:
+                            break
+                    self.sleep(3)
+                    waited += 3
+            raise RuntimeError(call(__file__, "unreachableMessage", exc.detail, self.request_repair(),
+                                    int(time.time() * 1000))) from None
+
+    def _request(self, method, path, body, timeout):
         self.forwarder.ensure()
         data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(
@@ -167,9 +262,7 @@ class Broker:
                 detail = exc.reason
             raise RuntimeError(f"grok-box broker answered {exc.code}: {detail}") from None
         except (urllib.error.URLError, OSError, ValueError) as exc:
-            detail = str(getattr(exc, "reason", exc)) or type(exc).__name__
-            raise RuntimeError(call(__file__, "unreachableMessage", detail, self.request_repair(),
-                                    int(time.time() * 1000))) from None
+            raise BoxUnreachable(str(getattr(exc, "reason", exc)) or type(exc).__name__) from None
 
     def request_repair(self):
         """Ask slack22grokbot to have a Grok bot rerun the box setup; returns its last repair status.
@@ -233,6 +326,8 @@ def make_provider_class(base):
             if not self.broker.config.token:
                 raise ValueError("GROK_BOX_BROWSER_TOKEN is not set")
             task = current_task(task_id)
+            if self.broker.waker is not None:
+                self.broker.waker.wake()  # cheap while it's awake; at most once a minute
             opened = self.broker.request("POST", "/v1/sessions", {"task": task}, timeout=90)
             info = call(__file__, "sessionInfo", task, self.broker.config.local_port, opened["ws"],
                         int(opened.get("seeded") or 0))
@@ -292,12 +387,37 @@ def _retire_loop(broker):
             LOG.debug("grok-box-browser: retire pass failed", exc_info=True)
 
 
+KEEPALIVE_EVERY = 180
+KEEPALIVE_ACTIVE = 300
+
+
+def keepalive_once(forwarder, waker, now):
+    """Wake the box if a browser carried traffic recently, so Grok Bot doesn't pause it mid-task."""
+    if forwarder.last_activity and now - forwarder.last_activity < KEEPALIVE_ACTIVE:
+        return waker.wake(force=True)
+    return None
+
+
+def _keepalive_loop(forwarder, waker):
+    while True:
+        time.sleep(KEEPALIVE_EVERY)
+        try:
+            keepalive_once(forwarder, waker, time.monotonic())
+        except Exception:
+            LOG.debug("grok-box-browser: keepalive failed", exc_info=True)
+
+
 def register(ctx):
     from agent.browser_provider import BrowserProvider
 
     config = Config()
-    broker = Broker(config, Forwarder(config.local_port, config.dial))
+    forwarder = Forwarder(config.local_port, config.dial)
+    waker = Waker(config)
+    broker = Broker(config, forwarder, waker=waker)
     ctx.register_browser_provider(make_provider_class(BrowserProvider)(broker))
+    if waker.configured() and not any(thread.name == "grok-box-keepalive" for thread in threading.enumerate()):
+        threading.Thread(target=_keepalive_loop, args=(forwarder, waker), name="grok-box-keepalive",
+                         daemon=True).start()
     # One retire loop per process: a live plugin reload registers this plugin again.
     if config.token and config.linear_key and not any(
             thread.name == "grok-box-retire" for thread in threading.enumerate()):

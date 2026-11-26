@@ -110,7 +110,7 @@ interface RpcRequest {
 export function createHandler(
   config: Pick<RosterConfig, "token" | "publicOrigin">,
   roster: Roster,
-  api: Pick<GrokBotApi, "sessionState">,
+  api: Pick<GrokBotApi, "sessionState" | "call">,
 ): (request: Request) => Promise<Response> {
   let health: { at: number; session: string } | undefined;
   return async (request) => {
@@ -127,12 +127,27 @@ export function createHandler(
         session: health.session,
       });
     }
-    if (path !== "/" && path !== "/mcp") return reply(404, { error: "not_found" });
+    if (path !== "/" && path !== "/mcp" && path !== "/sandbox/ensure")
+      return reply(404, { error: "not_found" });
     const authorization = request.headers.get("authorization") ?? "";
     const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
     if (!sameToken(bearer, config.token)) return reply(401, { error: "unauthorized" });
     const origin = request.headers.get("origin");
     if (origin && origin !== config.publicOrigin) return reply(403, { error: "origin_denied" });
+    if (path === "/sandbox/ensure") {
+      // Wakes Leon's Grok Bot cloud computer when Grok Bot has paused it, as the desktop app does.
+      // grok-box-browser calls this so Hermes's browser in that machine answers. Answers only the
+      // run state: the descriptor's gateway and port tokens never leave this Worker.
+      if (request.method !== "POST") return reply(405, { error: "Use POST" });
+      try {
+        const sandbox = await api.call<{ runState?: unknown }>("EnsureSandBox", {});
+        return reply(200, {
+          runState: typeof sandbox.runState === "string" ? sandbox.runState : null,
+        });
+      } catch (error) {
+        return reply(502, { error: String((error as Error).message).slice(0, 200) });
+      }
+    }
     if (request.method !== "POST") return reply(405, { error: "Use stateless MCP POST requests" });
 
     const raw = await request.text();

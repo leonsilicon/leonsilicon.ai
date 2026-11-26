@@ -27,6 +27,10 @@ Each deletion is logged with the bot's ID and name (Workers observability).
 
 It is in Leon's account-wide MCP config, which every bot uses, as `grokbot-admin` with the URL `https://grokbot-admin.leonsilicon.ai/mcp` and an `Authorization: Bearer …` header. That config is `DashboardService/GetMcpConfig` and `SetMcpConfig` on the same API. The app edits it by reading it with secrets redacted and saving it back with one change, the server keeping the redacted values; the entry was added the same way on 2026-11-21 (as `grok-bot-roster`, renamed the same day with `serverRenames`), and the other servers' headers were checked afterwards.
 
+## Waking the cloud computer
+
+`POST /sandbox/ensure` with the same bearer token calls `GrokBotService/EnsureSandBox`, as the desktop app does, and answers only `{ runState }`. Grok Bot pauses Leon's cloud computer when no bot is running; [grok-box-browser](../../../../../apps/hermes-plugin-grok-box-browser/README.md) calls this so Hermes's Chrome in that machine answers. The descriptor's gateway, VNC and port tokens stay in the Worker.
+
 ## API
 
 - `GrokBotApi(store, options?)`: `call(method, body)`, `ensureFresh()`, `sessionState()` (`ok`, `signed_out` or `unknown`). A `SessionStore` holds `{ accessToken, refreshToken }`; `memorySessionStore()` is the in-memory one.
