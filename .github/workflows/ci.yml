@@ -27,6 +27,7 @@ jobs:
         run: |
           uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with cryptography --with pytest python -m pytest \
             --rootdir=. --import-mode=importlib \
+            packages/ai/leonsilicon/configs/hermes-mirrors/__tests__ \
             apps/hermes-plugin-autodeploy/__tests__ \
             apps/hermes-plugin-dropbox-task-memory/__tests__ \
             apps/hermes-plugin-grok-box-browser/__tests__ \
