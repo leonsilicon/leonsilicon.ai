@@ -97,7 +97,7 @@
     },
     "apps/hermes-plugin-grok-box-browser": {
       "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "devDependencies": {
         "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
@@ -389,7 +389,7 @@
     },
     "packages/ai/leonsilicon/services/slack22grokbot": {
       "name": "@-/ai.leonsilicon.services.slack22grokbot",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
       },

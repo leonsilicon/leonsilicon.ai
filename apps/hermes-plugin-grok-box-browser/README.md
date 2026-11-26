@@ -60,21 +60,23 @@ bash up.sh
 
 `up.sh` installs Tailscale 1.104.7 (sha256-checked), joins as `grok-box` with the one-time key and deletes it, publishes port 9400 with `tailscale serve`, starts the broker and prints a summary without secrets. Everything lives in `/workspace/hermes-browsers`: profiles, Tailscale state, logs.
 
-**After the box restarts** (it does so without notice), ask a Grok bot to run `bash /workspace/hermes-browsers/box/up.sh` again. Hermes's browser tools say so when the box can't be reached.
+**After the box restarts** (it does so without notice), [slack22grokbot](../../packages/ai/leonsilicon/services/slack22grokbot/README.md#grok-box-upkeep) sets it up again: it puts the setup before the next message Hermes sends any Grok bot, or, when Hermes's browser finds the box down, sends it to `Grok Bot` on its own within a minute. If two repairs in a row fail, Hermes is told to ask Leon; then run the setup above by hand.
 
 ### Hermes
 
 Set in the Hermes profile's environment (Hermes Cloud's Keys page):
 
-| Key                           | Value                                                           |
-| ----------------------------- | --------------------------------------------------------------- |
-| `GROK_BOX_BROWSER_TOKEN`      | The broker's token                                              |
-| `GROK_BOX_BROWSER_HOST`       | The box's tailnet name or address (default `grok-box`)          |
-| `GROK_BOX_BROWSER_PORT`       | The box's tailnet port (default `9400`)                         |
-| `GROK_BOX_BROWSER_LOCAL_PORT` | The loopback forwarder's port on Hermes Cloud (default `19400`) |
-| `GROK_BOX_TAILSCALE`          | Default `$HERMES_HOME/orca-device/tailscale/bin/tailscale`      |
-| `GROK_BOX_TAILSCALE_SOCKET`   | Default `$HERMES_HOME/orca-device/tailscale/tailscaled.sock`    |
-| `LINEAR_API_KEY`              | Already set; used to find done and canceled tasks               |
+| Key                                                              | Value                                                                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GROK_BOX_BROWSER_TOKEN`                                         | The broker's token                                                                                   |
+| `GROK_BOX_BROWSER_HOST`                                          | The box's tailnet name or address (default `grok-box`)                                               |
+| `GROK_BOX_BROWSER_PORT`                                          | The box's tailnet port (default `9400`)                                                              |
+| `GROK_BOX_BROWSER_LOCAL_PORT`                                    | The loopback forwarder's port on Hermes Cloud (default `19400`)                                      |
+| `GROK_BOX_TAILSCALE`                                             | Default `$HERMES_HOME/orca-device/tailscale/bin/tailscale`                                           |
+| `GROK_BOX_TAILSCALE_SOCKET`                                      | Default `$HERMES_HOME/orca-device/tailscale/tailscaled.sock`                                         |
+| `LINEAR_API_KEY`                                                 | Already set; used to find done and canceled tasks                                                    |
+| `GROK_BOX_TS_OAUTH_CLIENT_ID`, `GROK_BOX_TS_OAUTH_CLIENT_SECRET` | A Tailscale OAuth client that can only create `tag:grok-box` auth keys, for slack22grokbot's repairs |
+| `GROK_BOX_SHARED_DIR`                                            | Where the plugin leaves repair requests for slack22grokbot (default `$HERMES_HOME/grok-box-browser`) |
 
 Install the plugin from its mirror, set `browser.cloud_provider: grok-box` in `config.yaml`, and restart the gateway when it's idle. The log shows `grok-box-browser: provider grok-box registered`. [autodeploy](../hermes-plugin-autodeploy/README.md) keeps it at the mirror's `main` from then on.
 

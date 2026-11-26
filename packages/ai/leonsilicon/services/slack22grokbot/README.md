@@ -42,6 +42,16 @@ Grok Bot bills by agent steps and tokens, so every message starts a costly run (
 - **Budget.** 25 relayed messages per rolling hour. At the limit the call is refused and tells Hermes to ask Leon. His words, passed as `leon_approved_more`, allow 25 more that hour. Up to 5 urgent sends an hour go out past the limit.
 - **Linear Bot and Todoist Bot** are refused unless `needs_bot_because` says what Hermes's own Linear and Todoist tools can't do.
 
+## Grok box upkeep
+
+Every Grok bot runs in Leon's Grok Bot cloud computer, which also hosts [grok-box-browser](../../../../../apps/hermes-plugin-grok-box-browser/README.md), the Chrome per Linear task that Hermes's browser tools drive. That machine restarts without notice and nothing in it starts the broker again, so the relay keeps it set up (`grok-box.ts`):
+
+- **On the way out.** Before each message it sends a bot, the relay checks the broker's `/health` over Hermes Cloud's tailnet link (`tailscale nc`, cached for a minute). While the box is down it puts the setup before the message, at most once every 30 minutes, for the bot to run in its own terminal first. That costs no extra Grok run.
+- **On its own.** When Hermes's browser finds the box down, the plugin leaves `$HERMES_HOME/grok-box-browser/repair-request.json`. Within a minute the relay sends the setup to the parent bot (`Grok Bot`) as a message of its own, at most once an hour and only while that bot is idle, and checks the broker five minutes later. The outcome goes to `repair-status.json`, which the plugin turns into what Hermes is told; after two failed repairs in a row, Hermes is told to ask Leon.
+- **The setup** downloads `box/up.sh` and `box/broker.mjs` from the plugin's public mirror at the commit Hermes has installed, checks them against the installed copies' sha256, writes the broker's token and runs `up.sh`. When the box is off the tailnet, the relay mints a one-time `tag:grok-box` join key with a Tailscale OAuth client that can only create such keys.
+
+It reads `GROK_BOX_BROWSER_TOKEN`, `GROK_BOX_BROWSER_HOST`, `GROK_BOX_BROWSER_PORT`, `GROK_BOX_TAILSCALE`, `GROK_BOX_TAILSCALE_SOCKET`, `GROK_BOX_TS_OAUTH_CLIENT_ID` and `GROK_BOX_TS_OAUTH_CLIENT_SECRET` from Hermes's own `.env` (the plugin reads the same keys), and does nothing without the token. `status.extensions.slack22grokbot.grokBox` shows the last upkeep and repair.
+
 ## How it works
 
 ```text

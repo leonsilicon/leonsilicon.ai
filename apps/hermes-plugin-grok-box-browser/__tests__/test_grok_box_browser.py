@@ -3,9 +3,12 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import socket
 import sys
+import tempfile
 import threading
+import time
 import types
 import unittest
 import urllib.error
@@ -119,12 +122,33 @@ class ProviderTests(unittest.TestCase):
         self.assertTrue(browser.close_session("leon-532"))
         self.assertEqual(opener.requests[-1][1], "http://127.0.0.1:19400/v1/sessions/leon-532/release")
 
-    def test_an_unreachable_box_tells_hermes_how_to_bring_it_back(self):
-        browser, _ = provider([urllib.error.URLError("connection refused")])
+    def test_an_unreachable_box_asks_slack22grokbot_for_a_repair(self):
+        shared = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, shared)
+        browser, _ = provider([urllib.error.URLError("connection refused")], GROK_BOX_SHARED_DIR=shared)
         with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):
             with self.assertRaises(RuntimeError) as raised:
                 browser.create_session("t")
-        self.assertIn("bash /workspace/hermes-browsers/box/up.sh", str(raised.exception))
+        self.assertIn("A repair has been requested", str(raised.exception))
+        with open(os.path.join(shared, "repair-request.json")) as handle:
+            self.assertGreater(json.load(handle)["at"], 1_700_000_000_000)
+
+        # The relay's status: a repair under way, then two failed ones.
+        now = int(time.time() * 1000)
+        with open(os.path.join(shared, "repair-status.json"), "w") as handle:
+            json.dump({"repairAt": now - 120_000, "failures": 0, "result": "sent"}, handle)
+        browser.broker.opener = FakeOpener([urllib.error.URLError("refused")])
+        with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):
+            with self.assertRaises(RuntimeError) as raised:
+                browser.create_session("t")
+        self.assertIn("was asked to restart it 2 minute(s) ago", str(raised.exception))
+        with open(os.path.join(shared, "repair-status.json"), "w") as handle:
+            json.dump({"repairAt": now, "failures": 2, "result": "failed"}, handle)
+        browser.broker.opener = FakeOpener([urllib.error.URLError("refused")])
+        with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):
+            with self.assertRaises(RuntimeError) as raised:
+                browser.create_session("t")
+        self.assertIn("tell Leon", str(raised.exception))
         busy = urllib.error.HTTPError("http://x", 503, "busy", {}, io.BytesIO(b'{"error": "all 6 browsers are busy"}'))
         browser, _ = provider([busy])
         with gateway_session(platform="slack", chat_name="leon-1-x", chat_id="C1"):

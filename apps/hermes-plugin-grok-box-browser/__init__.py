@@ -44,6 +44,8 @@ class Config:
         self.tailscale = _env("GROK_BOX_TAILSCALE", f"{home}/orca-device/tailscale/bin/tailscale")
         self.socket = _env("GROK_BOX_TAILSCALE_SOCKET", f"{home}/orca-device/tailscale/tailscaled.sock")
         self.linear_key = _env("LINEAR_API_KEY")
+        # Shared with slack22grokbot's keeper: repair-request.json from here, repair-status.json back.
+        self.shared = _env("GROK_BOX_SHARED_DIR", f"{home}/grok-box-browser")
 
     def dial(self):
         return [self.tailscale, f"--socket={self.socket}", "nc", self.host, str(self.port)]
@@ -165,7 +167,29 @@ class Broker:
                 detail = exc.reason
             raise RuntimeError(f"grok-box broker answered {exc.code}: {detail}") from None
         except (urllib.error.URLError, OSError, ValueError) as exc:
-            raise RuntimeError(call(__file__, "unreachableMessage", str(getattr(exc, "reason", exc)))) from None
+            detail = str(getattr(exc, "reason", exc)) or type(exc).__name__
+            raise RuntimeError(call(__file__, "unreachableMessage", detail, self.request_repair(),
+                                    int(time.time() * 1000))) from None
+
+    def request_repair(self):
+        """Ask slack22grokbot to have a Grok bot rerun the box setup; returns its last repair status.
+
+        The relay (in Hermes's Beeper inbox, on this host) reads the request within a minute, and
+        also adds the setup to the next message any Grok bot gets while the box is down."""
+        shared = self.config.shared
+        try:
+            os.makedirs(shared, exist_ok=True)
+            temporary = os.path.join(shared, "repair-request.json.tmp")
+            with open(temporary, "w") as handle:
+                json.dump({"at": int(time.time() * 1000)}, handle)
+            os.replace(temporary, os.path.join(shared, "repair-request.json"))
+        except OSError:
+            LOG.warning("grok-box-browser: couldn't leave a repair request", exc_info=True)
+        try:
+            with open(os.path.join(shared, "repair-status.json")) as handle:
+                return json.load(handle)
+        except (OSError, ValueError):
+            return None
 
 
 def current_task(task_id):

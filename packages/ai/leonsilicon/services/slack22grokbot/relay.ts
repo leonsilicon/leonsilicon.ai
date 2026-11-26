@@ -56,6 +56,8 @@ export interface GrokDelegationOptions {
   /** How long after a reply to keep waiting for more of it (default 20 s). */
   quietMs?: number;
   bridge?: Pick<Slack22GrokBot, "validate" | "complete" | "retired">;
+  /** Text to put before each outgoing message, e.g. the Grok box setup while it's down (grok-box.ts). */
+  upkeep?: () => Promise<string>;
 }
 
 export interface ShapedMessage {
@@ -69,6 +71,8 @@ export interface ShapedMessage {
 export interface GrokDelegation {
   bots(): Promise<Array<GrokBot & { queued?: number }>>;
   send(args: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** One message to a bot with no Slack task, e.g. a Grok box repair. Refused while the bot is busy. */
+  direct(bot: string, text: string): Promise<void>;
   read(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   complete(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   flushOnce(now?: () => number): Promise<void>;
@@ -211,6 +215,22 @@ export function createGrokDelegation(options: GrokDelegationOptions): GrokDelega
     return sent.id;
   }
 
+  /** A message with the upkeep text, if any, before it. Upkeep never stops a message going out. */
+  async function withUpkeep(text: string): Promise<string> {
+    const before = options.upkeep ? await options.upkeep().catch(() => "") : "";
+    return before ? `${before}\n\n${text}` : text;
+  }
+
+  async function direct(name: string, text: string): Promise<void> {
+    const target = await resolve(name);
+    const { list, windowed } = await recent(target.chatID);
+    const state = busy(list, Date.now(), { windowed });
+    if (state.busy) throw new Error(`${target.name} is busy: ${state.reason}`);
+    if (budgetStatus(budget).remaining <= 0) throw new Error("the hourly Grok budget is used up");
+    await post(target.chatID, text, `direct-${randomUUID()}`);
+    log({ event: "grok_direct", bot: target.name, chars: text.length });
+  }
+
   function queued(
     chatID: string,
     now: number = Date.now(),
@@ -314,9 +334,14 @@ export function createGrokDelegation(options: GrokDelegationOptions): GrokDelega
     // Taken before the send, so nothing that arrives while it is on its way is missed.
     const position = live ? await live.cursor() : 0;
     const sentAt = Date.now();
-    const messageID = await post(target.chatID, compose([item]), `send-${randomUUID()}`, {
-      urgent: isUrgent,
-    });
+    const messageID = await post(
+      target.chatID,
+      await withUpkeep(compose([item])),
+      `send-${randomUUID()}`,
+      {
+        urgent: isUrgent,
+      },
+    );
     log({
       event: "grok_send",
       bot: target.name,
@@ -432,7 +457,7 @@ export function createGrokDelegation(options: GrokDelegationOptions): GrokDelega
           const state = busy(list, now(), { windowed });
           if (state.busy && now() - Date.parse(first.at) < MAX_QUEUE_AGE_MS) continue;
           const batch = takeBatch(box.items, MAX_TEXT);
-          const text = compose(batch);
+          const text = await withUpkeep(compose(batch));
           // The same batch always has the same key, so a flush retried after a lost answer can't
           // post it twice.
           const key = `flush-${createHash("sha256")
@@ -475,6 +500,7 @@ export function createGrokDelegation(options: GrokDelegationOptions): GrokDelega
   return {
     bots: () => bots(),
     send,
+    direct,
     read,
     async complete(args) {
       if (!bridge) throw new Error("slack22grokbot is unavailable on this Beeper inbox");

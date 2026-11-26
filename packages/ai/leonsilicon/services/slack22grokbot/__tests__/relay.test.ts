@@ -20,7 +20,10 @@ const bridge: NonNullable<GrokDelegationOptions["bridge"]> = {
 };
 
 /** The relay against a fake Beeper: offline, sends nothing real. */
-function setup(configured: GrokDelegationOptions["bridge"] | null = bridge) {
+function setup(
+  configured: GrokDelegationOptions["bridge"] | null = bridge,
+  extra: Partial<GrokDelegationOptions> = {},
+) {
   const stateDir = join(mkdtempSync(join(tmpdir(), "slack22grokbot-test-")), "state");
   let key = 1000;
   let id = 1;
@@ -76,6 +79,7 @@ function setup(configured: GrokDelegationOptions["bridge"] | null = bridge) {
       flush: false,
       pollMs: 5,
       bridge: configured ?? undefined,
+      ...extra,
     });
   return { stateDir, relay: open(), open, chats, add, posted, logs, calls };
 }
@@ -484,4 +488,41 @@ test("one task bot per Slack thread: a task for a thread that has one goes to it
     /belongs to a different Slack thread/,
   );
   assert.equal(posted.length, 2);
+});
+
+test("the Grok box setup goes before every message while the box is down", async () => {
+  let down = true;
+  const { relay, posted, add } = setup(bridge, {
+    upkeep: async () => (down ? "[Before anything else, yourself] SETUP" : ""),
+  });
+  add("c-task", true, "earlier", 3600_000);
+  add("c-task", false, "Done.", 3500_000);
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "please do X", wait_seconds: 0 });
+  assert.match(String(posted[0]?.text), /^\[Before anything else, yourself\] SETUP\n\nplease do X/);
+  // A queued message gets it when the flusher sends it, and a healthy box adds nothing.
+  add("c-task", false, "On it.", 120_000);
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "also Y", wait_seconds: 0 });
+  down = false;
+  await relay.flushOnce(() => Date.now() + 25 * 60_000);
+  assert.match(String(posted.at(-1)?.text), /^also Y/);
+});
+
+test("upkeep that fails never stops a message", async () => {
+  const { relay, posted } = setup(bridge, {
+    upkeep: async () => {
+      throw new Error("tailscale is gone");
+    },
+  });
+  await relay.send({ ...THREAD, bot: "Task Bot", text: "please do X", wait_seconds: 0 });
+  assert.match(String(posted[0]?.text), /^please do X/);
+});
+
+test("direct sends one message with no Slack task, and not to a busy bot", async () => {
+  const { relay, posted, add, logs } = setup();
+  await relay.direct("Task Bot", "repair the box");
+  assert.equal(posted[0]?.text, "repair the box");
+  assert.match(String(posted[0]?.key), /^direct-/);
+  assert.ok(logs.some((entry) => entry.event === "grok_direct"));
+  add("c-linear", true, "still waiting", 30_000);
+  await assert.rejects(relay.direct("Linear Bot", "repair"), /Linear Bot is busy/);
 });

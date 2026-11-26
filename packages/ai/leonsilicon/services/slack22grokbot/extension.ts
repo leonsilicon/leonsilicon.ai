@@ -4,13 +4,15 @@ import { parseEnv } from "node:util";
 import type { DaemonExtension } from "@-/ai.leonsilicon.services.beeper-inbox";
 import { inboxBackend } from "#backend";
 import { bridgeServices } from "#bridge-services";
+import { createBoxKeeper } from "#grok-box";
 import { createGrokDelegation } from "#relay";
 import { Slack22GrokBot } from "#slack22grokbot";
 import { callTool, INSTRUCTIONS, TOOLS } from "#tools";
 
-export const VERSION = "1.6.0";
+export const VERSION = "1.7.0";
 const NAME = "slack22grokbot";
 const POLL_MS = 15_000;
+const BOX_EVERY_MS = 60_000;
 
 /**
  * The relay as an extension of Hermes's Beeper inbox daemon: `beeper-inbox.mjs mcp slack22grokbot` is its
@@ -48,11 +50,17 @@ export function slack22GrokBotExtension(): DaemonExtension {
           log({ event: "slack22grokbot_config_error", message: problem });
         }
       }
+      // Keeps grok-box-browser set up in the Grok Bot cloud computer (grok-box.ts).
+      const keeper = createBoxKeeper({
+        stateFile: join(context.home, "state", "grok-box.json"),
+        log,
+      });
       const relay = createGrokDelegation({
         stateDir: join(context.home, "state"),
         backend,
         bridge,
         log,
+        upkeep: () => keeper.upkeep(),
       });
       let stopped = false;
       let active = Promise.resolve();
@@ -75,18 +83,28 @@ export function slack22GrokBotExtension(): DaemonExtension {
           });
       };
       if (bridge) poll(bridge);
+      let boxActive = Promise.resolve();
+      const boxTimer = setInterval(() => {
+        boxActive = keeper
+          .tick((bot, text) => relay.direct(bot, text))
+          .catch((error: Error) => log({ event: "grok_box_tick_error", message: error.message }));
+      }, BOX_EVERY_MS);
+      boxTimer.unref();
       return {
         callTool: (name, args) => callTool(relay, name, args),
         status: () => ({
           running: Boolean(bridge),
           ...bridge?.status(),
           ...(problem ? { problem } : {}),
+          grokBox: keeper.status(),
         }),
         async stop() {
           stopped = true;
           clearTimeout(timer);
+          clearInterval(boxTimer);
           relay.stop();
           await active;
+          await boxActive;
         },
       };
     },

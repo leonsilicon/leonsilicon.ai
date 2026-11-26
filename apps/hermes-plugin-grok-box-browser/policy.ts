@@ -44,12 +44,31 @@ export function sessionInfo(task: string, localPort: number, ws: string, seeded:
   };
 }
 
-/** What Hermes is told when the box can't be reached, so it can bring the broker back. */
-export function unreachableMessage(detail: string) {
-  return (
-    "The Grok box browser is unreachable (" +
-    detail +
-    "). The Grok Bot cloud computer may have restarted. Ask a Grok bot to run " +
-    "`bash /workspace/hermes-browsers/box/up.sh` in its own terminal and report the output, then try again."
-  );
+interface RepairStatus {
+  repairAt?: number | null;
+  failures?: number;
+  result?: string | null;
+  detail?: string | null;
+}
+
+/**
+ * What Hermes is told when the box can't be reached. The plugin has asked slack22grokbot for a
+ * repair, which a Grok bot runs in the box; `status` is the relay's last word on repairs.
+ */
+export function unreachableMessage(detail: string, status: RepairStatus | null, nowMs: number) {
+  const lead = `The Grok box browser is unreachable (${detail}). The Grok Bot cloud computer may have restarted.`;
+  if ((status?.failures ?? 0) >= 2)
+    return (
+      `${lead} Automatic repairs through Grok Bot have failed ${status?.failures} times in a row, so tell ` +
+      'Leon the Grok box browser needs him (grok-box-browser README, "After the box restarts"). ' +
+      "Use another way to do the browser work for now."
+    );
+  const minutes = status?.repairAt ? Math.round((nowMs - status.repairAt) / 60_000) : null;
+  const sent =
+    status?.result === "sent" && minutes !== null && minutes < 15
+      ? ` A Grok bot was asked to restart it ${minutes} minute(s) ago.`
+      : status?.result === "skipped" && status.detail
+        ? ` The last repair couldn't be sent (${status.detail}); it is retried every few minutes.`
+        : " A repair has been requested; the next message to any Grok bot, or the relay within a minute, sends it.";
+  return `${lead}${sent} Try the browser again in about five minutes, and do other work meanwhile.`;
 }
