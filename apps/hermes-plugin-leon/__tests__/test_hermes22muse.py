@@ -1584,6 +1584,8 @@ class MuseAppToolTests(ToolTests):
             200, "application/json", b'{"approval": {"approval_id": "ap-1", "status": "allowed"}}')
         self.gateway.answers[("GET", "/tasks")] = (
             200, "application/json", b'{"ok": true, "result": {"schedules": []}}')
+        self.gateway.answers[("GET", "/tasks/runs?limit=100")] = (
+            200, "application/json", b'{"runs": []}')
         self.gateway.answers[("GET", "/skills")] = (
             200, "application/json", b'{"ok": false, "error": {"code": "not_ready"}}')
         self.gateway.answers[("GET", "/media/raw/workspace/a.png")] = (200, "image/png", b"\x89PNG")
@@ -1674,4 +1676,6 @@ class MuseAppToolTests(ToolTests):
 
     async def test_a_missing_login_says_how_to_sign_in(self):
         self.gateway.login = "ended"
+        # A previously issued gateway token can still be used until it expires.
+        self.adapter._hermes22muse_relay.web.tokens = None
         self.assertIn("Leon has to sign in again", self.call("muse_approvals")["error"])

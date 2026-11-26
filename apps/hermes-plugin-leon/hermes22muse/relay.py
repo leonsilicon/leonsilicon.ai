@@ -602,6 +602,8 @@ class Relay:
                 self.store.schedule_runs.delivered(run, ts)
 
     async def watch_schedule_runs(self):
+        # Let the gateway and its Slack workspace finish connecting before the first poll.
+        await asyncio.sleep(SCHEDULE_POLL)
         while True:
             for operation in (self.poll_schedule_runs, self.publish_schedule_runs):
                 try:
