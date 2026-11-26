@@ -1,1 +1,0 @@
-export { beeperToSlackExtension } from "#extension";

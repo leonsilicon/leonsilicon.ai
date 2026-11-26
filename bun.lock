@@ -27,22 +27,10 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
-    "apps/beeper-inbox": {
-      "name": "@-apps/beeper-inbox",
+    "apps/beeperd": {
+      "name": "@-apps/beeperd",
       "bin": {
-        "_beeper-inbox": "./_beeper-inbox.ts",
-        "_build-beeper-inbox": "./_build-beeper-inbox.ts",
-      },
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-        "@-/ai.leonsilicon.services.discord2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.instagram2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.linkedin2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.reddit2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.slack22grokbot": "workspace:*",
-        "@-/ai.leonsilicon.services.wechat2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.whatsapp2slack": "workspace:*",
-        "@-/ai.leonsilicon.services.x2slack": "workspace:*",
+        "_build-beeperd": "./_build-beeperd.ts",
       },
     },
     "apps/cronometer": {
@@ -300,32 +288,11 @@
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/beeper-inbox": {
-      "name": "@-/ai.leonsilicon.services.beeper-inbox",
-      "version": "0.1.0",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.slack22chatgpt": "workspace:*",
-        "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/beeper-to-slack": {
-      "name": "@-/ai.leonsilicon.services.beeper-to-slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-        "@-/ai.leonsilicon.services.feed-common": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/dailylinear": {
       "name": "@-/ai.leonsilicon.services.dailylinear",
       "version": "1.0.0",
       "dependencies": {
         "@-/ai.leonsilicon.services.slack22linear": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/discord2slack": {
-      "name": "@-/ai.leonsilicon.services.discord2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
     "packages/ai/leonsilicon/services/feed-common": {
@@ -347,18 +314,6 @@
       "name": "@-/ai.leonsilicon.services.grok-bot-roster",
       "version": "2.0.0",
     },
-    "packages/ai/leonsilicon/services/instagram2slack": {
-      "name": "@-/ai.leonsilicon.services.instagram2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/linkedin2slack": {
-      "name": "@-/ai.leonsilicon.services.linkedin2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/orca-bridge": {
       "name": "@-/ai.leonsilicon.services.orca-bridge",
       "version": "3.0.0",
@@ -376,26 +331,9 @@
         "@-/com.npmjs.modelcontextprotocol__sdk": "workspace:*",
       },
     },
-    "packages/ai/leonsilicon/services/reddit2slack": {
-      "name": "@-/ai.leonsilicon.services.reddit2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
-      },
-    },
     "packages/ai/leonsilicon/services/slack-as-leon": {
       "name": "@-/ai.leonsilicon.services.slack-as-leon",
       "version": "2.0.0",
-    },
-    "packages/ai/leonsilicon/services/slack22chatgpt": {
-      "name": "@-/ai.leonsilicon.services.slack22chatgpt",
-      "version": "0.1.0",
-    },
-    "packages/ai/leonsilicon/services/slack22grokbot": {
-      "name": "@-/ai.leonsilicon.services.slack22grokbot",
-      "version": "1.7.1",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
-      },
     },
     "packages/ai/leonsilicon/services/slack22linear": {
       "name": "@-/ai.leonsilicon.services.slack22linear",
@@ -404,24 +342,6 @@
         "@-/ai.leonsilicon.services.slack-as-leon": "workspace:*",
         "@-/com.npmjs.citty": "workspace:*",
         "@-/com.npmjs.yaml": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/wechat2slack": {
-      "name": "@-/ai.leonsilicon.services.wechat2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/whatsapp2slack": {
-      "name": "@-/ai.leonsilicon.services.whatsapp2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
-      },
-    },
-    "packages/ai/leonsilicon/services/x2slack": {
-      "name": "@-/ai.leonsilicon.services.x2slack",
-      "dependencies": {
-        "@-/ai.leonsilicon.services.beeper-to-slack": "workspace:*",
       },
     },
     "packages/com/npmjs/citty": {
@@ -575,13 +495,7 @@
 
     "@-/ai.leonsilicon.services.autotrigger": ["@-/ai.leonsilicon.services.autotrigger@workspace:packages/ai/leonsilicon/services/autotrigger"],
 
-    "@-/ai.leonsilicon.services.beeper-inbox": ["@-/ai.leonsilicon.services.beeper-inbox@workspace:packages/ai/leonsilicon/services/beeper-inbox"],
-
-    "@-/ai.leonsilicon.services.beeper-to-slack": ["@-/ai.leonsilicon.services.beeper-to-slack@workspace:packages/ai/leonsilicon/services/beeper-to-slack"],
-
     "@-/ai.leonsilicon.services.dailylinear": ["@-/ai.leonsilicon.services.dailylinear@workspace:packages/ai/leonsilicon/services/dailylinear"],
-
-    "@-/ai.leonsilicon.services.discord2slack": ["@-/ai.leonsilicon.services.discord2slack@workspace:packages/ai/leonsilicon/services/discord2slack"],
 
     "@-/ai.leonsilicon.services.feed-common": ["@-/ai.leonsilicon.services.feed-common@workspace:packages/ai/leonsilicon/services/feed-common"],
 
@@ -589,29 +503,13 @@
 
     "@-/ai.leonsilicon.services.grok-bot-roster": ["@-/ai.leonsilicon.services.grok-bot-roster@workspace:packages/ai/leonsilicon/services/grok-bot-roster"],
 
-    "@-/ai.leonsilicon.services.instagram2slack": ["@-/ai.leonsilicon.services.instagram2slack@workspace:packages/ai/leonsilicon/services/instagram2slack"],
-
-    "@-/ai.leonsilicon.services.linkedin2slack": ["@-/ai.leonsilicon.services.linkedin2slack@workspace:packages/ai/leonsilicon/services/linkedin2slack"],
-
     "@-/ai.leonsilicon.services.orca-bridge": ["@-/ai.leonsilicon.services.orca-bridge@workspace:packages/ai/leonsilicon/services/orca-bridge"],
 
     "@-/ai.leonsilicon.services.orcahermes-device": ["@-/ai.leonsilicon.services.orcahermes-device@workspace:packages/ai/leonsilicon/services/orcahermes-device"],
 
-    "@-/ai.leonsilicon.services.reddit2slack": ["@-/ai.leonsilicon.services.reddit2slack@workspace:packages/ai/leonsilicon/services/reddit2slack"],
-
     "@-/ai.leonsilicon.services.slack-as-leon": ["@-/ai.leonsilicon.services.slack-as-leon@workspace:packages/ai/leonsilicon/services/slack-as-leon"],
 
-    "@-/ai.leonsilicon.services.slack22chatgpt": ["@-/ai.leonsilicon.services.slack22chatgpt@workspace:packages/ai/leonsilicon/services/slack22chatgpt"],
-
-    "@-/ai.leonsilicon.services.slack22grokbot": ["@-/ai.leonsilicon.services.slack22grokbot@workspace:packages/ai/leonsilicon/services/slack22grokbot"],
-
     "@-/ai.leonsilicon.services.slack22linear": ["@-/ai.leonsilicon.services.slack22linear@workspace:packages/ai/leonsilicon/services/slack22linear"],
-
-    "@-/ai.leonsilicon.services.wechat2slack": ["@-/ai.leonsilicon.services.wechat2slack@workspace:packages/ai/leonsilicon/services/wechat2slack"],
-
-    "@-/ai.leonsilicon.services.whatsapp2slack": ["@-/ai.leonsilicon.services.whatsapp2slack@workspace:packages/ai/leonsilicon/services/whatsapp2slack"],
-
-    "@-/ai.leonsilicon.services.x2slack": ["@-/ai.leonsilicon.services.x2slack@workspace:packages/ai/leonsilicon/services/x2slack"],
 
     "@-/com.leonsilicon.hermes.plugins.autodeploy": ["@-/com.leonsilicon.hermes.plugins.autodeploy@workspace:apps/hermes-plugin-autodeploy"],
 
@@ -677,7 +575,7 @@
 
     "@-apps/autolinear": ["@-apps/autolinear@workspace:apps/autolinear"],
 
-    "@-apps/beeper-inbox": ["@-apps/beeper-inbox@workspace:apps/beeper-inbox"],
+    "@-apps/beeperd": ["@-apps/beeperd@workspace:apps/beeperd"],
 
     "@-apps/cronometer": ["@-apps/cronometer@workspace:apps/cronometer"],
 

@@ -67,15 +67,12 @@ export default defineConfig({
           ...[
             "autolinear",
             "autotrigger",
-            "beeper-inbox",
-            "beeper-to-slack",
             "dailylinear",
             "gmail2slack",
             "grok-bot-roster",
             "orca-bridge",
             "orcahermes-device",
             "slack-as-leon",
-            "slack22grokbot",
             "slack22linear",
           ].map((service) => `${ai}/services/${service}/__tests__/*.test.ts`),
         ].join(" "),
@@ -84,11 +81,6 @@ export default defineConfig({
       "build:hermes-plugins": {
         cache: false,
         command: `node ${ai}/configs/hermes-mirrors/_build-hermes-plugins.ts`,
-      },
-      // dist/beeper-inbox.tgz for Hermes Cloud: the app plus Pickle built from its pinned revision.
-      "build:beeper-inbox": {
-        cache: false,
-        command: "node apps/beeper-inbox/_build-beeper-inbox.ts",
       },
       // beeperd is Go: its tests need a C compiler (SQLite), and goolm keeps Olm in pure Go.
       "test:beeperd": {

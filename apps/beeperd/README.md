@@ -46,6 +46,8 @@ Everything is under `/opt/data/beeperd` (`$BEEPERD_HOME`, else `$HERMES_HOME/bee
 
 A service without its settings file stays idle and says so in the status.
 
+Each service has its own notes: [feeds](internal/feeds/README.md), [the Grok relay](internal/grokrelay/README.md), [handoffs to Silicon Dot](internal/handoff/README.md). The Linear publisher needs `vpx _env-file linear-issue-metadata` installed as `linear-issue-metadata/env`; slack22linear fills the endpoint it reads every 10 seconds, and its status shows the last successful pass, the rooms written and the channels with no room.
+
 ## Operating it
 
 ```sh

@@ -85,7 +85,7 @@ CI deploys the Cloudflare Workers (see Deploying). Its credentials are in the Gi
 | `grok-bot-roster` Worker      | Automatic on push to `main`; by hand `vpr -w deploy:grok-bot-roster`. Its sign-in lives in KV; see [its README](apps/grok-bot-roster/README.md) |
 | Hermes skills                 | Install a skill from its repository path. See [Hermes skills](#hermes-skills).                                                                  |
 | Hermes plugins                | Automatic on push to `main`: the mirrors publish, then [autodeploy](apps/hermes-plugin-autodeploy/README.md) installs them on Hermes Cloud      |
-| Beeper inbox (Hermes Cloud)   | `vpr -w build:beeper-inbox`, then upload and install; see [its README](apps/beeper-inbox/README.md#deploy)                                      |
+| Beeper inbox (Hermes Cloud)   | `vpr -w build:beeperd`, then upload and install; see [its README](apps/beeperd/README.md#build-and-deploy)                                      |
 | Beeper inbox extensions       | Part of the Beeper inbox release above                                                                                                          |
 | Todoist Automations           | Automatic on every Deploy run; by hand `vpx _todoist-automations push --yes`                                                                    |
 
