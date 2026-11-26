@@ -1,4 +1,4 @@
-name: Sync Hermes plugin mirrors
+name: Deploy Hermes plugins
 
 on:
   workflow_run:
@@ -38,3 +38,24 @@ jobs:
         env:
           GIT_TERMINAL_PROMPT: "0"
           HERMES_MIRROR_TOKEN: ${{ secrets.HERMES_MIRROR_TOKEN }}
+
+  # Hermes Cloud installs what the mirrors now hold, then restarts its gateway once it is idle
+  # (apps/hermes-plugin-autodeploy). The run follows the deploy to its end.
+  deploy:
+    needs: mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
+        with:
+          node-version: "24"
+          cache: true
+      - name: Deploy the plugins to Hermes Cloud
+        run: node packages/ai/leonsilicon/configs/hermes-mirrors/_deploy-hermes.ts
+        env:
+          HERMES_URL: ${{ vars.HERMES_URL }}
+          HERMES_DEPLOY_TOKEN: ${{ secrets.HERMES_DEPLOY_TOKEN }}

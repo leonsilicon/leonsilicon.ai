@@ -2,13 +2,15 @@
   "name": "@-/ai.leonsilicon.configs.hermes-mirrors",
   "version": "1.0.0",
   "private": true,
-  "description": "Publish standalone Git mirrors of the workspace's Hermes plugins.",
+  "description": "Publish standalone Git mirrors of the workspace's Hermes plugins, and deploy them to Hermes Cloud.",
   "bin": {
     "_build-hermes-plugins": "./_build-hermes-plugins.ts",
+    "_deploy-hermes": "./_deploy-hermes.ts",
     "_sync-hermes-mirrors": "./_sync-hermes-mirrors.ts"
   },
   "type": "module",
   "imports": {
+    "#deploy": "./deploy.ts",
     "#mirror": "./mirror.ts",
     "#plugin-config": "./plugin-config.ts",
     "#slack": "./slack.ts"

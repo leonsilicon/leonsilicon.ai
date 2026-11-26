@@ -41,7 +41,7 @@ Once, pinned to the mirror's current commit, then restart the gateway when Herme
 hermes plugins install leonsiliconAI/hermes-plugin-leon --ref "$(git ls-remote https://github.com/leonsiliconAI/hermes-plugin-leon.git refs/heads/main | cut -f1)" --yes-deps --enable
 ```
 
-From then on [autodeploy](../hermes-plugin-autodeploy/README.md) installs each new commit. Each feature's README lists its settings and the log line that shows it loaded.
+From then on each push to `main` deploys it: CI publishes the mirror, then has [autodeploy](../hermes-plugin-autodeploy/README.md) install it and restart the gateway once Hermes is idle. Each feature's README lists its settings and the log line that shows it loaded.
 
 ## Test
 
