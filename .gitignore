@@ -12,4 +12,5 @@ dist/
 .wrangler/
 .env.local
 
-/apps/hermes-plugin-*/_pythonmonkey.py
+/apps/hermes-plugin-*/_bridge.py
+/apps/hermes-plugin-*/bridge.cjs

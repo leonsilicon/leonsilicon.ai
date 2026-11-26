@@ -1,6 +1,6 @@
 {
   "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Hermes plugin: one Chrome per Linear task in Leon's Grok Bot cloud computer, as Hermes's browser.",
   "type": "module",

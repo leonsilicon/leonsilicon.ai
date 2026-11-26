@@ -4,4 +4,4 @@
 
 See [setup and operations](../../../../../DEVELOPMENT.md#hermes-plugin-mirrors) for the GitHub token and the Hermes Cloud migration.
 
-`_pythonmonkey.py` is the bridge each plugin uses to run its `policy.cjs`. The Vite+ build copies it beside each bundle, and the mirrors publish it. [What it guarantees and what policies must do](../../../../../DEVELOPMENT.md#hermes-plugin-mirrors) is in the development guide. Its tests are in `__tests__/test_pythonmonkey.py`.
+`_bridge.py` is the bridge each plugin uses to run its `policy.cjs`, and `bridge.ts` is the Node worker it starts, bundled with vscode-jsonrpc into `bridge.cjs` by `vp pack` here. The Vite+ build copies both beside each plugin's bundle, and the mirrors publish them. [What the bridge guarantees and what policies must do](../../../../../DEVELOPMENT.md#hermes-plugin-mirrors) is in the development guide. Its tests are in `__tests__/test_bridge.py`.

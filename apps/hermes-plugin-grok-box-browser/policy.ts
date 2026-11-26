@@ -1,4 +1,4 @@
-// Pure logic for grok-box-browser, run from Python through PythonMonkey (see __init__.py).
+// Pure logic for grok-box-browser, run from Python through the plugins' bridge (see __init__.py).
 
 const ISSUE_CHANNEL = /^leon-(\d+)(?:-|$)/;
 

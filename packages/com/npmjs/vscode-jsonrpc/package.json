@@ -1,0 +1,12 @@
+{
+  "name": "@-/com.npmjs.vscode-jsonrpc",
+  "private": true,
+  "type": "module",
+  "imports": {},
+  "exports": {
+    ".": "./+.ts"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "catalog:"
+  }
+}

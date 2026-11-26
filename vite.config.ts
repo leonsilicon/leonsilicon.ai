@@ -22,7 +22,7 @@ export default defineConfig({
   },
   lint: {
     ...flatcap.configs.oxlint,
-    ignorePatterns: ["apps/hermes-plugin-*/policy.cjs"],
+    ignorePatterns: ["apps/hermes-plugin-*/policy.cjs", "**/bridge.cjs"],
     options: { typeAware: true, typeCheck: true },
     overrides: [
       {
@@ -36,6 +36,7 @@ export default defineConfig({
     ignorePatterns: [
       "patches.gen/**",
       "apps/hermes-plugin-*/policy.cjs",
+      "**/bridge.cjs",
       "**/@fixtures/**",
       // What pywrangler puts beside a Python Worker: its packages, its environment and its lock.
       "**/python_modules/**",

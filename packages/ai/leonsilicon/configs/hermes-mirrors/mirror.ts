@@ -53,7 +53,8 @@ function standaloneTree(source: string, directory: string, cwd: string): string 
   // These are committed inputs to the Vite+ build. Publish their exact bytes so
   // the mirrored bundle can load in Hermes and the project can rebuild on its own.
   addShared("vite.config.ts", "plugin-config.ts");
-  addShared("_pythonmonkey.py", "_pythonmonkey.py");
+  addShared("_bridge.py", "_bridge.py");
+  addShared("bridge.cjs", "bridge.cjs");
   if (manifest.imports?.["#slack"] === sharedPackage + "/slack") {
     addShared("slack.ts", "slack.ts");
     manifest.imports["#slack"] = "./slack.ts";

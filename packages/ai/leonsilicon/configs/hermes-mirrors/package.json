@@ -18,6 +18,9 @@
     "./plugin-config": "./+plugin-config.ts",
     "./slack": "./+slack.ts"
   },
+  "dependencies": {
+    "@-/com.npmjs.vscode-jsonrpc": "workspace:*"
+  },
   "devDependencies": {
     "vite-plus": "catalog:"
   }

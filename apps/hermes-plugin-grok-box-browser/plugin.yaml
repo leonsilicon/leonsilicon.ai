@@ -1,6 +1,6 @@
 name: grok-box-browser
 label: Grok box browser
-version: 1.1.0
+version: 1.1.1
 description: >
   Gives each Linear task its own Chrome in Leon's Grok Bot cloud computer, signed in with Grok Bot's
   logins, as the browser behind Hermes's browser tools (browser.cloud_provider: grok-box).

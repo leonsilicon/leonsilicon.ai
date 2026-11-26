@@ -99,7 +99,7 @@ Settings are environment variables: `GBB_HOME`, `GBB_PORT`, `GBB_MAX_BROWSERS`, 
 ```sh
 vp -C apps/hermes-plugin-grok-box-browser pack
 node --test apps/hermes-plugin-grok-box-browser/__tests__/broker.test.mjs
-uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with pytest python -m pytest --rootdir=. --import-mode=importlib apps/hermes-plugin-grok-box-browser/__tests__
+uv run --no-project --python 3.14 --with pygls==2.1.1 --with pytest python -m pytest --rootdir=. --import-mode=importlib apps/hermes-plugin-grok-box-browser/__tests__
 ```
 
 The broker tests use a stand-in Chrome. To try the broker against a real one on a Mac, run it with `GBB_HEADLESS=1` and `GBB_CHROME` pointing at Chrome's binary.

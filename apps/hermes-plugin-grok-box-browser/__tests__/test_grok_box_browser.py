@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location("grok_box_browser", path / "__init
 plugin = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = plugin
 spec.loader.exec_module(plugin)
-call = sys.modules["grok_box_browser._pythonmonkey"].call
+call = sys.modules["grok_box_browser._bridge"].call
 
 
 class BrowserProvider(abc.ABC):

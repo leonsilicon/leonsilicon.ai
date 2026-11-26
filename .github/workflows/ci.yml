@@ -21,11 +21,11 @@ jobs:
       - run: vpr -w typecheck
       - run: vpr -w test
       - run: vpr -w build:hermes-plugins
-      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs'
+      - run: git diff --exit-code -- 'apps/hermes-plugin-*/policy.cjs' packages/ai/leonsilicon/configs/hermes-mirrors/bridge.cjs
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Test Hermes plugins
         run: |
-          uv run --no-project --python 3.14 --with pythonmonkey==1.5.1 --with cryptography --with pytest python -m pytest \
+          uv run --no-project --python 3.14 --with pygls==2.1.1 --with cryptography --with pytest python -m pytest \
             --rootdir=. --import-mode=importlib \
             packages/ai/leonsilicon/configs/hermes-mirrors/__tests__ \
             apps/hermes-plugin-autodeploy/__tests__ \

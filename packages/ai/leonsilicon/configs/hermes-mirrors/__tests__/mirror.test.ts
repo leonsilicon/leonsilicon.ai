@@ -36,8 +36,9 @@ test("mirrors publish standalone trees and advance only when their contents chan
   const shared = "packages/ai/leonsilicon/configs/hermes-mirrors";
   const sharedPackage = "@-/ai.leonsilicon.configs.hermes-mirrors";
   mkdirSync(join(cwd, shared), { recursive: true });
-  const loader = join(cwd, shared, "_pythonmonkey.py");
+  const loader = join(cwd, shared, "_bridge.py");
   writeFileSync(loader, "runtime = 1\n");
+  writeFileSync(join(cwd, shared, "bridge.cjs"), "worker = 1;\n");
   writeFileSync(join(cwd, shared, "slack.ts"), "export const slack = true;\n");
   writeFileSync(join(cwd, shared, "plugin-config.ts"), "export default {}\n");
   writeFileSync(
@@ -64,10 +65,11 @@ test("mirrors publish standalone trees and advance only when their contents chan
   const first = publish();
   assert.equal(
     git(["ls-tree", "--name-only", "HEAD"], remote),
-    "_pythonmonkey.py\npackage.json\nplugin.yaml\nslack.ts\nvite.config.ts",
+    "_bridge.py\nbridge.cjs\npackage.json\nplugin.yaml\nslack.ts\nvite.config.ts",
   );
-  assert.match(git(["ls-tree", "HEAD", "_pythonmonkey.py"], remote), /^100644 blob /);
-  assert.equal(git(["show", "HEAD:_pythonmonkey.py"], remote), "runtime = 1");
+  assert.match(git(["ls-tree", "HEAD", "_bridge.py"], remote), /^100644 blob /);
+  assert.equal(git(["show", "HEAD:_bridge.py"], remote), "runtime = 1");
+  assert.equal(git(["show", "HEAD:bridge.cjs"], remote), "worker = 1;");
   assert.equal(git(["show", "HEAD:vite.config.ts"], remote), "export default {}");
   assert.equal(git(["show", "HEAD:slack.ts"], remote), "export const slack = true;");
   assert.equal(
@@ -91,7 +93,7 @@ test("mirrors publish standalone trees and advance only when their contents chan
   writeFileSync(loader, "runtime = 2\n");
   const second = publish();
   assert.notEqual(second, first);
-  assert.equal(git(["show", "HEAD:_pythonmonkey.py"], remote), "runtime = 2");
+  assert.equal(git(["show", "HEAD:_bridge.py"], remote), "runtime = 2");
   writeFileSync(manifest, "name: autolinear\nversion: 1.0.1\n");
   assert.notEqual(publish(), first);
   assert.equal(git(["rev-parse", "HEAD^"], remote), second);
