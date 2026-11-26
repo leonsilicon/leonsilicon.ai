@@ -61,7 +61,7 @@
     },
     "apps/hermes-plugin-autodeploy": {
       "name": "@-/com.leonsilicon.hermes.plugins.autodeploy",
-      "version": "1.2.0",
+      "version": "2.0.0",
       "devDependencies": {
         "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
         "vite-plus": "1.5.0",
@@ -151,6 +151,7 @@
       "version": "1.0.0",
       "bin": {
         "_build-hermes-plugins": "./_build-hermes-plugins.ts",
+        "_deploy-hermes": "./_deploy-hermes.ts",
         "_sync-hermes-mirrors": "./_sync-hermes-mirrors.ts",
       },
       "dependencies": {
