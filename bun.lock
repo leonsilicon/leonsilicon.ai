@@ -95,6 +95,14 @@
         "vite-plus": "1.5.0",
       },
     },
+    "apps/hermes-plugin-grok-box-browser": {
+      "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
+        "vite-plus": "1.5.0",
+      },
+    },
     "apps/hermes-plugin-hermes22muse": {
       "name": "@-/com.leonsilicon.hermes.plugins.hermes22muse",
       "devDependencies": {
@@ -600,6 +608,8 @@
     "@-/com.leonsilicon.hermes.plugins.autolinear": ["@-/com.leonsilicon.hermes.plugins.autolinear@workspace:apps/hermes-plugin-autolinear"],
 
     "@-/com.leonsilicon.hermes.plugins.dropbox-task-memory": ["@-/com.leonsilicon.hermes.plugins.dropbox-task-memory@workspace:apps/hermes-plugin-dropbox-task-memory"],
+
+    "@-/com.leonsilicon.hermes.plugins.grok-box-browser": ["@-/com.leonsilicon.hermes.plugins.grok-box-browser@workspace:apps/hermes-plugin-grok-box-browser"],
 
     "@-/com.leonsilicon.hermes.plugins.hermes22muse": ["@-/com.leonsilicon.hermes.plugins.hermes22muse@workspace:apps/hermes-plugin-hermes22muse"],
 

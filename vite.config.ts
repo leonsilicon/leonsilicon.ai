@@ -58,6 +58,7 @@ export default defineConfig({
           `${ai}/configs/silicon-dot/agents-vault/__tests__/*.test.ts`,
           `${ai}/configs/silicon-dot/hermes-thread/__tests__/*.test.ts`,
           `${ai}/configs/todoist-automations/__tests__/*.test.ts`,
+          "apps/hermes-plugin-grok-box-browser/__tests__/*.test.mjs",
           ...[
             "autolinear",
             "autotrigger",

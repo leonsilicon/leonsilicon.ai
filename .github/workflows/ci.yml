@@ -29,6 +29,7 @@ jobs:
             --rootdir=. --import-mode=importlib \
             apps/hermes-plugin-autodeploy/__tests__ \
             apps/hermes-plugin-dropbox-task-memory/__tests__ \
+            apps/hermes-plugin-grok-box-browser/__tests__ \
             apps/hermes-plugin-slack22orca/__tests__ \
             apps/hermes-plugin-hermes22muse/__tests__ \
             apps/muse-gadget/__tests__

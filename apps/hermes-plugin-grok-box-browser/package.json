@@ -1,0 +1,20 @@
+{
+  "name": "@-/com.leonsilicon.hermes.plugins.grok-box-browser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hermes plugin: one Chrome per Linear task in Leon's Grok Bot cloud computer, as Hermes's browser.",
+  "type": "module",
+  "imports": {
+    "#plugin": "./plugin.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  },
+  "scripts": {
+    "build": "vp pack"
+  },
+  "devDependencies": {
+    "@-/ai.leonsilicon.configs.hermes-mirrors": "workspace:*",
+    "vite-plus": "1.5.0"
+  }
+}
