@@ -389,7 +389,7 @@
     },
     "packages/ai/leonsilicon/services/slack22grokbot": {
       "name": "@-/ai.leonsilicon.services.slack22grokbot",
-      "version": "1.7.0",
+      "version": "1.7.1",
       "dependencies": {
         "@-/ai.leonsilicon.services.beeper-inbox": "workspace:*",
       },

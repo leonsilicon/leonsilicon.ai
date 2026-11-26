@@ -115,6 +115,14 @@ export interface BoxDeps {
   now(): number;
 }
 
+/** Whether `text` holds a whole HTTP response with a Content-Length body. */
+export function responseComplete(text: string): boolean {
+  const end = text.indexOf("\r\n\r\n");
+  if (end < 0) return false;
+  const length = /\r\ncontent-length:\s*(\d+)/i.exec(text.slice(0, end));
+  return Boolean(length) && Buffer.byteLength(text.slice(end + 4)) >= Number(length![1]);
+}
+
 export const defaultBoxDeps: BoxDeps = {
   exec: (file, args) =>
     new Promise((resolve, reject) =>
@@ -138,10 +146,14 @@ export const defaultBoxDeps: BoxDeps = {
       const timer = setTimeout(done, timeoutMs);
       child.stdout.on("data", (data: Buffer) => {
         out += data.toString("utf8");
+        if (responseComplete(out)) done();
       });
       child.on("close", done);
       child.on("error", done);
-      child.stdin.end(request);
+      // `tailscale nc` drops the connection when its stdin ends, before the answer arrives: keep it
+      // open until the broker closes the connection (HTTP/1.0) or the timeout.
+      child.stdin.on("error", () => {});
+      child.stdin.write(request);
     }),
   fetch: (input, init) => fetch(input, init),
   readFile: (path) => readFileSync(path, "utf8"),

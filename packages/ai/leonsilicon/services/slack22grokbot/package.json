@@ -1,6 +1,6 @@
 {
   "name": "@-/ai.leonsilicon.services.slack22grokbot",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "Grok Bot delegation and Slack task thread sync for Hermes.",
   "type": "module",

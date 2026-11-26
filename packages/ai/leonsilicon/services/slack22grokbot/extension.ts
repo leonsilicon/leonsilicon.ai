@@ -9,7 +9,7 @@ import { createGrokDelegation } from "#relay";
 import { Slack22GrokBot } from "#slack22grokbot";
 import { callTool, INSTRUCTIONS, TOOLS } from "#tools";
 
-export const VERSION = "1.7.0";
+export const VERSION = "1.7.1";
 const NAME = "slack22grokbot";
 const POLL_MS = 15_000;
 const BOX_EVERY_MS = 60_000;

@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
   boxSettings,
+  boxHealthy,
   createBoxKeeper,
+  defaultBoxDeps,
   REPAIR_BOT,
+  responseComplete,
   setupCommand,
   type BoxDeps,
   type BoxSettings,
@@ -182,4 +186,35 @@ test("a repair the bot can't take now is retried in a few minutes, and a healthy
   await keeper.tick(send);
   assert.equal(sent.length, 1);
   assert.throws(() => readFileSync(request));
+});
+
+test("the health check keeps tailscale nc's stdin open until the answer is in", async () => {
+  // Like the real `tailscale nc`: the connection goes away as soon as stdin ends.
+  const dir = mkdtempSync(join(tmpdir(), "grok-box-nc-"));
+  const nc = join(dir, "tailscale");
+  writeFileSync(
+    nc,
+    `#!/usr/bin/env node
+const net = require("node:net");
+const [host, port] = process.argv.slice(-2);
+const socket = net.connect(Number(port), "127.0.0.1");
+process.stdin.on("data", (data) => socket.write(data));
+process.stdin.on("end", () => { socket.destroy(); process.exit(0); });
+socket.on("data", (data) => process.stdout.write(data));
+socket.on("close", () => process.exit(0));
+`,
+  );
+  chmodSync(nc, 0o755);
+  const server = http.createServer((_request, response) => {
+    setTimeout(() => response.end('{"ok":true}'), 100);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  const settings = { ...world().settings, tailscale: nc, port };
+  const started = Date.now();
+  assert.equal(await boxHealthy(settings, defaultBoxDeps), true);
+  assert.ok(Date.now() - started < 5000, "answers without waiting for the timeout");
+  server.close();
+  assert.equal(responseComplete('HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{"ok":true}'), true);
+  assert.equal(responseComplete('HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{"ok'), false);
 });
