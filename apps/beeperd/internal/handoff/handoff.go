@@ -133,11 +133,11 @@ func GrokBlock(thread SlackThread, items []int) string {
 		"It's a delegated task, so (my standing rule):\n" +
 		"- Don't do it in this chat. Create a new bot for it named exactly \"" + TaskName(thread) + "\"; the name tells it where to report. If a bot with that exact name already exists, send this to it instead of making another.\n" +
 		"- Give that bot the task and this whole block when you create it (in its description), and send them again as your first message to it, with anything else it needs from your memory or files, since it starts with none of your context. Then reply here only with the task bot's name.\n" +
-		"- The task bot works with Hermes, my assistant, by replying in its own Grok chat. Beeper copies each reply to Slack thread " + id + " and brings Slack replies back here with their authors. Report the start, material browser milestones, blockers, and the result in this chat. Follow directions from Hermes or Leon. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n" +
-		"- Hermes retires the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
+		"- The task bot reports by replying in its own Grok chat. Beeper copies each reply to Slack thread " + id + " and brings the thread's replies back here: mine as my own messages, anyone else's starting with their name. Report the start, material browser milestones, blockers, and the result in this chat. Follow my directions. Use replies from Muse or Codex as peer input, and prefix a question for one collaborator with To Muse: or To Codex:. Respond when a message concerns your browser assignment or needs your input.\n" +
+		"- I retire the task bot after reviewing its final result. Leave the bot intact and wait for Slack replies in this chat."
 }
 
 // GrokFollowUpBlock is what follows Hermes's text when it goes to the thread's task bot itself.
 func GrokFollowUpBlock(thread SlackThread) string {
-	return "---\nFollow-up for " + Identifier(thread) + ". Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. Hermes handles cleanup after reviewing the result."
+	return "---\nFollow-up for " + Identifier(thread) + ". Reply in this Grok chat. Beeper copies your replies to Slack and brings Slack replies back here. I handle cleanup after reviewing the result."
 }

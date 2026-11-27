@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -59,12 +60,17 @@ func TestTheThreadIsCheckedAndBecomesTheIdentifierAndTheTaskBotsName(t *testing.
 	}
 }
 
-func TestTheBlockTellsTheBotToSpawnTheTaskBotAndHowItTalksToHermes(t *testing.T) {
+func TestTheBlockTellsTheBotToSpawnTheTaskBotAndHowItTalksToLeon(t *testing.T) {
 	block := GrokBlock(t1, nil)
 	mustMatch(t, block, `^---\nSlack thread for this task: slack:C0TASKS001/1795280000\.123456`)
 	mustMatch(t, block, `named exactly "Task slack:C0TASKS001/1795280000\.123456"`)
 	mustMatch(t, block, `Beeper copies each reply to Slack thread slack:C0TASKS001/1795280000\.123456`)
-	mustMatch(t, block, `Hermes retires the task bot`)
+	mustMatch(t, block, `mine as my own messages, anyone else's starting with their name`)
+	mustMatch(t, block, `I retire the task bot`)
+	// Hermes writes to the bot as Leon (his rule, 2026-11-27): the block doesn't name it.
+	if strings.Contains(block, "Hermes") || strings.Contains(GrokFollowUpBlock(t1), "Hermes") {
+		t.Error("a Grok block names Hermes")
+	}
 }
 
 func TestATaskBotsNameDecodesToItsThread(t *testing.T) {

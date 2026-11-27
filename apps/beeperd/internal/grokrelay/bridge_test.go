@@ -151,7 +151,7 @@ func TestRoutesByTheFullBotNameRetriesAcrossRestartsMirrorsEditsAndRetiresOnlyTh
 		{ID: "2", Name: handoff.TaskName(wrongThread)},
 	}}
 	slack := &fakeSlack{t: t, fail: true, replies: []slackReply{
-		{TS: "1795280002.001000", From: "bot", Author: "Captain Claude", UserID: "UHERMES", Files: []string{}, Text: "Please check page 2."},
+		{TS: "1795280002.001000", From: "bot", Author: "Captain Claude", UserID: "UHERMES", Files: []string{}, Text: " to grok bot:  Please check page 2."},
 		{TS: "1795280002.002000", From: "leon", Author: "Leon", Files: []string{}, Text: "Include the date."},
 		{TS: "1795280002.003000", From: "codex", Author: "Codex", Files: []string{}, Text: "Check the release URL."},
 		{TS: "1795280002.004000", From: "bot", Author: "Muse", Files: []string{}, Text: "To Grok Bot: Can you verify the page?"},
@@ -186,8 +186,9 @@ func TestRoutesByTheFullBotNameRetriesAcrossRestartsMirrorsEditsAndRetiresOnlyTh
 	mustEqual(t, failures[taskBotName], "response lost")
 	mustEqual(t, failures[handoff.TaskName(wrongThread)], "thread_not_found")
 	wantSends := []struct{ chat, text string }{
-		{"!grok:test", "Slack reply from Hermes:\nPlease check page 2."},
-		{"!grok:test", "Slack reply from Leon:\nInclude the date."},
+		// Hermes's reply goes out as Leon's own message, without "To Grok Bot:".
+		{"!grok:test", "Please check page 2."},
+		{"!grok:test", "Include the date."},
 		{"!grok:test", "Slack reply from Codex (collaborator):\nCheck the release URL."},
 		{"!grok:test", "Slack reply from Muse (other Slack participant):\nTo Grok Bot: Can you verify the page?"},
 	}
@@ -334,8 +335,8 @@ func TestALongSlackReplyGoesToGrokInPartsWithItsFiles(t *testing.T) {
 	}
 	mustEqual(t, len(bridge.status()["errors"].(map[string]string)), 0)
 	mustEqual(t, len(chats.sends), 3)
-	mustEqual(t, chats.sends[0].text, "Slack reply from Hermes:\n"+strings.Repeat("é", 8000))
-	mustEqual(t, chats.sends[1].text, "Slack reply from Hermes:\né\nSlack attachment: https://files.test/a.png")
+	mustEqual(t, chats.sends[0].text, strings.Repeat("é", 8000))
+	mustEqual(t, chats.sends[1].text, "é\nSlack attachment: https://files.test/a.png")
 	mustEqual(t, chats.sends[2].text, "Slack reply from Some Bot (other Slack participant):\nSlack attachment: report.pdf")
 	key := hash("C0TASKS001/1795280002.001000")[:40]
 	mustEqual(t, chats.sends[0].key, "slack22grokbot-"+key+"-0")
@@ -485,5 +486,19 @@ func TestTheBridgeNeedsAllFourSettings(t *testing.T) {
 		}
 		_, err := newBridgeServices(env, &scriptedHTTP{})
 		mustRefuse(t, err, "^slack22grokbot needs "+missing+"$")
+	}
+}
+
+func TestOnlyALeadingGrokAddressIsDropped(t *testing.T) {
+	for text, want := range map[string]string{
+		"To Grok Bot: Retry the fill.":         "Retry the fill.",
+		"\n TO GROK BOT:\nRetry the fill.":     "Retry the fill.",
+		"To Grok Bot:":                         "",
+		"To Muse: Check the page.":             "To Muse: Check the page.",
+		"Ask it. To Grok Bot: Retry the fill.": "Ask it. To Grok Bot: Retry the fill.",
+		"To Grok":                              "To Grok",
+		"Tö Grok Bot: Retry the fill.":         "Tö Grok Bot: Retry the fill.",
+	} {
+		mustEqual(t, withoutGrokAddress(text), want)
 	}
 }

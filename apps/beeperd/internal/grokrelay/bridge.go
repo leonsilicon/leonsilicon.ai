@@ -500,7 +500,23 @@ func (b *slackBridge) copyToSlack(ctx context.Context, served *route, entry host
 	return nil
 }
 
-// forward sends a route's new Slack replies to the task bot's chat, each with its author's name.
+// grokAddress is how Hermes and the peers address the task bot in the shared thread ("To Grok Bot:",
+// the prefix hermes22muse routes to the thread).
+const grokAddress = "to grok bot:"
+
+// withoutGrokAddress drops a leading "To Grok Bot:": in the bot's own chat it addresses no one new.
+func withoutGrokAddress(text string) string {
+	rest := strings.TrimLeftFunc(text, handoff.IsSpace)
+	if len(rest) < len(grokAddress) || !strings.EqualFold(rest[:len(grokAddress)], grokAddress) {
+		return text
+	}
+	return strings.TrimLeftFunc(rest[len(grokAddress):], handoff.IsSpace)
+}
+
+// forward sends a route's new Slack replies to the task bot's chat. Hermes writes to the bot for
+// Leon (his rule, 2026-11-27), so its replies go out like Leon's own: as his messages, with no label
+// and no "To Grok Bot:". Everyone else's start with their name, so the bot can tell peer input from
+// Leon's directions.
 func (b *slackBridge) forward(ctx context.Context, served *route) error {
 	b.mu.Lock()
 	after := served.SlackCursor
@@ -510,20 +526,19 @@ func (b *slackBridge) forward(ctx context.Context, served *route) error {
 		return err
 	}
 	for _, reply := range page.Replies {
-		var author string
+		var label string
+		text := reply.Text
 		switch {
-		case reply.From == "hermes" || (b.hermesUserID != "" && reply.UserID == b.hermesUserID):
-			author = "Hermes"
-		case reply.From == "leon":
-			author = "Leon"
+		case reply.From == "hermes" || (b.hermesUserID != "" && reply.UserID == b.hermesUserID), reply.From == "leon":
+			text = withoutGrokAddress(text)
 		case reply.From == "codex":
-			author = "Codex (collaborator)"
+			label = "Slack reply from Codex (collaborator):\n"
 		default:
-			author = strings.Join(strings.FieldsFunc(reply.Author, handoff.IsSpace), " ") + " (other Slack participant)"
+			label = "Slack reply from " + strings.Join(strings.FieldsFunc(reply.Author, handoff.IsSpace), " ") + " (other Slack participant):\n"
 		}
 		lines := []string{}
-		if reply.Text != "" {
-			lines = append(lines, reply.Text)
+		if text != "" {
+			lines = append(lines, text)
 		}
 		for _, file := range reply.Files {
 			lines = append(lines, "Slack attachment: "+file)
@@ -534,7 +549,7 @@ func (b *slackBridge) forward(ctx context.Context, served *route) error {
 			const size = 8000
 			for index, part := range chunks(text, size) {
 				sendKey := fmt.Sprintf("slack22grokbot-%s-%d", key, index*size)
-				if _, err := b.backend.send(ctx, served.ChatID, "Slack reply from "+author+":\n"+part, sendKey); err != nil {
+				if _, err := b.backend.send(ctx, served.ChatID, label+part, sendKey); err != nil {
 					return err
 				}
 			}

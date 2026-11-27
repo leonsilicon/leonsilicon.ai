@@ -2,7 +2,7 @@
 
 The `slack22grokbot` service delivers Hermes’s browser work, including work in signed-in sessions, in the bot's Beeper chat as Leon and connects the resulting task bot to its Slack thread.
 
-It is a service inside [beeperd](../../README.md) on Hermes Cloud and uses its inbox to reach Grok Bot over Matrix. It was ported from TypeScript on 2026-11-26; what it sends to Grok and to Slack is byte for byte what the TypeScript relay sent (`testdata/text.json`).
+It is a service inside [beeperd](../../README.md) on Hermes Cloud and uses its inbox to reach Grok Bot over Matrix. It was ported from TypeScript on 2026-11-26; what it sends to Grok and to Slack is byte for byte what the TypeScript relay sent (`testdata/text.json`), except where Leon changed a rule since (2026-11-27: Hermes's Slack replies reach Grok as his own messages).
 
 ## Tools
 
@@ -21,7 +21,7 @@ Every delegation carries the channel and root timestamp. The service validates t
 
 Use the same thread as Muse and Codex. Grok Bot receives their Slack replies in its own chat and can prefix a question with `To Muse:` or `To Codex:`. Hermes records Grok Bot’s reports and edits in the issue channel’s progress message (the hermes22muse plugin).
 
-- Beeper's [official Grok Bot connector](https://help.beeper.com/en_US/quick-references/ai-assistants-in-beeper) delivers the task bot's messages to the inbox journal. `slack22grokbot` copies them to Slack as marked Grok replies, about two seconds after the bot stops writing (a new message in a task bot's chat starts the next cycle 1.5 s later; otherwise the cycle runs every 15 s) and applies Beeper edits to the same Slack message. Slack replies go back to the bot's Beeper conversation with the author's name. The bridge skips its own messages in both directions. Attachment messages carry their text or a file reference. Binary files and interactive cards stay in their source app.
+- Beeper's [official Grok Bot connector](https://help.beeper.com/en_US/quick-references/ai-assistants-in-beeper) delivers the task bot's messages to the inbox journal. `slack22grokbot` copies them to Slack as marked Grok replies, about two seconds after the bot stops writing (a new message in a task bot's chat starts the next cycle 1.5 s later; otherwise the cycle runs every 15 s) and applies Beeper edits to the same Slack message. Slack replies go back to the bot's Beeper conversation. Hermes writes to the bot for Leon (his rule, 2026-11-27), so Hermes's and Leon's replies go as plain messages from Leon, without a leading `To Grok Bot:`; Codex's, Muse's and anyone else's start with `Slack reply from <name>:`, so the bot can tell peer input from Leon's directions. The bridge skips its own messages in both directions. Attachment messages carry their text or a file reference. Binary files and interactive cards stay in their source app.
 - Hermes starts work with `grok_bot_send`, then answers the task bot in Slack. Once Hermes has verified the final result, it calls `grok_task_complete` with the same thread. The service drains pending Grok replies and asks [grokbot-admin](../../../../packages/ai/leonsilicon/services/grok-bot-roster/README.md) to delete the task bot by its pinned roster ID. A failed deletion stays pending for retry.
 - Task bot names use the channel ID. Ambiguous routes and missing Slack roots show up in status. The service picks up new activity after installation and uses persisted cursors on restart.
 - Hermes's Slack guard plugin recognizes the same Grok marker for mirrored posts.
