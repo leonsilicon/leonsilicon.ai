@@ -9,6 +9,7 @@ import {
 import {
   botClient,
   commandLine,
+  hermesCommandContent,
   IssueMetadata,
   LinearClient,
   loadConfig,
@@ -21,6 +22,7 @@ import {
 import type {
   Adoption,
   SlackCall,
+  SlackMessageEvent,
   Sql,
   SqlValue,
   SyncConfig,
@@ -109,6 +111,8 @@ const slackArchiveEvents = new Set([
   "group_unarchive",
 ]);
 
+type SlackEventPayload = Record<string, unknown> & Partial<SlackMessageEvent>;
+
 async function enqueue(env: Env, id: string, kind: string, payload: unknown): Promise<void> {
   const response = await stub(env).fetch(
     new Request("https://sync/enqueue", {
@@ -123,7 +127,7 @@ async function enqueue(env: Env, id: string, kind: string, payload: unknown): Pr
  * Slack events worth queueing: people's messages and edits in channels, Hermes's messages and edits
  * with a command for Autolinear, and Hermes's 👀, ✅ and ❌ on messages (the sync checks where).
  */
-function wantedSlackEvent(event: Record<string, unknown> | undefined, config: SyncConfig): boolean {
+function wantedSlackEvent(event: SlackEventPayload | undefined, config: SyncConfig): boolean {
   if (event?.type === "reaction_added")
     return (
       event.user === config.hermesUserId &&
@@ -134,12 +138,13 @@ function wantedSlackEvent(event: Record<string, unknown> | undefined, config: Sy
     );
   if (!event || event.type !== "message") return false;
   if (event.channel_type !== "channel" && event.channel_type !== "group") return false;
-  const hermesCommand = (message: Record<string, unknown> | undefined) =>
-    typeof message?.text === "string" &&
-    commandLine(message.text, config.autolinearUserId) !== null;
+  const hermesCommand = (message: Partial<SlackMessageEvent>) => {
+    const content = hermesCommandContent(message);
+    return content !== null && commandLine(content.text, config.autolinearUserId) !== null;
+  };
   if (event.subtype === "message_changed") {
     // People's edits, and Hermes's edits with a command (it can stream a reply by editing it).
-    const edited = event.message as Record<string, unknown> | undefined;
+    const edited = event.message;
     if (edited?.user === config.hermesUserId) return hermesCommand(edited);
     return !edited?.bot_id;
   }
@@ -184,7 +189,7 @@ export default {
         challenge?: string;
         event_id?: string;
         is_ext_shared_channel?: boolean;
-        event?: Record<string, unknown>;
+        event?: SlackEventPayload;
       };
       // Before the signing secret is set, answer only Slack's URL check, so the app can be created.
       if (!env.LINEAR_SYNC_SLACK_SIGNING_SECRET) {

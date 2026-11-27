@@ -59,7 +59,11 @@ interface SlackMessageContent {
   ts: string;
   text?: string;
   thread_ts?: string;
-  blocks?: { block_id?: string }[];
+  blocks?: {
+    block_id?: string;
+    type?: string;
+    text?: { type?: string; text?: string };
+  }[];
 }
 
 export interface SlackMessageEvent extends SlackMessageContent {
@@ -77,6 +81,36 @@ export interface SlackMessageEvent extends SlackMessageContent {
     files?: SlackFile[];
     edited?: { ts?: string };
   };
+}
+
+/** The text Autolinear can read for commands, shared by the webhook filter and the sync. */
+export function hermesCommandContent(message: Partial<SlackMessageContent>) {
+  const blockId = message.blocks?.[0]?.block_id;
+  if (blockId?.startsWith("hermes-task-progress-note/")) return null;
+  const text = typeof message.text === "string" ? message.text : "";
+  const card = blockId?.startsWith("hermes-task-progress/");
+  const legacyCard = !card && /^\*Task progress\*(?:\s|$)/.test(text);
+  if ((!card && !legacyCard) || (message.thread_ts && message.thread_ts !== message.ts))
+    return { text, progress: false };
+  if (card && !blockId?.startsWith("hermes-task-progress/answer/"))
+    return { text: "", progress: true };
+
+  // Slack can flatten the top-level text of a Block Kit message. The answer's sections keep
+  // the line breaks that distinguish a command from a mention in the middle of a sentence.
+  const heading = "*Update from Hermes*\n";
+  const sections = (message.blocks ?? []).flatMap((block) =>
+    block.type === "section" && block.text?.type === "mrkdwn" && typeof block.text.text === "string"
+      ? [block.text.text]
+      : [],
+  );
+  const start = sections.findIndex((section) => section.startsWith(heading));
+  if (start !== -1)
+    return { text: sections.slice(start).join("\n").slice(heading.length), progress: true };
+
+  const fallback = `\n\n${text}`;
+  const boundary = `\n\n${heading}`;
+  const offset = fallback.indexOf(boundary);
+  return { text: offset === -1 ? "" : fallback.slice(offset + boundary.length), progress: true };
 }
 
 export interface SlackReactionEvent {
@@ -1274,27 +1308,18 @@ export class Sync {
   ): Promise<void> {
     const rec = this.#store.issueByChannel(channelId);
     if (!rec || rec.archived) return;
-    const { ts, thread_ts: threadTs, blocks } = message;
+    const { ts, thread_ts: threadTs } = message;
     if (!editedAt && NO_TURN_NOTICE.test(message.text ?? "")) {
       this.#store.markFired(noticeKey(channelId, ts), this.#now());
       return this.#log("hermes_no_turn_notice", { issue: rec.issueId, ts });
     }
-    const blockId = blocks?.[0]?.block_id;
-    if (blockId?.startsWith("hermes-task-progress-note/")) return;
-    let text = message.text ?? "";
+    const content = hermesCommandContent(message);
+    if (!content) return;
+    const { text, progress } = content;
     let commandTs = ts;
-    const card = blockId?.startsWith("hermes-task-progress/");
-    const legacyCard = !card && /^\*Task progress\*(?:\s|$)/.test(text);
-    if ((!threadTs || threadTs === ts) && (card || legacyCard)) {
+    if (progress) {
       const revision = editedAt ?? ts;
       if (!/^[0-9]+\.[0-9]{6}$/.test(revision)) return;
-      const heading = "\n\n*Update from Hermes*\n";
-      const body = `\n\n${text}`;
-      const start =
-        legacyCard || blockId?.startsWith("hermes-task-progress/answer/")
-          ? body.indexOf(heading)
-          : -1;
-      text = start === -1 ? "" : body.slice(start + heading.length);
       const digest = text ? await stableUuid(text) : "";
       if (!this.#store.progressAnswerChanged(channelId, ts, revision, digest)) return;
       commandTs = `${ts}:${revision}`;

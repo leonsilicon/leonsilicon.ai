@@ -87,6 +87,7 @@ export {
   autolinearIssueId,
   COMMAND_SETTLE_MS,
   excerptQuote,
+  hermesCommandContent,
   isAutolinearIssue,
   MAX_REMINDERS,
   PROJECT_GRACE_MS,

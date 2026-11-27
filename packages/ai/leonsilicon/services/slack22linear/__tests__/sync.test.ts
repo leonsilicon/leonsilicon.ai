@@ -1945,12 +1945,20 @@ for (const layout of ["legacy text", "Slack blocks"]) {
   test(`new answers can move the issue again on the same task message with ${layout}`, async () => {
     const t = setup();
     const { issue, channel } = await issueChannel(t);
+    const source = await leonWrites(t, channel.id, "Send the report.");
+    t.clock.now += 1000;
     const ts = tsAt(t.clock.now);
-    const edit = (answer: string, reports = "") => {
+    const edit = (answer: string, reports = "", continuation = "") => {
       t.clock.now += 1000;
       const revision = tsAt(t.clock.now);
       const sections = layout === "legacy text" ? ["*Task progress*", reports] : [reports];
       if (answer) sections.push(`*Update from Hermes*\n${answer}`);
+      if (continuation) sections.push(continuation);
+      const text = sections.filter(Boolean).join("\n\n");
+      const section = (body: string) => ({
+        type: "section",
+        text: { type: "mrkdwn", text: body, verbatim: true },
+      });
       return {
         type: "message",
         subtype: "message_changed",
@@ -1959,9 +1967,15 @@ for (const layout of ["legacy text", "Slack blocks"]) {
         message: {
           ts,
           user: HERMES,
-          text: sections.filter(Boolean).join("\n\n"),
+          text: layout === "Slack blocks" ? text.replace(/\n+/g, " ") : text,
           ...(layout === "Slack blocks" && {
-            blocks: [{ block_id: `hermes-task-progress/${answer ? "answer/" : ""}${revision}` }],
+            blocks: [
+              {
+                type: "rich_text",
+                block_id: `hermes-task-progress/${answer ? "answer/" : ""}${revision}`,
+              },
+              ...sections.filter(Boolean).map(section),
+            ],
           }),
           edited: { ts: revision },
         },
@@ -1971,9 +1985,9 @@ for (const layout of ["legacy text", "Slack blocks"]) {
     const assigned = `The report is being checked.\n<@${AUTO}> move executing`;
     const first = edit(assigned);
     await t.sync.run("slack", first);
-    t.clock.now += COMMAND_SETTLE_MS;
-    await t.drain();
+    await hermesReacts(t, channel.id, source);
     assert.equal(issue.state.name, "Executing");
+    assert.equal(autolinearPosts(t).length, 0, "the answer already gave a command");
     const updates = t.linear.updates.length;
 
     await t.sync.run(
@@ -2006,7 +2020,7 @@ for (const layout of ["legacy text", "Slack blocks"]) {
     await t.drain();
     assert.equal(issue.state.name, "Awaiting Leon");
 
-    const done = edit(`Sent and verified.\n<@${AUTO}> move done`);
+    const done = edit("Sent and verified.", "", `<@${AUTO}> move done`);
     await t.sync.run("slack", done);
     await t.sync.run("slack", done);
     t.clock.now += COMMAND_SETTLE_MS;
