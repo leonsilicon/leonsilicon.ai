@@ -106,8 +106,6 @@ export interface Adoption {
   sourceChannel: string;
   sourceTs: string;
   sourceThreadTs?: string | null;
-  /** The intro's line saying where the issue came from, in Slack mrkdwn. */
-  lead: string;
 }
 
 /** A message as `conversations.replies` returns it. */
@@ -1624,8 +1622,8 @@ export class Sync {
 
   /**
    * The rest of an adopted channel's setup, off autolinear's path: files the issue in the project
-   * whose channel Leon wrote in, adds a reply's thread to the description, posts the intro (saying
-   * where the issue came from, pinging no one), then sets the topic and section like any sync.
+   * whose channel Leon wrote in, adds a reply's thread to the description, then sets the topic
+   * and section like any sync.
    */
   async onAdopted(a: Adoption): Promise<void> {
     const rec = this.#store.issue(a.issueId);
@@ -1636,17 +1634,13 @@ export class Sync {
       const update: IssueUpdate = {};
       const project = this.#store.projectByChannel(a.sourceChannel);
       if (project) update.projectId = project.projectId;
-      let lead = a.lead;
       const root =
         a.sourceThreadTs && a.sourceThreadTs !== a.sourceTs
           ? await this.#threadRoot(a.sourceChannel, a.sourceThreadTs)
           : null;
-      if (root?.text) {
-        lead += `\n${excerptQuote(root.text, 300)}`;
+      if (root?.text)
         update.description = `${issue.description ?? ""}\n\n${await this.#inReplyTo(a.sourceChannel, root)}`;
-      }
       if (Object.keys(update).length) await this.#linear.updateIssue(issue.id, update);
-      await this.#postIntro(rec.channelId, issue, { lead, quiet: true });
       this.#store.markFired(key, this.#now());
     }
     await this.syncIssue((await this.#linear.issue(a.issueId)) ?? issue, "live");
@@ -2270,22 +2264,15 @@ export class Sync {
     );
   }
 
-  /** `lead` replaces the description's excerpt; `quiet` mentions no one. */
-  async #postIntro(
-    channelId: string,
-    issue: LinearIssue,
-    { lead, quiet = false }: { lead?: string; quiet?: boolean } = {},
-  ): Promise<void> {
+  async #postIntro(channelId: string, issue: LinearIssue): Promise<void> {
     const { name } = parseTitle(issue.title);
     const safe = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const description = linearToSlack(issueDescription(issue.description)).trim();
-    const excerpt =
-      lead ?? (description.length > 2500 ? `${description.slice(0, 2500)}…` : description);
-    const mentions = quiet ? "" : this.#mentions(issue);
+    const excerpt = description.length > 2500 ? `${description.slice(0, 2500)}…` : description;
     const text = [
       `*<${issue.url}|${issue.identifier}: ${safe}>* · ${issue.state.name}`,
       excerpt,
-      mentions,
+      this.#mentions(issue),
     ]
       .filter(Boolean)
       .join("\n\n");

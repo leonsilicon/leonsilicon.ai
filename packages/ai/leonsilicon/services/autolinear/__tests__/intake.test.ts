@@ -14,6 +14,7 @@ const LEON = "U0LEON00001";
 const HERMES = "U0HERMES001";
 const DM = "D0LEONDM01";
 const WORKSPACE = "https://leonsilicon.slack.com";
+const ISSUE_LINK = "<https://linear.app/leonsilicon/issue/LEON-401|LEON-401>";
 
 /** Slack and Linear, with every call logged and each answer `delay` ms late (on a fake clock). */
 function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
@@ -42,6 +43,7 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
     lookups: [] as SlackParams[],
     sourceFiles: [] as { id: string }[],
     refuseEdits: false,
+    rejectFileShareBlocks: false,
   };
   const session = (method: string, params: SlackParams = {}) =>
     track(method, () => {
@@ -78,6 +80,8 @@ function setup(env: Record<string, string> = {}, cache: IntakeCache = {}) {
           return { ok: true, ts };
         }
         case "files.share": {
+          if (params.blocks && slack.rejectFileShareBlocks)
+            throw new SlackError(method, "invalid_blocks");
           const ts = `1794000002.00000${slack.shares.length + 1}`;
           slack.shares.push({ ts, params });
           return { ok: true, file_msg_ts: ts };
@@ -239,8 +243,14 @@ test("a message is copied to its new issue channel before being replaced with th
   ]);
   const copy = t.slack.posts[0]!;
   assert.equal(copy.channel, "C1");
-  assert.equal(copy.params.text, message().text);
-  assert.deepEqual(JSON.parse(String(copy.params.blocks)), message().blocks);
+  const footer = `Moved from <${permalink}|a DM with Hermes> | ${ISSUE_LINK}`;
+  assert.equal(copy.params.text, `${message().text}\n\n${footer}`);
+  assert.deepEqual(JSON.parse(String(copy.params.blocks)), [
+    ...message().blocks!,
+    { type: "context", elements: [{ type: "mrkdwn", text: footer }] },
+  ]);
+  assert.equal(copy.params.unfurl_links, false);
+  assert.equal(copy.params.unfurl_media, false);
   assert.match(String(copy.params.client_msg_id), /^de1e6a7e-/);
   assert.deepEqual(t.adopted, [
     {
@@ -253,7 +263,6 @@ test("a message is copied to its new issue channel before being replaced with th
       sourceChannel: DM,
       sourceTs: "1794000000.000001",
       sourceThreadTs: null,
-      lead: `From Leon's message in <${permalink}|a DM with Hermes>.`,
     },
   ]);
   assert.deepEqual(result, {
@@ -327,10 +336,6 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
       "📎 [receipt.png](https://files.slack.com/F1)",
   );
   assert.equal(t.adopted[0]!.sourceThreadTs, "1794000000.000004");
-  assert.equal(
-    t.adopted[0]!.lead,
-    `From Leon's reply in <${permalink}|a thread in #project-2026-11-26>.`,
-  );
   assert.equal(t.slack.edits[0]!.text, `<#${result.channel.id}>`);
   assert.deepEqual(t.slack.lookups[0], {
     channel: DM,
@@ -341,7 +346,18 @@ test("a reply links its thread, others' mentions get names, and a taken channel 
     limit: 5,
   });
   assert.equal(t.slack.shares[0]!.params.files, "F1");
-  assert.equal(t.slack.shares[0]!.params.comment, "sure, ask <@U0SYED00001>");
+  assert.deepEqual(JSON.parse(String(t.slack.shares[0]!.params.blocks)), [
+    { type: "section", text: { type: "mrkdwn", text: "sure, ask <@U0SYED00001>" } },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Moved from <${permalink.replace("&", "&amp;")}|#project-2026-11-26> | ${ISSUE_LINK}`,
+        },
+      ],
+    },
+  ]);
   assert.deepEqual(t.slack.detached, [{ channel: DM, ts: "1794000000.000005", file: "F1" }]);
 });
 
@@ -355,7 +371,18 @@ test("uploaded files and formatting move before the original is reduced to a cha
   assert.equal(share.params.channel, result.channel.id);
   assert.equal(share.params.files, "F1,F2");
   assert.equal(share.params.resharing_aware, true);
-  assert.deepEqual(JSON.parse(String(share.params.blocks)), msg.blocks);
+  assert.deepEqual(JSON.parse(String(share.params.blocks)), [
+    ...msg.blocks!,
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Moved from <${WORKSPACE}/archives/${DM}/p1794000000000001|a DM with Hermes> | ${ISSUE_LINK}`,
+        },
+      ],
+    },
+  ]);
   assert.match(String(share.params.client_msg_id), /^de1e6a7e-/);
   assert.equal(t.slack.posts.length, 0);
   assert.equal(t.slack.lookups.length, 0);
@@ -393,6 +420,21 @@ test("a file-only message keeps its source until shared and resumes a failed det
   assert.equal(t.slack.edits.length, 1);
   assert.equal(t.slack.detached.length, 1);
   assert.deepEqual(t.progress().filesToDetach, []);
+});
+
+test("a file share still includes the issue link when Slack rejects its blocks", async () => {
+  const t = setup();
+  t.slack.rejectFileShareBlocks = true;
+  const msg = message({ files: [{ id: "F1" }] });
+  const result = await t.intake.run(msg);
+  assert.ok(result.ok);
+  const share = t.slack.shares[0]!;
+  assert.equal(result.ts, share.ts);
+  assert.equal(share.params.blocks, undefined);
+  assert.equal(
+    share.params.comment,
+    `${msg.text}\n\nMoved from <${WORKSPACE}/archives/${DM}/p1794000000000001|a DM with Hermes> | ${ISSUE_LINK}`,
+  );
 });
 
 test("a retry can attach an image to a copy saved before file sharing was added", async () => {

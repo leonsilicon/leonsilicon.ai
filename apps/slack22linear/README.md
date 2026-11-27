@@ -64,7 +64,7 @@ Other tasks:
 
 ## autolinear
 
-[autolinear](../autolinear/README.md) creates an issue and opens its channel itself, as Leon, so both appear at once, then hands the channel over through a binding to this Worker's Durable Object (`/adopt`; the Worker's public routes never reach it). The Durable Object invites the bot and Hermes, records the channel, and queues the rest (intro, issue metadata, section, project, thread quote) as an `adopted` job. An autolinear issue (ID starting `a7011ea7`) whose webhook comes first waits up to two minutes for the hand-over instead of getting a second channel. The details are in the [service README](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-issues). Deploy this Worker before autolinear when `/adopt` changes.
+[autolinear](../autolinear/README.md) creates an issue and opens its channel itself, as Leon, so both appear at once, then hands the channel over through a binding to this Worker's Durable Object (`/adopt`; the Worker's public routes never reach it). The Durable Object invites the bot and Hermes, records the channel, and queues the rest (issue metadata, section, project, thread quote) as an `adopted` job. An autolinear issue (ID starting `a7011ea7`) whose webhook comes first waits up to two minutes for the hand-over instead of getting a second channel. The details are in the [service README](../../packages/ai/leonsilicon/services/slack22linear/README.md#autolinears-issues). Deploy this Worker before autolinear when `/adopt` changes.
 
 ## Hermes
 

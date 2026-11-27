@@ -180,8 +180,9 @@ export class Intake {
     const channel = p.channel;
 
     const reply = Boolean(msg.threadTs && msg.threadTs !== msg.ts);
-    const where = escapeSlack(msg.where);
-    const lead = `From Leon's ${reply ? "reply" : "message"} in ${permalink ? `<${permalink}|${where}>` : where}.`;
+    const where = escapeSlack(msg.where.replace(/^a thread in /, ""));
+    const source = permalink ? `<${escapeSlack(permalink)}|${where}>` : where;
+    const footer = `Moved from ${source} | <${escapeSlack(issue.url)}|${issue.identifier}>`;
     const copyAndLink = async () => {
       if (msg.files?.length && !p.filesToDetach) {
         const fileIds = await this.#fileIds(msg);
@@ -193,13 +194,13 @@ export class Intake {
             p.copyClientMsgId = newClientMsgId();
             await save();
           }
-          p.copyTs = await this.#copy(msg, channel.id, fileIds, p.copyClientMsgId);
+          p.copyTs = await this.#copy(msg, channel.id, fileIds, p.copyClientMsgId, footer);
         }
         p.filesToDetach = fileIds;
         mark("copy");
         await save();
       } else if (!p.copyTs) {
-        p.copyTs = await this.#copy(msg, channel.id, [], newClientMsgId());
+        p.copyTs = await this.#copy(msg, channel.id, [], newClientMsgId(), footer);
         mark("copy");
         await save();
       }
@@ -233,7 +234,6 @@ export class Intake {
               sourceChannel: msg.channel,
               sourceTs: msg.ts,
               sourceThreadTs: reply ? msg.threadTs : null,
-              lead,
             })
             .then(() => {
               p.adopted = true;
@@ -425,36 +425,48 @@ export class Intake {
     }
   }
 
-  /** Posts as Leon with the same formatting and native Slack files. */
+  /** Posts as Leon with the same formatting, native Slack files and a context footer. */
   async #copy(
     msg: IntakeMessage,
     channelId: string,
     fileIds: string[],
     clientMsgId: string,
+    footer: string,
   ): Promise<string> {
     const method = fileIds.length ? "files.share" : "chat.postMessage";
+    const text = msg.text ? `${msg.text}\n\n${footer}` : footer;
+    const context = { type: "context", elements: [{ type: "mrkdwn", text: footer }] };
     const post = (blocks?: unknown[]) =>
       this.#d.session(method, {
         channel: channelId,
         client_msg_id: clientMsgId,
+        unfurl_links: false,
+        unfurl_media: false,
         ...(fileIds.length
           ? {
               files: fileIds.join(","),
               resharing_aware: true,
-              comment: blocks ? undefined : msg.text || undefined,
+              comment: blocks ? undefined : text,
             }
-          : { text: msg.text || "(no text)" }),
+          : { text }),
         blocks: blocks ? JSON.stringify(blocks) : undefined,
       });
-    let posted;
-    if (msg.blocks?.length) {
+    const tryBlocks = async (blocks: unknown[]) => {
       try {
-        posted = await post(msg.blocks);
+        return await post(blocks);
       } catch (error) {
         if (!(error instanceof SlackError) || error.code !== "invalid_blocks") throw error;
-        posted = await post();
+        return null;
       }
-    } else posted = await post();
+    };
+    const section = { type: "section", text: { type: "mrkdwn", text: msg.text } };
+    const posted =
+      (msg.blocks?.length ? await tryBlocks([...msg.blocks, context]) : null) ??
+      // Slack limits a section to 3,000 characters. Keep longer text intact in the plain fallback.
+      (msg.text.length <= 3000
+        ? await tryBlocks(msg.text ? [section, context] : [context])
+        : null) ??
+      (await post());
     const ts = posted.file_msg_ts ?? posted.ts;
     if (typeof ts !== "string" || !ts) throw new Error(`Slack ${method} returned no timestamp`);
     return ts;

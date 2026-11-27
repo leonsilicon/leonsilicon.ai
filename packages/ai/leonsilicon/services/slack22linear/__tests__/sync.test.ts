@@ -1543,7 +1543,6 @@ async function autolinearIssue(t: ReturnType<typeof setup>, number = 401, title 
     channelName: channel.name,
     sourceChannel: "D0DM",
     sourceTs: `1794000000.${number}`,
-    lead: "From Leon's message in <https://x.slack.com/archives/D0DM/p1|a DM with Hermes>.",
   };
   return { issue, channel, adoption };
 }
@@ -1566,12 +1565,7 @@ test("autolinear's issue waits for its channel's hand-over instead of getting a 
   assert.equal(store.issueByChannel(channel.id)?.issueId, issue.id);
 
   await drain();
-  const [intro] = slack.posts.filter((p) => p.channel === channel.id);
-  assert.equal(
-    intro!.text,
-    `*<${issue.url}|LEON-401: check rogers>* · Awaiting Init\n\n${adoption.lead}`,
-    "says where it came from and pings no one",
-  );
+  assert.equal(slack.posts.filter((p) => p.channel === channel.id).length, 0);
   assert.equal(channel.topic, "");
   assert.equal(slack.sectionOf(channel.id), "Awaiting Init");
 
@@ -1626,8 +1620,7 @@ test("an adopted reply brings its thread's first message; a project channel's me
       `In reply to **Hermes** ([thread](https://leonsilicon.slack.com/archives/${projectChannel.id}/p${root.ts.replace(".", "")})):\n\n` +
       "> File the T4 **now** or wait for the slip?",
   );
-  const intro = slack.posts.find((p) => p.channel === channel.id)!;
-  assert.ok(intro.text.endsWith(`${adoption.lead}\n> File the T4 *now* or wait for the slip?`));
+  assert.equal(slack.posts.filter((p) => p.channel === channel.id).length, 0);
 });
 
 // ── Hermes's answers ─────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ Everything Leon sees is on one short path, and everything else is off it:
 - For any other message, the plugin starts the request the moment Hermes receives it, before Hermes reads the thread or downloads files, and waits for it only when it builds the turn.
 - AutoLinear creates the issue and channel, then posts the copy with its attached files and hands over the channel in parallel. After Slack confirms the copy, AutoLinear replaces the source text with the channel link and detaches the files from the source message. The team and status IDs and the workspace URL come from config or a lookup cached per isolate. The title, description and permalink come from the message itself.
 - Each message gets its own Durable Object, created in eastern North America (`locationHint: "enam"`), next to Slack's and Linear's APIs, so each of those requests is a short hop. There's no queue or global lock: messages run in parallel.
-- The topic, sidebar section, intro, project and thread quote are left to slack22linear's queue, which does them a second or two later.
+- The topic, sidebar section, project and thread quote are left to slack22linear's queue, which does them a second or two later.
 
 Every intake logs `intake` with `ms`, the milliseconds until each step was done (`issue`, `channel`, `copy`, `linked`, `adopted`), and Hermes's gateway log repeats them. One started by Slack's event also logs `event_intake`.
 
