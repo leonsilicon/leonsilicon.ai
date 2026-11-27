@@ -124,6 +124,7 @@ interface RawMessage {
   client_msg_id?: string;
   text?: string;
   edited?: unknown;
+  blocks?: { block_id?: string }[];
   bot_profile?: { name?: string };
   username?: string;
   files?: { name?: string; title?: string; permalink?: string }[];
@@ -145,6 +146,11 @@ const isGatewayNotice = (raw: RawMessage): boolean =>
   Boolean(raw.bot_id || raw.subtype === "bot_message") &&
   !raw.files?.length &&
   GATEWAY_NOTICE.test(raw.text ?? "");
+
+/** Hermes leaves these replies in Slack for Leon. They do not ask a delegated agent to act. */
+const isTaskProgressNote = (raw: RawMessage): boolean =>
+  Boolean(raw.bot_id || raw.subtype === "bot_message") &&
+  (raw.blocks?.some((block) => block.block_id?.startsWith("hermes-task-progress-note/")) ?? false);
 
 const CONVERSATION_ID = /^[CGD][A-Z0-9]{6,}$/;
 const USER_ID = /^[UW][A-Z0-9]{6,}$/;
@@ -385,7 +391,12 @@ export class SlackAsLeon {
       if (!message.ts || message.thread_ts !== args.threadTs || !later(message.ts, args.after))
         continue;
       if (later(message.ts, cursor)) cursor = message.ts;
-      if (agentOf(message.client_msg_id) === "grok" || isGatewayNotice(message)) continue;
+      if (
+        agentOf(message.client_msg_id) === "grok" ||
+        isGatewayNotice(message) ||
+        isTaskProgressNote(message)
+      )
+        continue;
       if (
         message.subtype &&
         !["bot_message", "thread_broadcast", "file_share"].includes(message.subtype)
@@ -574,7 +585,7 @@ export class SlackAsLeon {
     for (const { raw, topLevel } of found.values()) {
       if (raw.subtype && !["bot_message", "thread_broadcast", "file_share"].includes(raw.subtype))
         continue;
-      if (isGatewayNotice(raw)) continue;
+      if (isGatewayNotice(raw) || (poster !== "hermes" && isTaskProgressNote(raw))) continue;
       out.push(await this.#shape(raw, leon, topLevel, poster));
     }
     return out.sort((a, b) => (later(a.ts, b.ts) ? 1 : -1));

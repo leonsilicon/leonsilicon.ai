@@ -28,6 +28,7 @@ interface Message {
   bot_id?: string;
   client_msg_id?: string;
   text: string;
+  blocks?: { block_id: string }[];
   bot_profile?: { name: string };
   edited?: { ts: string };
 }
@@ -308,6 +309,55 @@ test("Hermes's gateway notices never reach a Grok bot or a Codex session as a re
     ],
   );
   assert.equal(page.cursor, "1794500003.000000");
+});
+
+test("Hermes's progress replies stay visible in Slack without answering or waking an agent", async () => {
+  const { service, messages } = setup();
+  const thread = { channel: TODO, threadTs: ROOT };
+  const conversation = messages.get(TODO)!;
+  conversation.push({ ts: ROOT, user: LEON, text: "Task" });
+  const codex = await service.send(
+    {
+      channel: TODO,
+      thread_ts: ROOT,
+      from_bot: `Task slack:${TODO}/${ROOT}`,
+      text: "Started",
+      wait_seconds: 0,
+    },
+    "codex",
+  );
+  const hermes = { user: HERMES, bot_id: "B0HERMES01", thread_ts: ROOT };
+  const progress = {
+    ...hermes,
+    ts: "1794500001.000000",
+    text: "Grok Bot is waiting for approval.",
+    blocks: [{ block_id: "hermes-task-progress-note/acef102a-e54c-4a65-b809-bbc77f117dcd" }],
+  };
+  conversation.push(progress);
+  assert.deepEqual(await service.grokThread({ ...thread, after: codex.ts }), {
+    channel: TODO,
+    cursor: progress.ts,
+    replies: [],
+  });
+  const pending = await service.read({ channel: TODO, ts: codex.ts, wait_seconds: 5 }, "codex");
+  assert.deepEqual(pending.replies, []);
+  assert.equal(pending.answered, false);
+  assert.equal(pending.waited_seconds, 5);
+
+  const instruction = { ...hermes, ts: "1794500002.000000", text: "To Grok Bot: Check the date." };
+  const decision = { user: LEON, thread_ts: ROOT, ts: "1794500003.000000", text: "Go ahead." };
+  conversation.push(instruction, decision);
+  const page = await service.grokThread({ ...thread, after: progress.ts });
+  assert.deepEqual(
+    page.replies.map(({ text }) => text),
+    [instruction.text, decision.text],
+  );
+  const answer = await service.read({ channel: TODO, ts: codex.ts }, "codex");
+  assert.deepEqual(
+    answer.replies.map(({ text }) => text),
+    [instruction.text, decision.text],
+  );
+  assert.equal(answer.answered, true);
 });
 
 test("a message to people returns at once, and replies in a thread keep their thread", async () => {
