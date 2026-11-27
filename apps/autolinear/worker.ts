@@ -14,6 +14,7 @@ import {
   parseCommand,
   readMuseAnswer,
   readSnapshot,
+  readWorkSnapshot,
   readTurns,
   verifySlack,
 } from "@-/ai.leonsilicon.services.slack22linear";
@@ -237,6 +238,13 @@ export default {
       );
       log("routines", { schedules: snapshot.schedules.length, status: queued.status });
       return queued.ok ? json({ queued: true }) : json({ error: "couldn't queue it" }, 502);
+    }
+
+    if (request.method === "POST" && url.pathname === "/work") {
+      if (!fromHermes(request, env)) return json({ error: "unauthorized" }, 401);
+      const work = readWorkSnapshot(await request.json().catch(() => null));
+      if (!work) return json({ error: "invalid work snapshot" }, 400);
+      return queueSync(env, { id: `work:${work.at}`, kind: "work", payload: work });
     }
 
     // The hermes22muse relay on Hermes Cloud, about every minute while Hermes runs turns: the

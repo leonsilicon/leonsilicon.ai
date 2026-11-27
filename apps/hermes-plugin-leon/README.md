@@ -18,6 +18,7 @@ Each feature is a folder here, with its own README, `__init__.py` and `policy.ts
 | [slack-flat-replies](slack_flat_replies/README.md)         | Answers top-level Slack messages in the channel, not a thread                                        |
 | [slack-lost-turns](slack_lost_turns/README.md)             | Keeps a Slack conversation going when Hermes restarts in the middle of one of its turns              |
 | [slack-own-thread-reply](slack_own_thread_reply/README.md) | `slack_reply_own_thread`, for threads Hermes's own bot started                                       |
+| [slack-work](slack_work/README.md)                         | Shows the Slack working indicator and reports active runs to Autolinear                              |
 | [slack22orca](slack22orca/README.md)                       | Delegates Slack tasks to Orca and relays the answers                                                 |
 
 A feature keeps everything it had as a plugin: its tools and toolsets, its `/orca` command, its `.env` keys, its log lines (`slack-auto-join: …`), and its data under `$HERMES_HOME` (`plugin-data/slack-auto-join/`, `hermes22muse/`, `slack22orca/`, `grok-box-browser/`). Only its version is gone: the plugin has one.
@@ -55,6 +56,7 @@ uv run --no-project --python 3.14 --with pygls==2.1.1 --with cryptography --with
   apps/hermes-plugin-leon/__tests__/test_leon.py \
   apps/hermes-plugin-leon/__tests__/test_dropbox_task_memory.py \
   apps/hermes-plugin-leon/__tests__/test_grok_box_browser.py \
+  apps/hermes-plugin-leon/__tests__/test_slack_work.py \
   apps/hermes-plugin-leon/__tests__/test_slack22orca.py \
   apps/hermes-plugin-leon/__tests__/test_hermes22muse.py
 ```

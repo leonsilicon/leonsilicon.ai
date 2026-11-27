@@ -38,6 +38,7 @@ jobs:
             apps/hermes-plugin-leon/__tests__/test_leon.py \
             apps/hermes-plugin-leon/__tests__/test_dropbox_task_memory.py \
             apps/hermes-plugin-leon/__tests__/test_grok_box_browser.py \
+            apps/hermes-plugin-leon/__tests__/test_slack_work.py \
             apps/hermes-plugin-leon/__tests__/test_slack22orca.py \
             apps/hermes-plugin-leon/__tests__/test_hermes22muse.py \
             apps/muse-gadget/__tests__

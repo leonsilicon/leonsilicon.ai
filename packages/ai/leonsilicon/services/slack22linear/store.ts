@@ -1,3 +1,5 @@
+import type { WorkSnapshot } from "#work";
+
 export type SqlValue = string | number | null;
 export type Row = Record<string, SqlValue>;
 
@@ -80,6 +82,10 @@ export interface Job {
 }
 
 const MIGRATIONS = [
+  `CREATE TABLE IF NOT EXISTS slack_work (
+    id INTEGER PRIMARY KEY CHECK (id = 1), at INTEGER NOT NULL, active TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS slack_work_channels (
+    channel TEXT PRIMARY KEY, finished_at INTEGER, unobserved INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS issues (
     issue_id TEXT PRIMARY KEY, identifier TEXT NOT NULL, title TEXT NOT NULL, state_name TEXT NOT NULL,
     channel_id TEXT NOT NULL, channel_name TEXT NOT NULL, section TEXT, topic TEXT, archived INTEGER NOT NULL DEFAULT 0)`,
@@ -160,6 +166,52 @@ export class Store {
     for (const statement of MIGRATIONS) sql.exec(statement);
     if (!sql.exec(`PRAGMA table_info(acks)`).some((column) => column.name === "thread_ts"))
       sql.exec(`ALTER TABLE acks ADD COLUMN thread_ts TEXT`);
+  }
+
+  workSnapshot(): Pick<WorkSnapshot, "at" | "active"> | null {
+    const row = this.#sql.exec("SELECT at, active FROM slack_work WHERE id = 1")[0];
+    return row
+      ? { at: Number(row.at), active: JSON.parse(row.active as string) as string[] }
+      : null;
+  }
+
+  saveWorkSnapshot({ at, active }: WorkSnapshot): void {
+    this.#sql.exec(
+      "INSERT INTO slack_work VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET at = excluded.at, active = excluded.active",
+      at,
+      JSON.stringify(active),
+    );
+  }
+
+  workChannel(channel: string): { finishedAt: number | null; unobserved: boolean } | null {
+    const row = this.#sql.exec("SELECT * FROM slack_work_channels WHERE channel = ?", channel)[0];
+    return row
+      ? {
+          finishedAt: row.finished_at === null ? null : Number(row.finished_at),
+          unobserved: Boolean(row.unobserved),
+        }
+      : null;
+  }
+
+  finishWork(channel: string, at: number): void {
+    this.#sql.exec(
+      `INSERT INTO slack_work_channels (channel, finished_at) VALUES (?, ?)
+       ON CONFLICT (channel) DO UPDATE SET finished_at = excluded.finished_at`,
+      channel,
+      at,
+    );
+  }
+
+  holdUnobservedWork(channel: string): void {
+    this.#sql.exec(
+      `INSERT INTO slack_work_channels (channel, unobserved) VALUES (?, 1)
+       ON CONFLICT (channel) DO UPDATE SET unobserved = 1`,
+      channel,
+    );
+  }
+
+  clearUnobservedWork(channel: string): void {
+    this.#sql.exec("UPDATE slack_work_channels SET unobserved = 0 WHERE channel = ?", channel);
   }
 
   issue(issueId: string): IssueRecord | null {

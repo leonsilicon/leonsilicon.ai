@@ -129,6 +129,14 @@ class Store:
             )
             return [json.loads(record) for (record,) in rows]
 
+    def active_routes(self):
+        with self.connection() as db:
+            jobs = [json.loads(record) for (record,) in db.execute(
+                "SELECT record FROM jobs WHERE state != 'done'",
+            )]
+        return {(job["team"], job["channel"], job["thread"]) for job in jobs
+                if job["channel"].startswith(("C", "G"))}
+
     def next_message(self):
         with self.connection() as db:
             return db.execute("""
@@ -340,12 +348,14 @@ def register(ctx):
     def wire(_native, adapter):
         nonlocal relay
         if getattr(adapter, "_slack22orca_worker", None):
+            relay = adapter._slack22orca_relay
             return
         from hermes_constants import get_hermes_home
 
         relay = Relay(Store(get_hermes_home() / "slack22orca"), Orca(), adapter)
         worker = asyncio.create_task(relay.run())
         adapter._slack22orca_worker = worker
+        adapter._slack22orca_relay = relay
         disconnect = adapter.disconnect
 
         @functools.wraps(disconnect)
@@ -357,6 +367,7 @@ def register(ctx):
             finally:
                 adapter.disconnect = disconnect
                 adapter._slack22orca_worker = None
+                adapter._slack22orca_relay = None
                 await disconnect(*args, **kwargs)
 
         adapter.disconnect = disconnect_and_stop

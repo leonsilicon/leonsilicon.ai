@@ -1,4 +1,5 @@
 import type { IssueMetadata } from "#issue-metadata";
+import type { WorkEnded, WorkSnapshot } from "#work";
 import { CLIENT_MSG_ID_PREFIX } from "@-/ai.leonsilicon.services.slack-as-leon";
 import {
   AWAITING_HERMES,
@@ -535,6 +536,8 @@ export class Sync {
     else if (kind === "stuck") await this.onStuck(payload as Stuck);
     else if (kind === "unseen") await this.onUnseen(payload as Unseen);
     else if (kind === "lease") await this.onLeaseEnded((payload as { id: string }).id);
+    else if (kind === "work") this.onWork(payload as WorkSnapshot);
+    else if (kind === "work-ended") await this.onWorkEnded(payload as WorkEnded);
     else if (kind === "turns") this.onTurns(payload as Turns);
     else if (kind === "muse-answer") await this.onMuseAnswer(payload as MuseAnswer);
     else if (kind === "resume-hermes") return; // Discard continuation jobs queued before deployment.
@@ -636,6 +639,8 @@ export class Sync {
     this.#planTimer(issue);
     this.#planLease(issue);
     const prev = this.#store.issue(issue.id);
+    if (prev?.stateName === this.#c.hermesAckState && issue.state.name !== this.#c.hermesAckState)
+      this.#store.clearUnobservedWork(prev.channelId);
     if (this.#c.closedStateTypes.includes(issue.state.type)) {
       if (!prev) return null;
       this.#issueMetadata.save(prev.channelId, issue);
@@ -1124,6 +1129,41 @@ export class Sync {
     }
   }
 
+  /** A fresh snapshot tells us when the last observed run in an issue channel ended. */
+  onWork(work: WorkSnapshot): void {
+    const previous = this.#store.workSnapshot();
+    if (previous && previous.at >= work.at) return;
+    const active = new Set(work.active);
+    for (const channel of new Set(work.unobserved)) {
+      if (this.#store.issueByChannel(channel)) this.#store.holdUnobservedWork(channel);
+    }
+    for (const channel of new Set([...(previous?.active ?? []), ...work.finished])) {
+      if (active.has(channel) || !this.#store.issueByChannel(channel)) continue;
+      this.#store.finishWork(channel, work.at);
+      const ended: WorkEnded = { channel, at: work.at };
+      this.#store.enqueue(`work:ended:${channel}:${work.at}`, "work-ended", ended, this.#now());
+    }
+    this.#store.saveWorkSnapshot(work);
+  }
+
+  /** A failed Linear request can retry independently of subsequent gateway reports. */
+  async onWorkEnded({ channel, at }: WorkEnded): Promise<void> {
+    const work = this.#store.workChannel(channel);
+    if (
+      work?.finishedAt !== at ||
+      work.unobserved ||
+      this.#store.workSnapshot()?.active.includes(channel)
+    )
+      return;
+    const issue = await this.#openIssueIn(channel);
+    if (issue?.state.name !== this.#c.hermesAckState) return;
+    const to = this.#c.leaseEndedTarget;
+    await this.#move(issue, to, { keepKeys: true });
+    const moved = await this.#linear.issue(issue.id);
+    if (moved) await this.syncIssue(moved, "live");
+    this.#log("autolinear_work_ended", { issue: issue.identifier, to });
+  }
+
   // ── Executing's lease ──────────────────────────────────────────────────────
 
   /** Gives an issue in Executing a lease when it has none; any other issue has none. */
@@ -1190,6 +1230,8 @@ export class Sync {
     const now = this.#now();
     const job = this.#store.timerJob<LeaseJob>(leaseKey(issueId));
     if (!job || job.at > now) return;
+    // Once the gateway supports lifecycle reports, only confirmed run completion moves an issue.
+    if (this.#store.workSnapshot()) return;
     const issue = await this.#linear.issue(issueId);
     if (!issue) return;
     const from = this.#c.hermesAckState;

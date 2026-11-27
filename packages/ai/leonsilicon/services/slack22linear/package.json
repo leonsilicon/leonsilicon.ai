@@ -14,7 +14,8 @@
     "#slack": "./slack.ts",
     "#store": "./store.ts",
     "#sync": "./sync.ts",
-    "#verify": "./verify.ts"
+    "#verify": "./verify.ts",
+    "#work": "./work.ts"
   },
   "exports": {
     ".": "./+server.ts"

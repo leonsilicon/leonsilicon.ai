@@ -40,6 +40,7 @@ FEATURES = (
     "slack_flat_replies",
     "slack_lost_turns",
     "slack_own_thread_reply",
+    "slack_work",
     "slack22orca",
 )
 DISABLED_ENV = "LEON_PLUGIN_DISABLED"

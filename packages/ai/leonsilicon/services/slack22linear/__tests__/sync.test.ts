@@ -2712,3 +2712,80 @@ test("the daily tick gives an issue already stuck in Executing a lease with a st
   assert.match(statusNotices(t).at(-1)!.text, /^\*Executing\* → \*Awaiting Leon\*/);
   assert.deepEqual(t.slack.reactions, []);
 });
+
+test("observed work clears Executing when the last run ends, without waiting", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "run the checks");
+  await hermesReacts(t, channel.id, question, "eyes");
+  assert.equal(issue.state.name, "Executing");
+  const report = (
+    at: number,
+    active: string[],
+    finished: string[] = [],
+    unobserved: string[] = [],
+  ) => t.sync.run("work", { at, active, finished, unobserved });
+
+  await report(1, [channel.id]);
+  await report(2, [channel.id], [channel.id]);
+  assert.equal(issue.state.name, "Executing", "the Hermes turn ended, and Orca is still running");
+  await report(1, [], [channel.id]);
+  assert.equal(issue.state.name, "Executing", "an older snapshot cannot end the current run");
+  await report(3, []);
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
+  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Leon");
+});
+
+test("a completed Hermes turn does not clear Executing with an unobserved delegation", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "ask Grok to check");
+  await hermesReacts(t, channel.id, question, "eyes");
+
+  await t.sync.run("work", { at: 1, active: [channel.id], finished: [], unobserved: [channel.id] });
+  await t.sync.run("work", { at: 2, active: [], finished: [channel.id], unobserved: [] });
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+});
+
+test("the end of work preserves a status already chosen for the issue", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const question = await leonWrites(t, channel.id, "ask me if any details are missing");
+  await hermesReacts(t, channel.id, question, "eyes");
+  await t.sync.run("work", { at: 1, active: [channel.id], finished: [], unobserved: [] });
+  await t.sync.run("command", {
+    channel: channel.id,
+    ts: "slash-test",
+    text: "move clarification",
+    by: "leon",
+  });
+  await t.sync.run("work", { at: 2, active: [], finished: [channel.id], unobserved: [] });
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Clarification");
+});
+
+test("an idle channel alone cannot clear Executing after the gateway supports work reports", async () => {
+  const t = setup();
+  const { issue } = await issueChannel(t, "Executing");
+  const lease = t.store.timer(`lease:${issue.id}`)!;
+
+  await t.sync.run("work", { at: 1, active: [], finished: [], unobserved: [] });
+  t.clock.now = lease + 1;
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+});
+
+test("a new active run supersedes an ended run's queued transition", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t, "Executing");
+  await t.sync.run("work", { at: 1, active: [], finished: [channel.id], unobserved: [] });
+  await t.sync.run("work", { at: 2, active: [channel.id], finished: [], unobserved: [] });
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+
+  await t.sync.run("work", { at: 3, active: [], finished: [], unobserved: [] });
+  await t.drain();
+  assert.equal(issue.state.name, "Awaiting Leon");
+});
