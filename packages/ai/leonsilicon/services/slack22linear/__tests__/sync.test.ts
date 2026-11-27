@@ -2542,9 +2542,9 @@ test("Executing is a lease: once nothing works on an issue, it goes to Leon", as
   t.clock.now += 1;
   await t.drain();
   assert.equal(issue.state.name, "Awaiting Leon");
-  const notice = statusNotices(t).at(-1)!;
-  assert.match(notice.text, /^\*Executing\* → \*Awaiting Leon\*/);
-  assert.ok(notice.text.includes(`<@${LEON}>`), "Leon hears about it");
+  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Leon");
+  assert.deepEqual(autolinearReactions(t, question), ["gear", "bust_in_silhouette"]);
+  assert.deepEqual(statusNotices(t), []);
   const comment = [...t.linear.comments.values()].at(-1)!;
   assert.match(comment.body, /^\*\*slack22linear:\*\* nothing is working on this any more/);
   assert.equal(t.store.timer(`lease:${issue.id}`), null, "only Executing has a lease");
@@ -2556,7 +2556,12 @@ test("agents' posts and `move executing --until` hold the lease; Autolinear's po
   const ask = await leonWrites(t, channel.id, "post my keyboard on marketplaces");
   await hermesReacts(t, channel.id, ask, "eyes");
   t.clock.now += 3000;
-  await hermesCommands(t, channel.id, "move executing --until 3h", "Grok is checking prices.");
+  const command = await hermesCommands(
+    t,
+    channel.id,
+    "move executing --until 3h",
+    "Grok is checking prices.",
+  );
   await hermesReacts(t, channel.id, ask);
   const lease = t.store.timer(`lease:${issue.id}`)!;
   assert.equal(lease, t.clock.now - ANSWER_SETTLE_MS + 3 * 3600_000, "as long as Hermes said");
@@ -2594,6 +2599,9 @@ test("agents' posts and `move executing --until` hold the lease; Autolinear's po
   t.clock.now += LEASE_MS;
   await t.drain();
   assert.equal(issue.state.name, "Awaiting Leon", "nobody acted on the agents' reports");
+  assert.deepEqual(autolinearReactions(t, command), ["bust_in_silhouette"]);
+  assert.deepEqual(autolinearReactions(t, ask), ["gear"]);
+  assert.deepEqual(statusNotices(t), []);
 
   // A bare `move executing` holds for an hour.
   const t2 = setup();
@@ -2601,6 +2609,50 @@ test("agents' posts and `move executing --until` hold the lease; Autolinear's po
   await hermesCommands(t2, other.channel.id, "move executing", "Handed to Codex.");
   assert.equal(other.issue.state.name, "Executing");
   assert.equal(t2.store.timer(`lease:${other.issue.id}`), t2.clock.now + EXECUTING_MS);
+});
+
+test("lease expiry retries the reaction on the edited progress card without posting to Slack", async () => {
+  const t = setup();
+  const { issue, channel } = await issueChannel(t);
+  const { ts } = t.slack.say(channel.id, HERMES, "*Task progress*", { ts: tsAt(t.clock.now) });
+  t.clock.now += 1000;
+  const revision = tsAt(t.clock.now);
+  await t.sync.run("slack", {
+    type: "message",
+    subtype: "message_changed",
+    channel: channel.id,
+    message: {
+      ts,
+      user: HERMES,
+      text: `*Task progress*\n\n*Update from Hermes*\n<@${AUTO}> move executing --until 45m`,
+      edited: { ts: revision },
+    },
+  });
+  t.clock.now += COMMAND_SETTLE_MS;
+  await t.drain();
+  assert.equal(issue.state.name, "Executing");
+  const posts = t.slack.posts.length;
+  t.clock.now = t.store.timer(`lease:${issue.id}`)!;
+  const lease = t.store.dueJobs(t.clock.now, 50).find((job) => job.kind === "lease")!;
+  t.slack.failures.push({ who: "autolinear", method: "reactions.add", code: "ratelimited" });
+  await assert.rejects(t.drain(), /ratelimited/);
+  t.store.fail(lease, "ratelimited", t.clock.now);
+  assert.equal(issue.state.name, "Awaiting Leon");
+  await t.sync.run("linear", issueHook(issue.id));
+  assert.equal(t.slack.posts.length, posts);
+  t.clock.now = t.store.timer(`lease:${issue.id}`)!;
+  await t.drain();
+  const [comment] = t.linear.comments.values();
+  assert.ok(comment);
+  await t.sync.run("linear", commentHook(comment.id));
+
+  assert.equal(t.linear.updates.length, 2);
+  assert.equal(t.linear.comments.size, 1);
+  assert.equal(t.slack.sectionOf(channel.id), "Awaiting Leon");
+  assert.deepEqual(autolinearReactions(t, ts), ["bust_in_silhouette"]);
+  assert.deepEqual(autolinearReactions(t, revision), []);
+  assert.equal(t.slack.posts.length, posts);
+  assert.equal(t.store.timer(`lease:${issue.id}`), null);
 });
 
 test("`--until` must be soon and goes with Executing only", async () => {
@@ -2639,7 +2691,7 @@ test("stay after Hermes's 👀 goes back to the wait before it; with none, it's 
   assert.ok(why!.text.includes("`move executing --until <when it should be done>`"), why!.text);
 });
 
-test("the daily tick gives an issue already stuck in Executing a lease", async () => {
+test("the daily tick gives an issue already stuck in Executing a lease with a status notice", async () => {
   const t = setup();
   const { issue } = await issueChannel(t, "Executing");
   assert.equal(t.store.timer(`lease:${issue.id}`), t.clock.now - 60_000 + LEASE_MS);
@@ -2650,4 +2702,6 @@ test("the daily tick gives an issue already stuck in Executing a lease", async (
   t.clock.now += LEASE_MS;
   await t.drain();
   assert.equal(issue.state.name, "Awaiting Leon");
+  assert.match(statusNotices(t).at(-1)!.text, /^\*Executing\* → \*Awaiting Leon\*/);
+  assert.deepEqual(t.slack.reactions, []);
 });

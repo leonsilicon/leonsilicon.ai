@@ -392,6 +392,28 @@ export class Store {
     return row?.t === null || row?.t === undefined ? null : Number(row.t);
   }
 
+  /** The current timer and its payload, including a retry's next run time. */
+  timerJob<T>(key: string): { id: string; at: number; payload: T } | null {
+    const prefix = `${key}@`;
+    const row = this.#sql.exec(
+      `SELECT id, not_before, payload FROM queue WHERE substr(id, 1, ?) = ? LIMIT 1`,
+      prefix.length,
+      prefix,
+    )[0];
+    return row
+      ? {
+          id: row.id as string,
+          at: Number(row.not_before),
+          payload: JSON.parse(row.payload as string),
+        }
+      : null;
+  }
+
+  /** Saves a job's progress without changing its run time or retry count. */
+  saveJobPayload(id: string, payload: unknown): void {
+    this.#sql.exec(`UPDATE queue SET payload = ? WHERE id = ?`, JSON.stringify(payload), id);
+  }
+
   /** Remember the newest card revision. Agent-report edits carry the same answer digest. */
   progressAnswerChanged(channel: string, ts: string, revision: string, digest: string): boolean {
     const prior = this.#sql.exec(

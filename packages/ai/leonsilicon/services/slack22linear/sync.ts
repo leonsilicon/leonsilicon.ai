@@ -202,6 +202,14 @@ interface Outcome {
   text: string;
 }
 
+interface LeaseJob {
+  id: string;
+  /** The Slack message that started or explicitly set this lease. */
+  messageTs?: string | null;
+  /** Saved before the Linear write so retries can finish the same expiration. */
+  ending?: { at: number; to: string };
+}
+
 export interface SyncDeps {
   config: SyncConfig;
   store: Store;
@@ -391,6 +399,7 @@ const PROJECT_RETRY_MS = 30 * 60_000;
 const issueTimer = (issueId: string) => `timer:${issueId}`;
 /** When an issue in Executing goes to `leaseEndedTarget`, unless something works on it first. */
 const leaseKey = (issueId: string) => `lease:${issueId}`;
+const leaseCommentKey = (commentId: string) => `lease-comment:${commentId}`;
 /** Recorded once an issue's due time has been announced, so it is announced once. */
 const dueKey = (issueId: string, at: number) => `due:${issueId}:${at}`;
 /**
@@ -535,6 +544,7 @@ export class Sync {
 
   async onLinearComment(hook: LinearWebhook): Promise<void> {
     const id = hook.data.id;
+    if (this.#store.fired(leaseCommentKey(id))) return; // Recorded in Linear alongside a Slack reaction.
     const known = this.#store.comment(id);
     if (known?.origin === "slack") return; // our own mirror of a Slack message
     if (hook.action === "remove") {
@@ -1087,17 +1097,31 @@ export class Sync {
   /** Gives an issue in Executing a lease when it has none; any other issue has none. */
   #planLease(issue: LinearIssue): void {
     const now = this.#now();
-    if (issue.state.name !== this.#c.hermesAckState)
-      this.#store.setTimer(leaseKey(issue.id), "lease", null, null, now);
-    else if (this.#store.timer(leaseKey(issue.id)) === null)
-      this.#extendLease(issue.id, now + LEASE_MS);
+    const key = leaseKey(issue.id);
+    const lease = this.#store.timerJob<LeaseJob>(key);
+    if (issue.state.name !== this.#c.hermesAckState) {
+      if (lease && !lease.payload.ending) this.#store.setTimer(key, "lease", null, null, now);
+    } else if (!lease) {
+      const ack = this.#store.ack(issue.id);
+      this.#store.setTimer(
+        key,
+        "lease",
+        { id: issue.id, messageTs: ack?.at === null ? ack.messageTs : null } satisfies LeaseJob,
+        now + LEASE_MS,
+        now,
+      );
+    }
   }
 
-  /** Moves the lease's end to `at` when that's later, or to `at` exactly with `exact`. */
-  #extendLease(issueId: string, at: number, exact = false): void {
-    const current = this.#store.timer(leaseKey(issueId));
-    if (!exact && current !== null && current >= at) return;
-    this.#store.setTimer(leaseKey(issueId), "lease", { id: issueId }, at, this.#now());
+  /** Work can extend a lease. A command sets its exact end and source (`null` for a slash command). */
+  #extendLease(issueId: string, at: number, commandTs?: string | null): void {
+    const key = leaseKey(issueId);
+    const current = this.#store.timerJob<LeaseJob>(key);
+    if (commandTs === undefined && current && (current.payload.ending || current.at >= at)) return;
+    const messageTs = commandTs === undefined ? current?.payload.messageTs : commandTs;
+    const lease = { id: issueId, messageTs } satisfies LeaseJob;
+    if (current?.at === at) this.#store.saveJobPayload(current.id, lease);
+    else this.#store.setTimer(key, "lease", lease, at, this.#now());
   }
 
   /** A sign of work in an issue's channel: an issue in Executing keeps its lease `LEASE_MS` more. */
@@ -1127,24 +1151,43 @@ export class Sync {
    * An issue's lease ended while it was in Executing: no Hermes turn has run in its channel, no one
    * has posted there for `LEASE_MS`, and the time `move executing` gave has passed. Whatever was
    * working on it stopped (a dropped turn, a failed handoff, an agent whose report nobody acted
-   * on), so it goes to `leaseEndedTarget`, which mentions Leon, with a comment that says why.
-   * Workflow details stay, so the issue can go back to a wait it had.
+   * on), so it goes to `leaseEndedTarget`, with a reaction on the source message and a Linear
+   * comment that says why. Workflow details stay, so the issue can go back to a wait it had.
    */
   async onLeaseEnded(issueId: string): Promise<void> {
+    const now = this.#now();
+    const job = this.#store.timerJob<LeaseJob>(leaseKey(issueId));
+    if (!job || job.at > now) return;
     const issue = await this.#linear.issue(issueId);
-    if (!issue || issue.state.name !== this.#c.hermesAckState) return;
-    const to = this.#c.leaseEndedTarget;
-    const at = this.#now();
-    await this.#move(issue, to, { keepKeys: true });
+    if (!issue) return;
+    const from = this.#c.hermesAckState;
+    const { ending } = job.payload;
+    if (issue.state.name !== from && issue.state.name !== ending?.to) return;
+    const { to, at } = ending ?? { to: this.#c.leaseEndedTarget, at: now };
+    const { messageTs = this.#store.ack(issue.id)?.messageTs ?? null } = job.payload;
+    if (!ending) this.#store.saveJobPayload(job.id, { id: issueId, messageTs, ending: { at, to } });
+    if (issue.state.name === from) await this.#move(issue, to, { keepKeys: true });
+
+    const moved = issue.state.name === to ? issue : await this.#linear.issue(issue.id);
+    if (!moved || moved.state.name !== to) return;
+    const rec = this.#store.issue(issue.id);
+    const id = await stableUuid(`lease-ended:${issue.id}:${at}`);
+    if (messageTs && rec && this.#autolinear) {
+      await this.#reactStatus(rec.channelId, messageTs, to);
+      this.#store.markFired(leaseCommentKey(id), now);
+    }
+    await this.syncIssue(moved, "live");
     this.#store.dropAck(issue.id);
-    await this.#linear.createComment({
-      id: await stableUuid(`lease-ended:${issue.id}:${at}`),
-      issueId: issue.id,
-      body: `**slack22linear:** nothing is working on this any more, so it left *${issue.state.name}*: no Hermes turn is running in its channel, no one has posted there for ${LEASE_MS / 60_000} minutes, and any time given with \`move executing --until\` has passed. Reply in the channel to pick it back up.`,
-    });
+    try {
+      await this.#linear.createComment({
+        id,
+        issueId: issue.id,
+        body: `**slack22linear:** nothing is working on this any more, so it left *${from}*: no Hermes turn is running in its channel, no one has posted there for ${LEASE_MS / 60_000} minutes, and any time given with \`move executing --until\` has passed. Reply in the channel to pick it back up.`,
+      });
+    } catch (error) {
+      if (!/already exists|duplicate|unique/i.test(String(error))) throw error;
+    }
     this.#log("lease_ended", { issue: issue.identifier, to });
-    const moved = await this.#linear.issue(issue.id);
-    if (moved) await this.syncIssue(moved, "live");
   }
 
   /**
@@ -1429,14 +1472,20 @@ export class Sync {
       const day = localDay(due.getTime(), this.#c.timeZone);
       if (day !== issue.dueDate) update.dueDate = day;
     }
-    const holds = () => {
-      if (leaseEnd === null) return "";
-      this.#extendLease(issue.id, leaseEnd, true);
-      return ` If nothing happens in its channel by ${localLabel(leaseEnd, this.#c.timeZone, true)}, it goes to *${this.#c.leaseEndedTarget}*.`;
+    const hold = () => {
+      if (leaseEnd === null) return;
+      const ts = job.by === "hermes" ? job.ts.split(":", 1)[0]! : null;
+      this.#extendLease(issue.id, leaseEnd, ts);
     };
-    if (!Object.keys(update).length)
-      return { ok: true, text: `${issue.identifier} is already *${to}*.${holds()}` };
-    if (update.stateId !== undefined)
+    const held =
+      leaseEnd === null
+        ? ""
+        : ` If nothing happens in its channel by ${localLabel(leaseEnd, this.#c.timeZone, true)}, it goes to *${this.#c.leaseEndedTarget}*.`;
+    if (!Object.keys(update).length) {
+      hold();
+      return { ok: true, text: `${issue.identifier} is already *${to}*.${held}` };
+    }
+    if (update.stateId !== undefined) {
       this.#store.putCommandMove({
         issueId: issue.id,
         ts: job.ts,
@@ -1444,12 +1493,16 @@ export class Sync {
         fromState: issue.state.name,
         toState: to,
       });
+      // Save the lease before entering Executing so a retry or webhook sees its exact deadline.
+      hold();
+    }
     await this.#linear.updateIssue(issue.id, update);
+    if (update.stateId === undefined) hold();
     const moved = await this.#linear.issue(issue.id);
     const by = job.by === "leon" ? "Leon" : "Hermes";
     if (moved) await this.syncIssue(moved, "live");
     this.#log("autolinear_command", { issue: issue.identifier, from: issue.state.name, to, by });
-    return { ok: true, text: `${issue.identifier} is now *${to}*.${holds()}` };
+    return { ok: true, text: `${issue.identifier} is now *${to}*.${held}` };
   }
 
   /**
@@ -2175,8 +2228,25 @@ export class Sync {
     return lines.join(" ");
   }
 
+  async #reactStatus(channelId: string, ts: string, status: string): Promise<void> {
+    await tolerate(
+      this.#autolinearCall("reactions.add", {
+        channel: channelId,
+        timestamp: ts,
+        name:
+          STATUS_REACTIONS.get(status) ??
+          (status === this.#c.hermesAckState ? "gear" : "white_check_mark"),
+      }),
+      ["already_reacted", "message_not_found", ...ARCHIVED],
+    );
+  }
+
   async #notifyStatus(channelId: string, from: string, issue: LinearIssue): Promise<void> {
     const to = issue.state.name;
+    if (this.#autolinear && from === this.#c.hermesAckState) {
+      const lease = this.#store.timerJob<LeaseJob>(leaseKey(issue.id))?.payload;
+      if (lease?.ending?.to === to && lease.messageTs) return;
+    }
     const command = this.#store.commandMove(issue.id);
     const move = command?.toState === to ? command : null;
     if (move?.by === "hermes") return;
@@ -2184,14 +2254,7 @@ export class Sync {
       const ack = this.#store.ack(issue.id);
       if (ack?.at === null) {
         if (ack.messageTs && this.#autolinear)
-          await tolerate(
-            this.#autolinearCall("reactions.add", {
-              channel: channelId,
-              timestamp: ack.messageTs,
-              name: STATUS_REACTIONS.get(to) ?? "gear",
-            }),
-            ["already_reacted", "message_not_found", ...ARCHIVED],
-          );
+          await this.#reactStatus(channelId, ack.messageTs, to);
         return;
       }
     }
