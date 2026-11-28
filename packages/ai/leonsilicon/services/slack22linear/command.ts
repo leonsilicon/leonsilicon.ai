@@ -42,7 +42,7 @@ export const AWAITING_HERMES = "Awaiting Hermes";
 /** What Hermes writes after Autolinear's mention (or Leon after `/autolinear`), as Slack mrkdwn. */
 export function commandUsage(lead: string): string {
   return [
-    `\`${lead} move done\`: nothing is left for anyone`,
+    `\`${lead} move done\`: only once Leon has said it's done`,
     `\`${lead} move leon\`: Leon needs to see or do something`,
     `\`${lead} move trigger --who "Apple App Review"\`: waiting on someone else`,
     `\`${lead} move trigger --event "Rogers BYOD deal" --stop 2026-12-01\`: waiting for an event until a stop date`,

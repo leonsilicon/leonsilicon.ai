@@ -1803,7 +1803,9 @@ test("Hermes's answer moves nothing; Autolinear reminds it, and its command move
     ),
     reminder!.text,
   );
-  assert.ok(reminder!.text.includes("• `@Autolinear move done`: nothing is left for anyone"));
+  assert.ok(
+    reminder!.text.includes("• `@Autolinear move done`: only once Leon has said it's done"),
+  );
   assert.equal(reminder!.thread_ts, undefined, "at the top of the channel");
   assert.ok(channel.members.has(AUTO), "Autolinear's bot is in the channel");
 
